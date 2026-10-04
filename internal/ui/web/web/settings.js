@@ -490,6 +490,8 @@ function currentDraftShortcuts() {
   };
 }
 
+const MODIFIER_KEYS = new Set(["Control", "Alt", "AltGraph", "Shift", "Meta", "OS"]);
+
 function onRecordKeydown(e) {
   if (!recording) return;
   e.preventDefault();
@@ -498,6 +500,8 @@ function onRecordKeydown(e) {
     stopRecording(true);
     return;
   }
+  // Holding Ctrl or Alt fires a keydown for the modifier itself; wait for the real key.
+  if (MODIFIER_KEYS.has(e.key)) return;
   const isClear = (e.key === "Delete" || e.key === "Backspace") && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
   if (!isClear && !e.ctrlKey && !e.altKey) return; // wait for a real Ctrl/Alt chord
   send({
@@ -515,6 +519,8 @@ function onRecordKeydown(e) {
 
 function startRecording(field) {
   recording = { field };
+  // Go releases the saved hotkeys meanwhile, or a chord already in use never reaches the page.
+  send({ type: "record" });
   window.addEventListener("keydown", onRecordKeydown, true);
   window.addEventListener("blur", onWindowBlurWhileRecording);
   render();
@@ -710,7 +716,7 @@ function onMessage(msg) {
     case "recorded":
       if (msg.shortcut) labels[shortcutKeyJSON(msg.shortcut)] = msg.label;
       applyRecorded(msg.field, msg.shortcut);
-      stopRecording(false);
+      stopRecording(true);
       break;
     case "rejected":
       break;
