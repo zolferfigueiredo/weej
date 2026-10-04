@@ -1,6 +1,6 @@
 #!/bin/sh
 # Blocks direct commits to main, and em or en dashes in catalogs and web files people read.
-# ./run.sh turns this on (core.hooksPath is local config, so it doesn't travel with a clone).
+# run.bat turns this on (core.hooksPath is local config, so it doesn't travel with a clone).
 
 if [ "$(git symbolic-ref --short HEAD 2>/dev/null)" = "main" ]; then
     echo "Refusing to commit directly to main. Use a branch." >&2

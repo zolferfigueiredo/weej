@@ -44,10 +44,10 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - name: Shellcheck the scripts
+      - name: Shellcheck the hook
         run: |
           command -v shellcheck >/dev/null || sudo apt-get install -y shellcheck
-          shellcheck -x build.sh run.sh install.sh release.sh scripts/env.sh .githooks/pre-commit
+          shellcheck -x .githooks/pre-commit
       - name: No em or en dashes in user-facing text
         run: |
           dirs=()
