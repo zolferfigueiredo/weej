@@ -109,7 +109,9 @@ func (app *App) finishCalibration() {
 	if changed {
 		cur := app.snapshotSettings()
 		cur.Columns = result
-		app.persistSettings(cur)
+		if err := app.persistSettings(cur); err != nil {
+			app.log("Could not save settings: " + err.Error())
+		}
 	}
 
 	app.mu.Lock()

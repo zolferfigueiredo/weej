@@ -21,9 +21,9 @@ func encodeICO(w io.Writer, sizes []int, iconAt func(size int) image.Image) erro
 	}
 
 	var out bytes.Buffer
-	binary.Write(&out, binary.LittleEndian, uint16(0))
-	binary.Write(&out, binary.LittleEndian, uint16(1))
-	binary.Write(&out, binary.LittleEndian, uint16(len(sizes)))
+	out.Write(binary.LittleEndian.AppendUint16(nil, 0))
+	out.Write(binary.LittleEndian.AppendUint16(nil, 1))
+	out.Write(binary.LittleEndian.AppendUint16(nil, uint16(len(sizes))))
 
 	offset := uint32(6 + 16*len(sizes))
 	for i, size := range sizes {
@@ -32,10 +32,10 @@ func encodeICO(w io.Writer, sizes []int, iconAt func(size int) image.Image) erro
 		out.WriteByte(d)
 		out.WriteByte(0)
 		out.WriteByte(0)
-		binary.Write(&out, binary.LittleEndian, uint16(1))
-		binary.Write(&out, binary.LittleEndian, uint16(32))
-		binary.Write(&out, binary.LittleEndian, uint32(len(pngs[i])))
-		binary.Write(&out, binary.LittleEndian, offset)
+		out.Write(binary.LittleEndian.AppendUint16(nil, 1))
+		out.Write(binary.LittleEndian.AppendUint16(nil, 32))
+		out.Write(binary.LittleEndian.AppendUint32(nil, uint32(len(pngs[i]))))
+		out.Write(binary.LittleEndian.AppendUint32(nil, offset))
 		offset += uint32(len(pngs[i]))
 	}
 	for _, p := range pngs {

@@ -14,7 +14,6 @@ var (
 	procCreateDIBSection   = gdi32.NewProc("CreateDIBSection")
 	procSelectObject       = gdi32.NewProc("SelectObject")
 	procDeleteObject       = gdi32.NewProc("DeleteObject")
-	procDeleteDC           = gdi32.NewProc("DeleteDC")
 	procCreateBitmap       = gdi32.NewProc("CreateBitmap")
 	procGetObjectW         = gdi32.NewProc("GetObjectW")
 	procGetDIBits          = gdi32.NewProc("GetDIBits")
@@ -36,16 +35,11 @@ type bitmapInfoHeader struct {
 	clrImportant  uint32
 }
 
-const biRGB = 0
 const dibRGBColors = 0
 
 func createCompatibleDC(hdc windows.Handle) windows.Handle {
 	r, _, _ := procCreateCompatibleDC.Call(uintptr(hdc))
 	return windows.Handle(r)
-}
-
-func deleteDC(hdc windows.Handle) {
-	procDeleteDC.Call(uintptr(hdc))
 }
 
 func selectObject(hdc, obj windows.Handle) windows.Handle {

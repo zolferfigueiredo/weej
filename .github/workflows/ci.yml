@@ -24,19 +24,26 @@ jobs:
     name: Lint and build
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      GOOS: windows
-      GOARCH: amd64
-      CGO_ENABLED: 0
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.13
-      - run: go build ./...
+      # Built with the job's Go: a prebuilt golangci-lint made with an older Go refuses a go 1.27 module.
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+      - name: Lint
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: 0
+        run: golangci-lint run ./...
+      - name: Build
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: 0
+        run: go build ./...
 
   scripts:
     name: Scripts

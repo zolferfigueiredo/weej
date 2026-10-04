@@ -21,7 +21,6 @@ var (
 	procRegisterClassExW      = user32.NewProc("RegisterClassExW")
 	procCreateWindowExW       = user32.NewProc("CreateWindowExW")
 	procDefWindowProcW        = user32.NewProc("DefWindowProcW")
-	procDestroyWindow         = user32.NewProc("DestroyWindow")
 	procShowWindow            = user32.NewProc("ShowWindow")
 	procGetMessageW           = user32.NewProc("GetMessageW")
 	procTranslateMessage      = user32.NewProc("TranslateMessage")
@@ -164,10 +163,6 @@ func createWindowExW(exStyle uint32, className, windowName *uint16, style uint32
 func defWindowProcW(hwnd windows.HWND, msg uint32, wparam, lparam uintptr) uintptr {
 	r, _, _ := procDefWindowProcW.Call(uintptr(hwnd), uintptr(msg), wparam, lparam)
 	return r
-}
-
-func destroyWindow(hwnd windows.HWND) {
-	procDestroyWindow.Call(uintptr(hwnd))
 }
 
 func showWindow(hwnd windows.HWND, cmd int32) {

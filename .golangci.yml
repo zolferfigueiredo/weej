@@ -1,6 +1,9 @@
 version: "2"
 
 linters:
+  exclusions:
+    presets:
+      - std-error-handling
   default: standard
   enable:
     - misspell

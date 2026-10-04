@@ -198,13 +198,13 @@ func applyMenuTheme(dark bool) {
 	if err != nil {
 		return
 	}
-	syscall.SyscallN(addr, uintptr(mode))
+	_, _, _ = syscall.SyscallN(addr, uintptr(mode))
 
 	addr, err = ordinalAddr(&ordFlushMenuThemes, 136)
 	if err != nil {
 		return
 	}
-	syscall.SyscallN(addr)
+	_, _, _ = syscall.SyscallN(addr)
 }
 
 func ordinalAddr(cache *uintptr, ordinal uintptr) (uintptr, error) {

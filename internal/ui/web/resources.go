@@ -63,7 +63,7 @@ func onWebResourceRequested(chromium *edge.Chromium) func(*edge.ICoreWebView2Web
 		if err != nil {
 			return
 		}
-		defer resp.Release()
+		defer func() { _ = resp.Release() }()
 		_ = args.PutResponse(resp)
 	}
 }

@@ -40,7 +40,9 @@ func (app *App) onHotkey(id int) {
 		}
 		s.Active = id
 	}
-	app.persistSettings(s)
+	if err := app.persistSettings(s); err != nil {
+		app.log("Could not save settings: " + err.Error())
+	}
 	app.refreshTray()
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "profile", "profile": s.Active})
