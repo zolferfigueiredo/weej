@@ -17,6 +17,7 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/platform/serialport"
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/platform/via"
+	"github.com/zolferfigueiredo/weej/internal/platform/zoom"
 	"github.com/zolferfigueiredo/weej/internal/ui/web"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 )
@@ -54,6 +55,7 @@ func (app *App) setup(l *winui.Loop) {
 	app.audio = audioW
 	app.ddc = display.NewDDC(app.log)
 	app.via = via.NewVIA(app.log)
+	app.zoom = zoom.New(app.log)
 
 	app.setupTray(l)
 	app.checkUpdateComplete()
