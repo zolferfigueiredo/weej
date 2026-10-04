@@ -1,0 +1,103 @@
+package draw
+
+import (
+	"image"
+	"math"
+
+	"golang.org/x/image/vector"
+)
+
+type IconStyle string
+
+const (
+	StyleMixer IconStyle = "mixer"
+	StyleDial  IconStyle = "dial"
+	StyleApp   IconStyle = "app"
+)
+
+func TrayIcon(style IconStyle, connected bool, px int, lightTaskbar bool) *image.NRGBA {
+	if style == StyleApp {
+		return AppIcon(px)
+	}
+
+	var m *image.Alpha
+	if style == StyleMixer {
+		m = mixerMask(px, !connected)
+	} else {
+		m = dialMask(px, connected)
+	}
+
+	ink := uint8(255)
+	if lightTaskbar {
+		ink = 0
+	}
+	out := image.NewNRGBA(image.Rect(0, 0, px, px))
+	for i, a := range m.Pix {
+		j := i * 4
+		out.Pix[j], out.Pix[j+1], out.Pix[j+2], out.Pix[j+3] = ink, ink, ink, a
+	}
+	return out
+}
+
+func mixerMask(px int, parked bool) *image.Alpha {
+	s := float32(px) / 24
+	base := mask(px, func(z *vector.Rasterizer) {
+		addRoundedRect(z, 2*s, 2*s, 20*s, 20*s, 4.67*s)
+	})
+
+	xs := [3]float32{6.67, 12, 17.33}
+	ys := [3]float32{8, 14, 10.67}
+	if parked {
+		ys = [3]float32{16.67, 16.67, 16.67}
+	}
+	for i, x := range xs {
+		y := ys[i]
+		groove := mask(px, func(z *vector.Rasterizer) {
+			addCapsule(z, x*s, 6*s, x*s, 18*s, 1.33*s/2)
+		})
+		cutMask(base, groove)
+		knob := mask(px, func(z *vector.Rasterizer) {
+			addRoundedRect(z, (x-2)*s, (y-1.335)*s, 4*s, 2.67*s, 0.8*s)
+		})
+		cutMask(base, knob)
+	}
+	return base
+}
+
+func dialMask(px int, connected bool) *image.Alpha {
+	s := float32(px) / 24
+	cx, cy := 12*s, 13.17*s
+	radius := float32(9.67) * s
+	hw := float32(1.33) * s / 2
+	pointer := float32(-135)
+	if connected {
+		pointer = 45
+	}
+
+	base := mask(px, func(z *vector.Rasterizer) {
+		addThickArc(z, cx, cy, radius, hw, -135, 135)
+	})
+	for i, v := range base.Pix {
+		base.Pix[i] = clamp255(float64(v) * 0.35)
+	}
+
+	if connected {
+		lit := mask(px, func(z *vector.Rasterizer) {
+			addThickArc(z, cx, cy, radius, hw, -135, pointer)
+		})
+		overAlpha(base, lit, 1)
+	}
+
+	knob := mask(px, func(z *vector.Rasterizer) {
+		addEllipse(z, cx, cy, 6.33*s, 6.33*s)
+	})
+	overAlpha(base, knob, 1)
+
+	rad := float64(pointer) * math.Pi / 180
+	dx, dy := float32(math.Sin(rad)), -float32(math.Cos(rad))
+	notch := mask(px, func(z *vector.Rasterizer) {
+		addCapsule(z, cx+dx*1.67*s, cy+dy*1.67*s, cx+dx*4.33*s, cy+dy*4.33*s, float32(1.6)*s/2)
+	})
+	cutMask(base, notch)
+	return base
+}

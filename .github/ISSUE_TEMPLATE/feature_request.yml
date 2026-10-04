@@ -1,0 +1,13 @@
+name: Feature request
+description: Suggest an idea for WeeJ
+labels: [enhancement]
+body:
+  - type: textarea
+    attributes:
+      label: What would you like?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Why?
+      description: The problem it would solve for you.
