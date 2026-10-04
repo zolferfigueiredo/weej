@@ -141,6 +141,8 @@ func (app *App) openSettings(tab string) {
 			app.mu.Lock()
 			app.settingsWin = nil
 			app.mu.Unlock()
+			// Closing mid-recording would otherwise leave the saved hotkeys switched off.
+			app.registerHotkeys(app.snapshotSettings().Setup)
 		},
 	}, app.onSettingsMessage)
 	if err != nil {
@@ -471,7 +473,9 @@ func (app *App) handleSettingsKey(data []byte) {
 
 	hk := app.loop.Hotkeys()
 	registered := hk.Register(shortcutProbeHotkeyID, shortcut.Mods, shortcut.VK)
-	hk.UnregisterAll()
+	if registered {
+		hk.Unregister(shortcutProbeHotkeyID)
+	}
 	if !registered {
 		reject()
 		return
