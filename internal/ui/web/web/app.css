@@ -1,0 +1,777 @@
+/*
+DIRECTION CONTRACT
+THESIS: these windows disappear into Windows 11 itself; Fluent is not a theme choice
+here, it is the brief, so the "own world" this system owns is executing that native
+language exactly rather than interpreting it.
+OWN-WORLD: Segoe UI Variable; Mica-toned neutral grounds (#f3f3f3 light / #202020
+dark); grouped SettingsCard rows on hairline borders; 4px control radius, 8px card
+radius; accent used only for selection, primary actions and toggle-on state; a 2px
+accent focus rect offset 2px.
+STORY: the user opens a small, rare, task-shaped window, trusts it immediately
+because nothing about it reads as "a web page", does the one thing they came for,
+and leaves.
+FIRST VIEWPORT: Settings opens on the General tab: profile picker and knob list up
+top in a card, footer with Close/Save pinned below; Calibration/Language/Update open
+small and centered, content vertically stacked, primary action bottom-right or full
+width.
+FORM: brief-pinned native system (Windows 11 Settings / WinUI 3 Fluent), not rolled;
+no concept-seed round applies to a pinned direction.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish
+review, the verdict, DESIGN.md, and every shipping raster carrying its provenance.
+*/
+
+:root {
+  --accent: #0078d4;
+  --accent-text: #ffffff;
+  --radius-lg: 8px;
+  --radius-md: 6px;
+  --radius-sm: 4px;
+  --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  --fs-title: 20px;
+  --fs-subtitle: 14px;
+  --fs-body: 14px;
+  --fs-caption: 12px;
+  --motion-fast: 100ms;
+  --motion: 150ms;
+  --ease: cubic-bezier(0.1, 0.9, 0.2, 1);
+
+  --bg: #f3f3f3;
+  --card-bg: #fbfbfb;
+  --card-bg-hover: #f5f5f5;
+  --control-bg: #ffffff;
+  --control-border: rgba(0, 0, 0, 0.09);
+  --border: rgba(0, 0, 0, 0.08);
+  --divider: rgba(0, 0, 0, 0.06);
+  --text: #1a1a1a;
+  --text-secondary: #5d5d5d;
+  --text-disabled: #9b9b9b;
+  --danger: #c42b1c;
+  --warning: #9d5d00;
+  --success: #0f7b0f;
+  --shadow-flyout: 0 4px 16px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.08);
+  --scrollbar: rgba(0, 0, 0, 0.28);
+  --scrollbar-track: transparent;
+  --selection: rgba(0, 120, 212, 0.25);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #202020;
+    --card-bg: #2c2c2c;
+    --card-bg-hover: #323232;
+    --control-bg: #2c2c2c;
+    --control-border: rgba(255, 255, 255, 0.12);
+    --border: rgba(255, 255, 255, 0.08);
+    --divider: rgba(255, 255, 255, 0.07);
+    --text: #ffffff;
+    --text-secondary: #c5c5c5;
+    --text-disabled: #6b6b6b;
+    --danger: #ff99a4;
+    --warning: #ffb956;
+    --success: #6ccb5f;
+    --scrollbar: rgba(255, 255, 255, 0.32);
+    --selection: rgba(0, 120, 212, 0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #202020;
+  --card-bg: #2c2c2c;
+  --card-bg-hover: #323232;
+  --control-bg: #2c2c2c;
+  --control-border: rgba(255, 255, 255, 0.12);
+  --border: rgba(255, 255, 255, 0.08);
+  --divider: rgba(255, 255, 255, 0.07);
+  --text: #ffffff;
+  --text-secondary: #c5c5c5;
+  --text-disabled: #6b6b6b;
+  --danger: #ff99a4;
+  --warning: #ffb956;
+  --success: #6ccb5f;
+  --scrollbar: rgba(255, 255, 255, 0.32);
+  --selection: rgba(0, 120, 212, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: var(--fs-body) / 1.4 var(--font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--selection);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration: underline;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus {
+  outline: none;
+}
+
+/* Windows 11's focus rect: a 2px high-contrast outline offset from the control,
+   never color-only, so it still reads on any accent or state color underneath. */
+:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button:focus-visible,
+.input:focus-visible,
+select:focus-visible,
+.toggle:focus-visible,
+.chk:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+.app {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 100vh;
+}
+
+.page-title {
+  font: 600 var(--fs-title) / 1.3 var(--font-display);
+  margin: 0 0 4px;
+}
+
+/* --- Tabs (Fluent Pivot) --- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.tab {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 10px 4px;
+  margin-right: 20px;
+  font-size: var(--fs-subtitle);
+  color: var(--text-secondary);
+  cursor: pointer;
+  position: relative;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tabpanel[hidden] {
+  display: none;
+}
+
+/* --- Groups / Cards (Fluent SettingsCard) --- */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* A lone button in a group (e.g. "Import from deej...") would otherwise stretch
+   to the group's full cross-axis width, like .card does; only .card wants that. */
+.group > .btn {
+  align-self: flex-start;
+}
+
+.group-title {
+  font: 600 var(--fs-subtitle) / 1.3 var(--font);
+  padding: 0 2px 4px;
+}
+
+.group-note {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+  padding: 4px 2px 0;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row.clickable {
+  cursor: pointer;
+}
+
+.row.clickable:hover {
+  background: var(--card-bg-hover);
+}
+
+.row-icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: var(--radius-sm);
+}
+
+.row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.row-title {
+  font-size: var(--fs-body);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-desc {
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+.row-desc.warning {
+  color: var(--danger);
+}
+
+.row-control {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* --- Buttons --- */
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text);
+  border-radius: var(--radius-md);
+  padding: 7px 14px;
+  font-size: var(--fs-body);
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--ease), border-color var(--motion-fast) var(--ease);
+  line-height: 1.3;
+}
+
+.btn:hover {
+  background: var(--card-bg-hover);
+}
+
+.btn:active {
+  transform: translateY(0.5px);
+}
+
+.btn:disabled {
+  color: var(--text-disabled);
+  cursor: not-allowed;
+  background: var(--control-bg);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+  background: var(--accent);
+}
+
+.btn-primary:disabled {
+  background: var(--control-border);
+  border-color: var(--control-border);
+  color: var(--text-disabled);
+}
+
+.btn-subtle {
+  border-color: transparent;
+  background: transparent;
+}
+
+.btn-subtle:hover {
+  background: var(--card-bg-hover);
+}
+
+.btn-danger {
+  color: var(--danger);
+}
+
+.btn-icon {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-body);
+  line-height: 1;
+}
+
+.btn-link {
+  border: none;
+  background: none;
+  color: var(--accent);
+  padding: 0;
+  cursor: pointer;
+  font-size: inherit;
+  text-align: left;
+}
+
+.btn-link:hover {
+  text-decoration: underline;
+}
+
+/* --- Inputs / Select --- */
+
+.input,
+select.select {
+  width: 100%;
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius-md);
+  padding: 7px 10px;
+  font-size: var(--fs-body);
+  color: var(--text);
+}
+
+.input:hover,
+select.select:hover {
+  border-color: var(--text-secondary);
+}
+
+select.select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-secondary) 50%),
+    linear-gradient(135deg, var(--text-secondary) 50%, transparent 50%);
+  background-position: calc(100% - 16px) center, calc(100% - 11px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+
+/* --- Toggle switch --- */
+
+.toggle {
+  appearance: none;
+  width: 40px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--text-secondary);
+  background: transparent;
+  position: relative;
+  cursor: pointer;
+  flex: none;
+  transition: background var(--motion) var(--ease), border-color var(--motion) var(--ease);
+}
+
+.toggle::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--text);
+  transition: transform var(--motion) var(--ease), background var(--motion) var(--ease);
+}
+
+.toggle:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle:checked::after {
+  background: var(--accent-text);
+  transform: translateX(18px);
+}
+
+.toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* --- Checkbox (job picker) --- */
+
+.chk {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 3px;
+  border: 1px solid var(--text-secondary);
+  background: var(--control-bg);
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+}
+
+.chk::after {
+  content: "";
+  width: 9px;
+  height: 7px;
+  clip-path: polygon(8% 48%, 0 62%, 35% 100%, 100% 20%, 90% 8%, 33% 75%);
+  background: var(--accent-text);
+  transform: scale(0);
+  transition: transform var(--motion-fast) var(--ease);
+}
+
+.chk:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.chk:checked::after {
+  transform: scale(1);
+}
+
+/* --- Footer (Settings) --- */
+
+.footer {
+  position: sticky;
+  bottom: 0;
+  margin: 8px -24px -24px;
+  padding: 14px 24px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  background: var(--bg);
+  border-top: 1px solid var(--divider);
+}
+
+/* --- Popover (job picker) --- */
+
+.popover-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.popover {
+  position: absolute;
+  z-index: 11;
+  min-width: 240px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-flyout);
+  padding: 4px;
+}
+
+.popover-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: var(--fs-body);
+}
+
+.popover-item:hover {
+  background: var(--card-bg-hover);
+}
+
+.popover-item img {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.popover-header {
+  padding: 8px 10px 4px;
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+}
+
+.popover-sep {
+  height: 1px;
+  background: var(--divider);
+  margin: 4px 6px;
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+  border: 1px solid var(--control-border);
+  border-radius: 999px;
+  padding: 1px 6px;
+  flex: none;
+}
+
+/* --- Dialog (confirm sheets) --- */
+
+.dialog-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  animation: fade-in var(--motion) var(--ease);
+}
+
+.dialog {
+  width: min(340px, calc(100vw - 48px));
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-flyout);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dialog-title {
+  font: 600 var(--fs-subtitle) / 1.3 var(--font);
+}
+
+.dialog-body {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* --- Standalone window layouts (calibration / language / update) --- */
+
+.center-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 28px 32px;
+  gap: 14px;
+}
+
+.center-page .app-icon {
+  width: 64px;
+  height: 64px;
+}
+
+.center-page h1 {
+  font: 600 var(--fs-title) / 1.3 var(--font-display);
+}
+
+.center-page .body-text {
+  max-width: 320px;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+}
+
+.progress-line {
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-caption);
+  color: var(--text-secondary);
+  min-height: 16px;
+}
+
+.progress-line.warning {
+  color: var(--warning);
+}
+
+.button-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.progress-bar {
+  width: 300px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--divider);
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar > span {
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+  border-radius: 999px;
+  transform-origin: left center;
+  transition: transform var(--motion) var(--ease);
+}
+
+.progress-bar.indeterminate > span {
+  width: 40%;
+  animation: indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.update-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  text-align: left;
+  width: 100%;
+}
+
+.update-row .app-icon {
+  width: 64px;
+  height: 64px;
+  flex: none;
+  margin-top: 2px;
+}
+
+.update-main {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.update-main h1 {
+  font: 600 16px / 1.3 var(--font-display);
+}
+
+.update-status {
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}

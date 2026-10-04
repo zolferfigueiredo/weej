@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="app.css" />
+    <title>WeeJ</title>
+  </head>
+  <body data-page="update">
+    <div id="root" class="center-page">
+      <div class="update-row">
+        <img class="app-icon" id="icon" alt="" width="64" height="64" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
+        <div class="update-main">
+          <h1 id="heading"></h1>
+          <p class="update-status" id="status"></p>
+          <div class="progress-bar indeterminate" id="bar"><span></span></div>
+        </div>
+      </div>
+      <div class="button-row">
+        <button class="btn btn-primary" type="button" id="btn-reopen" disabled></button>
+      </div>
+    </div>
+    <script type="module" src="update.js"></script>
+  </body>
+</html>
