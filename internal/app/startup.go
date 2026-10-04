@@ -68,14 +68,7 @@ func (app *App) setup(l *winui.Loop) {
 	l.Hotkeys().OnHotkey(app.onHotkey)
 	app.registerHotkeys(app.snapshotSettings().Setup)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	app.cancelSerial = cancel
-	go serialport.Run(ctx, serialport.Config{
-		ForcedPort: app.forcedPort,
-		OnLine:     app.onSerialLine,
-		OnStatus:   app.onSerialStatus,
-		Log:        app.log,
-	}, app.reconnectCh)
+	app.startSerial()
 
 	app.setupAutoUpdateChecks()
 
@@ -139,6 +132,39 @@ func (app *App) printStartupSummary() {
 	}
 }
 
+// startSerial (re)starts the serial loop with the saved port and speed. A port given on the
+// command line wins over the saved one. The previous loop has closed its port before the new
+// one opens it, or the board would look busy for a moment.
+func (app *App) startSerial() {
+	s := app.snapshotSettings()
+	port := app.forcedPort
+	if port == "" {
+		port = s.Port
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	app.mu.Lock()
+	prevCancel, prevDone := app.cancelSerial, app.serialDone
+	app.cancelSerial, app.serialDone = cancel, done
+	app.mu.Unlock()
+
+	go func() {
+		defer close(done)
+		if prevCancel != nil {
+			prevCancel()
+			<-prevDone
+			app.onSerialStatus(serialport.Status{})
+		}
+		serialport.Run(ctx, serialport.Config{
+			ForcedPort: port,
+			Baud:       s.BaudRate(),
+			OnLine:     app.onSerialLine,
+			OnStatus:   app.onSerialStatus,
+			Log:        app.log,
+		}, app.reconnectCh)
+	}()
+}
+
 func (app *App) onSerialLine(values []int) {
 	calibrating := app.isCalibrating()
 	if calibrating {
@@ -153,6 +179,7 @@ func (app *App) onSerialStatus(status serialport.Status) {
 	app.loop.Invoke(func() {
 		app.setConnection(status.Connected, status.Busy, status.Port)
 		app.refreshTrayNow()
+		app.pushConnection()
 		if !status.Connected {
 			app.engine.Reset()
 			return
@@ -217,8 +244,11 @@ func (app *App) shutdown() {
 		if app.zoom != nil {
 			app.zoom.Off()
 		}
-		if app.cancelSerial != nil {
-			app.cancelSerial()
+		app.mu.Lock()
+		cancel := app.cancelSerial
+		app.mu.Unlock()
+		if cancel != nil {
+			cancel()
 		}
 		if app.audio != nil {
 			app.audio.Close()

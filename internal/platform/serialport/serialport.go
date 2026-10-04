@@ -16,9 +16,11 @@ type Status struct {
 
 type Config struct {
 	ForcedPort string
-	OnLine     func(values []int)
-	OnStatus   func(Status)
-	Log        func(string)
+	// Baud is the serial speed; 0 means core.DefaultBaud.
+	Baud     int
+	OnLine   func(values []int)
+	OnStatus func(Status)
+	Log      func(string)
 }
 
 // Run is a blocking loop, porting TheeJ's serialLoop (Serial.swift) to Windows. It never
@@ -70,10 +72,15 @@ func Run(ctx context.Context, cfg Config, reconnect <-chan struct{}) {
 				return
 			}
 
-			port, err := openPort(name)
+			port, err := openPort(name, cfg.Baud)
 			if err != nil {
 				logf(fmt.Sprintf("Could not open %s", name))
-				setStatus(Status{Busy: isAccessDenied(err)})
+				busy := isAccessDenied(err)
+				busyPort := ""
+				if busy {
+					busyPort = name
+				}
+				setStatus(Status{Busy: busy, Port: busyPort})
 				if sleepDiscard(ctx, 2*time.Second, reconnect) {
 					return
 				}

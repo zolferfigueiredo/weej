@@ -11,6 +11,7 @@ import (
 
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/lang"
+	"github.com/zolferfigueiredo/weej/internal/platform/serialport"
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/ui/web"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
@@ -33,6 +34,8 @@ type setupJSON struct {
 	ShowProfileList bool           `json:"showProfileList"`
 	TrayIcon        string         `json:"trayIcon"`
 	Speed           string         `json:"speed"`
+	Port            string         `json:"port"`
+	BaudRate        int            `json:"baudRate"`
 	Language        string         `json:"language"`
 }
 
@@ -93,6 +96,8 @@ func setupToJSON(s core.Setup) setupJSON {
 		ShowProfileList: s.ShowProfiles,
 		TrayIcon:        string(s.Icon),
 		Speed:           string(s.Speed),
+		Port:            s.Port,
+		BaudRate:        s.BaudRate(),
 	}
 }
 
@@ -114,6 +119,8 @@ func setupFromJSON(j setupJSON) core.Setup {
 		ShowProfiles: j.ShowProfileList,
 		Icon:         core.ParseIconStyle(j.TrayIcon),
 		Speed:        core.ParseSpeed(j.Speed),
+		Port:         j.Port,
+		Baud:         j.BaudRate,
 	}
 }
 
@@ -188,6 +195,10 @@ func (app *App) onSettingsMessage(data []byte) {
 		app.handleSettingsKey(data)
 	case "stopRecording":
 		app.handleSettingsStopRecording()
+	case "listPorts":
+		app.sendPorts()
+	case "reconnect":
+		app.requestReconnect()
 	case "checkUpdates":
 		app.manualCheckUpdate()
 	case "openUrl":
@@ -224,6 +235,9 @@ func (app *App) sendSettingsInit() {
 	payload["iconPreviews"] = app.iconPreviews()
 	payload["labels"] = app.shortcutLabels(s.Setup)
 	payload["nightLightExperimental"] = true
+	payload["connection"] = app.connectionPayload()
+	payload["forcedPort"] = app.forcedPort
+	payload["baudRates"] = core.BaudRates
 	win.Send(payload)
 }
 
@@ -250,9 +264,13 @@ func (app *App) handleSettingsSave(data []byte) {
 	}
 
 	cur := app.snapshotSettings()
+	old := cur.Setup
 	cur.Setup = newSetup
 	if err := app.persistSettings(cur); err != nil {
 		app.log("Could not save settings: " + err.Error())
+	}
+	if old.Port != newSetup.Port || old.BaudRate() != newSetup.BaudRate() {
+		app.startSerial()
 	}
 
 	app.registerHotkeys(cur.Setup)
@@ -335,6 +353,9 @@ func (app *App) handleSettingsImportDeej() {
 	cur.Profiles = append(cur.Profiles, core.Profile{Name: imp.Name, Jobs: imp.Jobs})
 	cur.Columns = imp.Columns
 	cur.Invert = imp.Invert
+	if imp.Baud > 0 {
+		cur.Baud = imp.Baud
+	}
 	cur.Active = len(cur.Profiles) - 1
 
 	if win := app.settingsWin; win != nil {
@@ -525,4 +546,32 @@ func languagesPayload() []map[string]string {
 		out[i] = map[string]string{"code": l.Code, "name": l.Name}
 	}
 	return out
+}
+
+func (app *App) connectionPayload() map[string]any {
+	connected, busy, port := app.connectionStatus()
+	return map[string]any{"connected": connected, "busy": busy, "port": port}
+}
+
+func (app *App) pushConnection() {
+	if win := app.settingsWin; win != nil {
+		payload := app.connectionPayload()
+		payload["type"] = "connection"
+		win.Send(payload)
+	}
+}
+
+// Listing ports can take a moment, so it runs off the UI thread; Send is safe from anywhere.
+func (app *App) sendPorts() {
+	win := app.settingsWin
+	if win == nil {
+		return
+	}
+	go func() {
+		ports := serialport.List()
+		if ports == nil {
+			ports = []serialport.PortInfo{}
+		}
+		win.Send(map[string]any{"type": "ports", "ports": ports})
+	}()
 }

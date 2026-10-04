@@ -18,6 +18,8 @@ let recording = null; // { field: "profile:<i>" | "next" | "previous" }
 let popover = null; // { knob, top, left }
 let dialog = null; // { kind: "removeProfile" | "removeKnob" }
 let importNote = ""; // last import_skipped / import_failed text, shown under the import button
+let ports = null; // [{ name, product, usb }] once Go has listed them
+let connection = { connected: false, busy: false, port: "" };
 
 const SECTION_LABEL_KEY = {
   volume: "section.volume",
@@ -136,6 +138,7 @@ function render() {
   renderTabs();
   renderFooter();
   if (activeTab === "app") renderApp();
+  else if (activeTab === "connection") renderConnection();
   else if (activeTab === "about") renderAbout();
   else renderGeneral();
 
@@ -152,6 +155,7 @@ function renderTabs() {
   const tabs = [
     ["general", t("tab.general")],
     ["app", t("tab.app")],
+    ["connection", t("tab.connection")],
     ["about", t("tab.about")],
   ];
   document.getElementById("tabs").innerHTML = tabs
@@ -351,6 +355,79 @@ function renderApp() {
               <span class="row-desc">${esc(t("speed_note"))}</span>
             </div>
             <div class="row-control"><select class="select" id="speed-select">${speedOptions}</select></div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function portLabel(p) {
+  return p.product ? `${p.name} (${p.product})` : p.name;
+}
+
+function renderConnection() {
+  const forced = init.forcedPort || "";
+  const autoLabel =
+    !draft.port && connection.connected && connection.port ? t("port_auto_found", { port: connection.port }) : t("port_auto");
+  const list = ports || [];
+  let portOptions;
+  if (forced) {
+    portOptions = `<option selected>${esc(forced)}</option>`;
+  } else {
+    portOptions =
+      `<option value=""${draft.port ? "" : " selected"}>${esc(autoLabel)}</option>` +
+      list
+        .map((p) => `<option value="${escAttr(p.name)}"${draft.port === p.name ? " selected" : ""}>${esc(portLabel(p))}</option>`)
+        .join("");
+    // A saved port that is unplugged right now still has to show as the choice.
+    if (draft.port && !list.some((p) => p.name === draft.port)) {
+      portOptions += `<option value="${escAttr(draft.port)}" selected>${esc(draft.port)}</option>`;
+    }
+  }
+
+  const rates = (init.baudRates || [9600]).slice();
+  if (draft.baudRate && !rates.includes(draft.baudRate)) rates.push(draft.baudRate);
+  const baudOptions = rates
+    .map((r) => `<option value="${r}"${r === draft.baudRate ? " selected" : ""}>${r}</option>`)
+    .join("");
+
+  let status = t("not_connected");
+  let statusClass = "";
+  if (connection.connected) {
+    status = t("connected", { port: connection.port });
+    statusClass = " status-ok";
+  } else if (connection.busy && connection.port) {
+    status = t("port_busy", { port: connection.port });
+    statusClass = " warning";
+  }
+
+  document.getElementById("panel").innerHTML = `
+    <div class="tabpanel" role="tabpanel">
+      <div class="group">
+        <div class="card">
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("status"))}</span>
+              <span class="row-desc${statusClass}">${esc(status)}</span>
+            </div>
+            <div class="row-control"><button class="btn" type="button" data-action="reconnect">${esc(t("reconnect"))}</button></div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("port"))}</span>
+              <span class="row-desc">${esc(forced ? t("port_forced", { port: forced }) : t("port_note"))}</span>
+            </div>
+            <div class="row-control">
+              <button class="btn btn-icon btn-subtle" type="button" data-action="refresh-ports" title="${escAttr(t("refresh"))}" aria-label="${escAttr(t("refresh"))}"${forced ? " disabled" : ""}>&#x21bb;</button>
+              <select class="select" id="port-select"${forced ? " disabled" : ""}>${portOptions}</select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("baud_rate"))}</span>
+              <span class="row-desc">${esc(t("baud_note"))}</span>
+            </div>
+            <div class="row-control"><select class="select" id="baud-select">${baudOptions}</select></div>
           </div>
         </div>
       </div>
@@ -558,6 +635,7 @@ function onClick(e) {
   switch (target.dataset.action) {
     case "switch-tab":
       activeTab = target.dataset.tab;
+      if (activeTab === "connection") send({ type: "listPorts" });
       render();
       break;
     case "add-profile":
@@ -607,6 +685,12 @@ function onClick(e) {
       else startRecording(field);
       break;
     }
+    case "refresh-ports":
+      send({ type: "listPorts" });
+      break;
+    case "reconnect":
+      send({ type: "reconnect" });
+      break;
     case "remove-shortcut":
       applyRecorded(target.dataset.field, null);
       render();
@@ -675,6 +759,13 @@ function onChange(e) {
     case "speed-select":
       draft.speed = el.value;
       break;
+    case "port-select":
+      draft.port = el.value;
+      render();
+      break;
+    case "baud-select":
+      draft.baudRate = parseInt(el.value, 10);
+      break;
   }
 }
 
@@ -685,6 +776,8 @@ function onMessage(msg) {
       draft = clone(msg.setup);
       labels = Object.assign({}, msg.labels || {});
       activeTab = msg.tab || "general";
+      connection = msg.connection || connection;
+      if (activeTab === "connection") send({ type: "listPorts" });
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
       render();
       break;
@@ -701,6 +794,18 @@ function onMessage(msg) {
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
       importNote = msg.skipped && msg.skipped.length ? t("import_skipped", { items: msg.skipped.join(", ") }) : "";
       render();
+      break;
+    case "ports":
+      ports = msg.ports || [];
+      if (activeTab === "connection") render();
+      break;
+    // Go-initiated: the board connected, dropped or got blocked by another app.
+    case "connection":
+      connection = { connected: !!msg.connected, busy: !!msg.busy, port: msg.port || "" };
+      if (activeTab === "connection") {
+        send({ type: "listPorts" });
+        render();
+      }
       break;
     case "importFailed":
       importNote = t("import_failed");

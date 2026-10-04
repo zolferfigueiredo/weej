@@ -15,29 +15,32 @@ var (
 	dwmapi   = windows.NewLazySystemDLL("dwmapi.dll")
 	gdi32    = windows.NewLazySystemDLL("gdi32.dll")
 
-	procRegisterClassExW      = user32.NewProc("RegisterClassExW")
-	procCreateWindowExW       = user32.NewProc("CreateWindowExW")
-	procDefWindowProcW        = user32.NewProc("DefWindowProcW")
-	procDestroyWindow         = user32.NewProc("DestroyWindow")
-	procShowWindow            = user32.NewProc("ShowWindow")
-	procGetMessageW           = user32.NewProc("GetMessageW")
-	procTranslateMessage      = user32.NewProc("TranslateMessage")
-	procDispatchMessageW      = user32.NewProc("DispatchMessageW")
-	procPostQuitMessage       = user32.NewProc("PostQuitMessage")
-	procSetForegroundWindow   = user32.NewProc("SetForegroundWindow")
-	procLoadCursorW           = user32.NewProc("LoadCursorW")
-	procGetDpiForWindow       = user32.NewProc("GetDpiForWindow")
-	procSystemParametersInfoW = user32.NewProc("SystemParametersInfoW")
-	procSetWindowPos          = user32.NewProc("SetWindowPos")
-	procGetWindowRect         = user32.NewProc("GetWindowRect")
-	procGetClientRect         = user32.NewProc("GetClientRect")
-	procGetSystemMenu         = user32.NewProc("GetSystemMenu")
-	procDeleteMenu            = user32.NewProc("DeleteMenu")
-	procSetWindowTextW        = user32.NewProc("SetWindowTextW")
-	procSetTimer              = user32.NewProc("SetTimer")
-	procKillTimer             = user32.NewProc("KillTimer")
-	procFillRect              = user32.NewProc("FillRect")
-	procInvalidateRect        = user32.NewProc("InvalidateRect")
+	procRegisterClassExW       = user32.NewProc("RegisterClassExW")
+	procCreateWindowExW        = user32.NewProc("CreateWindowExW")
+	procDefWindowProcW         = user32.NewProc("DefWindowProcW")
+	procDestroyWindow          = user32.NewProc("DestroyWindow")
+	procShowWindow             = user32.NewProc("ShowWindow")
+	procGetMessageW            = user32.NewProc("GetMessageW")
+	procTranslateMessage       = user32.NewProc("TranslateMessage")
+	procDispatchMessageW       = user32.NewProc("DispatchMessageW")
+	procPostQuitMessage        = user32.NewProc("PostQuitMessage")
+	procSetForegroundWindow    = user32.NewProc("SetForegroundWindow")
+	procLoadCursorW            = user32.NewProc("LoadCursorW")
+	procGetDpiForWindow        = user32.NewProc("GetDpiForWindow")
+	procSystemParametersInfoW  = user32.NewProc("SystemParametersInfoW")
+	procSetWindowPos           = user32.NewProc("SetWindowPos")
+	procGetWindowRect          = user32.NewProc("GetWindowRect")
+	procGetClientRect          = user32.NewProc("GetClientRect")
+	procGetSystemMenu          = user32.NewProc("GetSystemMenu")
+	procDeleteMenu             = user32.NewProc("DeleteMenu")
+	procSetWindowTextW         = user32.NewProc("SetWindowTextW")
+	procSetTimer               = user32.NewProc("SetTimer")
+	procKillTimer              = user32.NewProc("KillTimer")
+	procFillRect               = user32.NewProc("FillRect")
+	procInvalidateRect         = user32.NewProc("InvalidateRect")
+	procLoadImageW             = user32.NewProc("LoadImageW")
+	procGetSystemMetricsForDpi = user32.NewProc("GetSystemMetricsForDpi")
+	procSendMessageW           = user32.NewProc("SendMessageW")
 
 	procCreateSolidBrush = gdi32.NewProc("CreateSolidBrush")
 	procDeleteObject     = gdi32.NewProc("DeleteObject")
@@ -76,6 +79,13 @@ const (
 	wmTimer      = 0x0113
 	wmSysCommand = 0x0112
 	wmDpiChanged = 0x02E0
+	wmSetIcon    = 0x0080
+
+	iconSmall  = 0
+	iconBig    = 1
+	imageIcon  = 1
+	smCxIcon   = 11
+	smCxSmIcon = 49
 
 	waInactive = 0
 
@@ -165,6 +175,10 @@ func createWindowHidden(title string) uintptr {
 		uintptr(cwUseDefault), uintptr(cwUseDefault), 400, 300,
 		0, 0, moduleHandle, 0,
 	)
+	if hwnd != 0 {
+		dpi, _, _ := procGetDpiForWindow.Call(hwnd)
+		setWindowIcons(hwnd, uint32(dpi))
+	}
 	return hwnd
 }
 
@@ -339,6 +353,7 @@ func wndProcDispatch(hwnd uintptr, message uint32, wparam, lparam uintptr) uintp
 			var suggested rect32
 			procRtlMoveMemory.Call(uintptr(unsafe.Pointer(&suggested)), lparam, unsafe.Sizeof(suggested))
 			w.scale = float64(wparam&0xFFFF) / 96.0
+			setWindowIcons(hwnd, uint32(wparam&0xFFFF))
 			setWindowPos(hwnd, suggested.Left, suggested.Top, suggested.Right-suggested.Left, suggested.Bottom-suggested.Top, swpNoZorder|swpNoActivate)
 			return 0
 		}
@@ -361,4 +376,39 @@ func wndProcDispatch(hwnd uintptr, message uint32, wparam, lparam uintptr) uintp
 	}
 	r, _, _ := procDefWindowProcW.Call(hwnd, uintptr(message), wparam, lparam)
 	return r
+}
+
+var (
+	iconMu    sync.Mutex
+	iconCache = map[uintptr]uintptr{}
+)
+
+// The exe's own icon group (named APP in winres.json), loaded at the exact pixel size a DPI
+// needs. Every window shares these, so they live for the whole process.
+func appIcon(size uintptr) uintptr {
+	iconMu.Lock()
+	defer iconMu.Unlock()
+	if h, ok := iconCache[size]; ok {
+		return h
+	}
+	module, _, _ := procGetModuleHandleW.Call(0)
+	h, _, _ := procLoadImageW.Call(module, uintptr(unsafe.Pointer(utf16Ptr("APP"))), imageIcon, size, size, 0)
+	if h != 0 {
+		iconCache[size] = h
+	}
+	return h
+}
+
+func setWindowIcons(hwnd uintptr, dpi uint32) {
+	if dpi == 0 {
+		dpi = 96
+	}
+	small, _, _ := procGetSystemMetricsForDpi.Call(smCxSmIcon, uintptr(dpi))
+	big, _, _ := procGetSystemMetricsForDpi.Call(smCxIcon, uintptr(dpi))
+	if h := appIcon(small); h != 0 {
+		procSendMessageW.Call(hwnd, wmSetIcon, iconSmall, h)
+	}
+	if h := appIcon(big); h != 0 {
+		procSendMessageW.Call(hwnd, wmSetIcon, iconBig, h)
+	}
 }
