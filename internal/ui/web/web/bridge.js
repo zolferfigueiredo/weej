@@ -289,7 +289,7 @@ const MOCK_EN_STRINGS = {
   "icon.dial": "Dial",
   "icon.mixer": "Mixer",
   import_deej: "Import from deej...",
-  import_done: "Your deej setup is now the profile “{name}”.",
+  import_done: "Your deej setup is now the profile â{name}â.",
   import_failed: "Couldn't read that deej config.",
   import_skipped: "Not imported: {items}",
   inspired_by: "Inspired by",
@@ -345,7 +345,7 @@ const MOCK_EN_STRINGS = {
   remove_knob: "Remove the last knob",
   remove_knob_info: "What it does in every profile goes with it.",
   remove_knob_q: "Remove knob {letter}?",
-  remove_named: "Remove “{name}”?",
+  remove_named: "Remove â{name}â?",
   remove_profile: "Remove this profile",
   remove_profile_info: "Its knob choices and shortcut go with it.",
   remove_shortcut: "Remove shortcut",
@@ -383,6 +383,16 @@ const MOCK_EN_STRINGS = {
   speed_note: "How soon a change lands after a turn.",
   "tab.about": "About",
   "tab.app": "App settings",
+  "tab.connection": "Connection",
+  status: "Status",
+  port: "Port",
+  port_auto: "Automatic",
+  port_auto_found: "Automatic ({port})",
+  port_note: "Automatic finds your board by itself.",
+  port_forced: "Set to {port} when WeeJ was started.",
+  baud_rate: "Baud rate",
+  baud_note: "Must match Serial.begin() in your board’s sketch.",
+  refresh: "Refresh",
   "tab.general": "General",
   tray: "Tray icon",
   tray_tip: "If you don't see its icon, open Show hidden icons on the taskbar and drag it next to the clock.",
@@ -515,11 +525,16 @@ function mockSettingsInit(enStrings) {
       showProfileList: true,
       trayIcon: "mixer",
       speed: "slow",
+      port: "",
+      baudRate: 9600,
     },
     catalog,
     iconPreviews: { mixer: svgIcon("#0078d4"), dial: svgIcon("#107c10"), app: svgIcon("#5d5d5d") },
     labels,
     nightLightExperimental: true,
+    connection: { connected: true, busy: false, port: "COM6" },
+    forcedPort: "",
+    baudRates: [9600, 19200, 38400, 57600, 115200],
   };
 }
 
@@ -533,6 +548,17 @@ function startSettingsMock(post, enStrings) {
         break;
       case "save":
         post({ type: "saved", setup: msg.setup });
+        break;
+      case "listPorts":
+        setTimeout(() => {
+          post({
+            type: "ports",
+            ports: [
+              { name: "COM1", product: "", usb: false },
+              { name: "COM6", product: "USB Serial", usb: true },
+            ],
+          });
+        }, 100);
         break;
       case "pickApp":
         setTimeout(() => {

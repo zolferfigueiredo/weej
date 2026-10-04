@@ -43,6 +43,8 @@ type settingsJSON struct {
 	ShowProfileList  bool       `json:"showProfileList"`
 	TrayIcon         string     `json:"trayIcon"`
 	Speed            string     `json:"speed"`
+	Port             string     `json:"port"`
+	BaudRate         int        `json:"baudRate"`
 	Language         string     `json:"language"`
 	ShowDataInMenu   bool       `json:"showDataInMenu"`
 	UpdateEvery      int        `json:"updateEvery"`
@@ -112,6 +114,8 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		ShowProfileList:  s.ShowProfiles,
 		TrayIcon:         string(s.Icon),
 		Speed:            string(s.Speed),
+		Port:             s.Port,
+		BaudRate:         s.BaudRate(),
 		Language:         s.Language,
 		ShowDataInMenu:   s.ShowDataInMenu,
 		UpdateEvery:      s.UpdateEvery,
@@ -186,6 +190,12 @@ func DecodeSettings(data []byte, defaultProfileName string) (Settings, error) {
 	}
 	if v, ok := take[string](raw, "speed"); ok {
 		s.Speed = ParseSpeed(v)
+	}
+	if v, ok := take[string](raw, "port"); ok {
+		s.Port = v
+	}
+	if v, ok := take[int](raw, "baudRate"); ok && v > 0 {
+		s.Baud = v
 	}
 	if v, ok := take[string](raw, "language"); ok {
 		s.Language = v
