@@ -39,6 +39,19 @@ func TestShortcutValid(t *testing.T) {
 	if !Valid(Shortcut{Key: "1", Mods: ModAlt}) {
 		t.Error("want valid: Alt is enough")
 	}
+	if Valid(Shortcut{VK: 0x11, Key: "Control", Mods: ModControl}) {
+		t.Error("want invalid: a modifier on its own is not a shortcut")
+	}
+	if Valid(Shortcut{VK: 0xA4, Key: "Alt", Mods: ModControl | ModAlt}) {
+		t.Error("want invalid: a modifier on its own is not a shortcut")
+	}
+}
+
+func TestShortcutLabelNamesLettersByKeyNotCharacter(t *testing.T) {
+	s := Shortcut{VK: 'E', Mods: ModControl | ModAlt, Key: "€"}
+	if got := Label(s, "Ctrl"); got != "Ctrl+Alt+E" {
+		t.Errorf("Label() = %q, want Ctrl+Alt+E", got)
+	}
 }
 
 func TestShortcutClash(t *testing.T) {

@@ -14,15 +14,18 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/lang"
 	"github.com/zolferfigueiredo/weej/internal/platform/audio"
 	"github.com/zolferfigueiredo/weej/internal/platform/display"
+	"github.com/zolferfigueiredo/weej/internal/platform/nightlight"
 	"github.com/zolferfigueiredo/weej/internal/platform/serialport"
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/platform/via"
+	"github.com/zolferfigueiredo/weej/internal/platform/zoom"
 	"github.com/zolferfigueiredo/weej/internal/ui/web"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 )
 
 func (app *App) setup(l *winui.Loop) {
 	app.loop = l
+	web.SetLogger(func(msg string) { app.log(msg) })
 
 	webVersion, webOK := web.Available()
 	if !webOK {
@@ -38,7 +41,9 @@ func (app *App) setup(l *winui.Loop) {
 		settings.Language = code
 	}
 	app.replaceSettings(settings)
-	app.persistSettings(settings)
+	if err := app.persistSettings(settings); err != nil {
+		app.log("Could not save settings: " + err.Error())
+	}
 
 	app.printStartupSummary()
 
@@ -51,6 +56,8 @@ func (app *App) setup(l *winui.Loop) {
 	app.audio = audioW
 	app.ddc = display.NewDDC(app.log)
 	app.via = via.NewVIA(app.log)
+	app.zoom = zoom.New(app.log)
+	app.nightlight = nightlight.New(app.log)
 
 	app.setupTray(l)
 	app.checkUpdateComplete()

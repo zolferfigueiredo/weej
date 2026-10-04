@@ -1,20 +1,14 @@
 //go:build windows
 
-// Package web hosts WeeJ's four WebView2 windows (Settings, Calibration, the
-// first-run Language prompt, Update progress) and the plain HTML/CSS/JS pages
-// under web/. It does not import internal/ui/winui, which owns the UI-thread
-// message loop and tray; Open instead takes that loop's own invoke function, so
-// Send/Close/Focus/SetTitle can be called from any goroutine the way winui.Loop's
-// own methods are.
 package web
 
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 
 	"github.com/wailsapp/go-webview2/pkg/edge"
@@ -23,8 +17,25 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 )
 
-// Available reports the installed WebView2 Evergreen runtime's version, mirroring
-// webviewloader.GetAvailableCoreWebView2BrowserVersionString("").
+var (
+	logMu sync.Mutex
+	logFn = func(string) {}
+)
+
+// SetLogger routes this package's messages into the app log; the GUI build has no stderr.
+func SetLogger(f func(string)) {
+	logMu.Lock()
+	logFn = f
+	logMu.Unlock()
+}
+
+func logf(format string, args ...any) {
+	logMu.Lock()
+	f := logFn
+	logMu.Unlock()
+	f(fmt.Sprintf(format, args...))
+}
+
 func Available() (version string, ok bool) {
 	v, err := webviewloader.GetAvailableCoreWebView2BrowserVersionString("")
 	if err != nil || v == "" {
@@ -39,8 +50,8 @@ type Options struct {
 	Height    int // DIP
 	MinHeight int // DIP
 
-	NoClose bool // update window: no close box
-	Modal   bool // language prompt: runs a nested modal loop until closed
+	NoClose bool
+	Modal   bool
 
 	OnClose func()
 	// Runs before a Modal window's loop starts, so its onMessage can reach the Window.
@@ -59,18 +70,41 @@ type Window struct {
 	work           rect32
 	widthPx        int32
 	minHeightPx    int32
+	dark           bool
+	brush          uintptr
 
-	closed int32 // atomic bool; 0 = open
+	// UI thread only.
+	ready   bool
+	pending []string
+	shown   bool
+
+	closed int32
 }
+
+// Closed windows' Chromium objects hold the COM callbacks WebView2 may still call into,
+// so they stay reachable for the life of the process instead of being collected.
+var (
+	retiredMu sync.Mutex
+	retired   []*edge.Chromium
+)
+
+const showFallbackTimer = 1
 
 func dipToPx(dip int, scale float64) int32 {
 	return int32(math.Round(float64(dip) * scale))
 }
 
-// Open creates and shows a WebView2 window for the named page ("settings",
-// "calibration", "language" or "update") and must run on the UI thread, the same
-// one invoke marshals onto. For a Modal window it does not return until that
-// window closes.
+// Matches app.css --bg, so nothing flashes before the page paints.
+func themeRGB(dark bool) (r, g, b uint8) {
+	if dark {
+		return 0x20, 0x20, 0x20
+	}
+	return 0xF3, 0xF3, 0xF3
+}
+
+// Open must run on the UI thread. The window stays hidden until the page reports its
+// height (or a short fallback timer fires), so it appears at its final size with content.
+// A Modal window's Open returns only once it has closed.
 func Open(invoke func(func()), page string, opts Options, onMessage func(msg []byte)) (*Window, error) {
 	hwnd := createWindowHidden(opts.Title)
 	if hwnd == 0 {
@@ -88,23 +122,19 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 	w.work = workArea()
 	w.widthPx = dipToPx(opts.Width, w.scale)
 	w.minHeightPx = dipToPx(opts.MinHeight, w.scale)
-	w.resizeTo(dipToPx(opts.Height, w.scale))
+	w.applyTheme(!sys.AppsLight())
+	w.resizeTo(dipToPx(opts.Height, w.scale), true)
 
-	setDarkTitleBar(hwnd, !sys.AppsLight())
-	setMica(hwnd)
 	if opts.NoClose {
 		disableCloseBox(hwnd)
 	}
 
-	if err := w.embed(page); err != nil {
-		destroyWindow(hwnd)
-		return nil, err
-	}
+	w.embed(page)
 
 	if opts.OnOpen != nil {
 		opts.OnOpen(w)
 	}
-	showWindow(hwnd, swShow)
+	setTimer(hwnd, showFallbackTimer, 1500)
 
 	if opts.Modal {
 		w.runModalLoop()
@@ -113,64 +143,153 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 	return w, nil
 }
 
-func (w *Window) embed(page string) error {
+func (w *Window) embed(page string) {
 	chromium := edge.NewChromium()
 	chromium.DataPath = filepath.Join(os.Getenv("LOCALAPPDATA"), "WeeJ", "WebView2")
 	chromium.SetErrorCallback(func(err error) {
-		log.Printf("web: webview2 error: %v", err)
+		logf("web: webview2 error: %v", err)
 	})
 	chromium.MessageCallback = w.onWebMessage
 	chromium.WebResourceRequestedCallback = onWebResourceRequested(chromium)
 	chromium.AcceleratorKeyCallback = func(vk uint) bool { return false }
 
-	// Embed pumps its own nested message loop until the environment and
-	// controller are created, then returns; proven in the S1 spike.
+	// Embed pumps its own nested message loop until the controller exists.
 	chromium.Embed(w.hwnd)
 	w.chromium = chromium
 
+	devTools := os.Getenv("WEEJ_DEVTOOLS") == "1"
 	if settings, err := chromium.GetSettings(); err != nil {
-		log.Printf("web: GetSettings: %v", err)
+		logf("web: GetSettings: %v", err)
 	} else {
-		_ = settings.PutAreDevToolsEnabled(false)
-		_ = settings.PutAreDefaultContextMenusEnabled(false)
+		_ = settings.PutAreDevToolsEnabled(devTools)
+		_ = settings.PutAreDefaultContextMenusEnabled(devTools)
 		_ = settings.PutIsZoomControlEnabled(false)
-		_ = settings.PutAreBrowserAcceleratorKeysEnabled(false)
+		_ = settings.PutAreBrowserAcceleratorKeysEnabled(devTools)
 		_ = settings.PutIsStatusBarEnabled(false)
 	}
 
-	chromium.SetBackgroundColour(0, 0, 0, 0)
+	w.setWebViewBackground()
 	chromium.AddWebResourceRequestedFilter(origin+"/*", edge.COREWEBVIEW2_WEB_RESOURCE_CONTEXT_ALL)
 	chromium.Navigate(origin + "/" + page + ".html")
-	chromium.Resize()
-	return nil
+	w.resizeWebView()
 }
 
-// onWebMessage runs on the UI thread (WebView2's own callback dispatch), so it
-// must never block or open another window directly; an onMessage handler that
-// needs to open one should hop back through invoke itself, same as any other
-// goroutine would.
+func (w *Window) isClosed() bool { return atomic.LoadInt32(&w.closed) != 0 }
+
+// Goes through the controller directly: Chromium's own wrappers turn any error into os.Exit.
+func (w *Window) setWebViewBackground() {
+	if w.chromium == nil {
+		return
+	}
+	c := w.chromium.GetController()
+	if c == nil {
+		return
+	}
+	c2 := c.GetICoreWebView2Controller2()
+	if c2 == nil {
+		return
+	}
+	r, g, b := themeRGB(w.dark)
+	if err := c2.PutDefaultBackgroundColor(edge.COREWEBVIEW2_COLOR{A: 255, R: r, G: g, B: b}); err != nil {
+		logf("web: background: %v", err)
+	}
+}
+
+func (w *Window) resizeWebView() {
+	if w.chromium == nil || w.isClosed() {
+		return
+	}
+	w.chromium.Resize()
+}
+
+func (w *Window) focusWebView() {
+	if w.chromium == nil || w.isClosed() {
+		return
+	}
+	if c := w.chromium.GetController(); c != nil {
+		_ = c.MoveFocus(edge.COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
+	}
+}
+
+func (w *Window) applyTheme(dark bool) {
+	w.dark = dark
+	setDarkTitleBar(w.hwnd, dark)
+	r, g, b := themeRGB(dark)
+	old := w.brush
+	w.brush = createSolidBrush(r, g, b)
+	if old != 0 {
+		deleteObject(old)
+	}
+	w.setWebViewBackground()
+	invalidate(w.hwnd)
+}
+
+// SetTheme recolors the title bar and the background behind the page. Safe from any goroutine.
+func (w *Window) SetTheme(dark bool) {
+	w.invoke(func() {
+		if w.isClosed() {
+			return
+		}
+		w.applyTheme(dark)
+	})
+}
+
+func (w *Window) showOnce() {
+	if w.shown || w.isClosed() {
+		return
+	}
+	w.shown = true
+	killTimer(w.hwnd, showFallbackTimer)
+	showWindow(w.hwnd, swShow)
+	// A WebView created inside a hidden window stays blank until told it is visible again.
+	if w.chromium != nil {
+		if c := w.chromium.GetController(); c != nil {
+			_ = c.PutIsVisible(true)
+		}
+	}
+	w.resizeWebView()
+	setForegroundWindow(w.hwnd)
+	w.focusWebView()
+}
+
 func (w *Window) onWebMessage(message string, sender *edge.ICoreWebView2, args *edge.ICoreWebView2WebMessageReceivedEventArgs) {
+	if w.isClosed() {
+		return
+	}
 	var probe struct {
-		Type  string  `json:"type"`
-		Value float64 `json:"value"`
+		Type    string  `json:"type"`
+		Value   float64 `json:"value"`
+		Message string  `json:"message"`
+		Source  string  `json:"source"`
+		Line    int     `json:"line"`
 	}
 	if err := json.Unmarshal([]byte(message), &probe); err != nil {
-		log.Printf("web: bad JSON from page: %v", err)
+		logf("web: bad JSON from page: %v", err)
 		return
 	}
-	if probe.Type == "height" {
-		w.resizeTo(dipToPx(int(probe.Value), w.scale))
+	switch probe.Type {
+	case "height":
+		w.resizeTo(int32(math.Ceil(probe.Value)), false)
+		w.showOnce()
 		return
+	case "pageError":
+		logf("web: page error: %s (%s:%d)", probe.Message, probe.Source, probe.Line)
+		return
+	case "ready":
+		w.ready = true
+		for _, script := range w.pending {
+			w.chromium.Eval(script)
+		}
+		w.pending = nil
 	}
 	if w.onMessage != nil {
 		w.onMessage([]byte(message))
 	}
 }
 
-// resizeTo sets the window's client height to heightPx, clamped to [minHeightPx,
-// work area height], keeping the window centred in the primary monitor's work
-// area. Width never changes after Open; only the page's reported height does.
-func (w *Window) resizeTo(heightPx int32) {
+// resizeTo sets the client height in physical pixels, clamped to the work area. Only the
+// first call centres the window; later ones keep it where the user put it.
+func (w *Window) resizeTo(heightPx int32, center bool) {
 	if heightPx < w.minHeightPx {
 		heightPx = w.minHeightPx
 	}
@@ -179,78 +298,94 @@ func (w *Window) resizeTo(heightPx int32) {
 	}
 	totalW := w.widthPx + w.frameW
 	totalH := heightPx + w.frameH
-	x := w.work.Left + ((w.work.Right-w.work.Left)-totalW)/2
-	y := w.work.Top + ((w.work.Bottom-w.work.Top)-totalH)/2
-	setWindowPos(w.hwnd, x, y, totalW, totalH, swpNoZorder|swpNoActivate)
-	if w.chromium != nil {
-		w.chromium.Resize()
+	if center {
+		x := w.work.Left + ((w.work.Right-w.work.Left)-totalW)/2
+		y := w.work.Top + ((w.work.Bottom-w.work.Top)-totalH)/2
+		setWindowPos(w.hwnd, x, y, totalW, totalH, swpNoZorder|swpNoActivate)
+	} else {
+		cur := windowRect(w.hwnd)
+		y := cur.Top
+		if y+totalH > w.work.Bottom {
+			y = w.work.Bottom - totalH
+		}
+		if y < w.work.Top {
+			y = w.work.Top
+		}
+		setWindowPos(w.hwnd, cur.Left, y, totalW, totalH, swpNoZorder|swpNoActivate)
 	}
+	w.resizeWebView()
 }
 
 func (w *Window) runModalLoop() {
-	for atomic.LoadInt32(&w.closed) == 0 {
+	for !w.isClosed() {
 		if !pumpOne() {
-			// A WM_QUIT belongs to the whole application, not this nested loop;
-			// repost it so the outer loop (winui.Loop.Run) still sees it.
+			// WM_QUIT belongs to the whole application: repost it for the outer loop.
 			postQuitMessage()
 			return
 		}
 	}
 }
 
-// handleDestroyed runs synchronously from wndProcDispatch on WM_DESTROY, already
-// on the UI thread, so it calls OnClose directly rather than through invoke.
 func (w *Window) handleDestroyed() {
 	atomic.StoreInt32(&w.closed, 1)
+	if w.chromium != nil {
+		retiredMu.Lock()
+		retired = append(retired, w.chromium)
+		retiredMu.Unlock()
+	}
+	if w.brush != 0 {
+		deleteObject(w.brush)
+		w.brush = 0
+	}
 	if w.opts.OnClose != nil {
 		w.opts.OnClose()
 	}
 }
 
-// Send marshals v and hands it to the page's weej.receive(); a no-op once the
-// window has closed. Safe from any goroutine.
+// Send hands v to the page's weej.receive(). Until the page has said it is ready,
+// weej.receive does not exist yet, so messages wait in order. Safe from any goroutine.
 func (w *Window) Send(v any) {
 	data, err := json.Marshal(v)
 	if err != nil {
-		log.Printf("web: Send: %v", err)
+		logf("web: Send: %v", err)
 		return
 	}
+	script := "weej.receive(" + string(data) + ")"
 	w.invoke(func() {
-		if atomic.LoadInt32(&w.closed) != 0 || w.chromium == nil {
+		if w.isClosed() || w.chromium == nil {
 			return
 		}
-		w.chromium.Eval("weej.receive(" + string(data) + ")")
+		if !w.ready {
+			w.pending = append(w.pending, script)
+			return
+		}
+		w.chromium.Eval(script)
 	})
 }
 
-// Close destroys the window's HWND, which releases WebView2 (there is no
-// exposed Close on the controller) and then runs OnClose. Safe from any
-// goroutine.
 func (w *Window) Close() {
 	w.invoke(func() {
-		if atomic.LoadInt32(&w.closed) != 0 {
+		if w.isClosed() {
 			return
 		}
 		destroyWindow(w.hwnd)
 	})
 }
 
-// Focus restores the window if minimized and brings it to the foreground. Safe
-// from any goroutine.
 func (w *Window) Focus() {
 	w.invoke(func() {
-		if atomic.LoadInt32(&w.closed) != 0 {
+		if w.isClosed() {
 			return
 		}
 		showWindow(w.hwnd, swRestore)
 		setForegroundWindow(w.hwnd)
+		w.focusWebView()
 	})
 }
 
-// SetTitle changes the native title bar text. Safe from any goroutine.
 func (w *Window) SetTitle(s string) {
 	w.invoke(func() {
-		if atomic.LoadInt32(&w.closed) != 0 {
+		if w.isClosed() {
 			return
 		}
 		setWindowText(w.hwnd, s)

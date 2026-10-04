@@ -41,8 +41,8 @@ func TestImportDeej(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(imp.Columns, []int{0, 1, 2, 3, 4, 6}) {
-		t.Fatalf("Columns = %v, want [0 1 2 3 4 6]", imp.Columns)
+	if !reflect.DeepEqual(imp.Columns, []int{0, 3, 2, 4, 1, 6}) {
+		t.Fatalf("Columns = %v, want [0 3 2 4 1 6] (file order)", imp.Columns)
 	}
 	if imp.Invert {
 		t.Error("Invert = true, want false (invert_sliders: true negates to false)")
@@ -59,30 +59,30 @@ func TestImportDeej(t *testing.T) {
 		t.Errorf("knob A = %v, want [master]", imp.Jobs[0])
 	}
 
-	// Knob B: the 7 browsers and Spotify.
-	wantB := []Job{
-		{Kind: JobApp, Exe: "chrome.exe"}, {Kind: JobApp, Exe: "brave.exe"}, {Kind: JobApp, Exe: "firefox.exe"},
-		{Kind: JobApp, Exe: "opera.exe"}, {Kind: JobApp, Exe: "edge.exe"}, {Kind: JobApp, Exe: "msedge.exe"},
-		{Kind: JobApp, Exe: "spotify.exe"},
+	// Knob B: brightness screen 0 ("monitor 1"), listed second in the file.
+	if !jobSlicesEqual(imp.Jobs[1], []Job{{Kind: JobBrightness, Screen: 0}}) {
+		t.Errorf("knob B = %v, want brightness screen 0", imp.Jobs[1])
 	}
-	if !jobSlicesEqual(imp.Jobs[1], wantB) {
-		t.Errorf("knob B = %v, want %v", imp.Jobs[1], wantB)
-	}
-
 	// Knob C: brightness screen 1 ("monitor 2").
 	if !jobSlicesEqual(imp.Jobs[2], []Job{{Kind: JobBrightness, Screen: 1}}) {
 		t.Errorf("knob C = %v, want brightness screen 1", imp.Jobs[2])
 	}
-	// Knob D: brightness screen 0 ("monitor 1").
-	if !jobSlicesEqual(imp.Jobs[3], []Job{{Kind: JobBrightness, Screen: 0}}) {
-		t.Errorf("knob D = %v, want brightness screen 0", imp.Jobs[3])
-	}
 
-	// Knob E: the games, deduplicated, plus otherApps.
-	wantE := []Job{
+	// Knob D: the games, deduplicated, plus otherApps.
+	wantD := []Job{
 		{Kind: JobApp, Exe: "cs2.exe"}, {Kind: JobApp, Exe: "rocketleague.exe"}, {Kind: JobApp, Exe: "roblox.exe"},
 		{Kind: JobApp, Exe: "steam.exe"}, {Kind: JobApp, Exe: "steamwebhelper.exe"}, {Kind: JobApp, Exe: "steamservice.exe"},
 		{Kind: JobApp, Exe: "vlc.exe"}, {Kind: JobOtherApps},
+	}
+	if !jobSlicesEqual(imp.Jobs[3], wantD) {
+		t.Errorf("knob D = %v, want %v", imp.Jobs[3], wantD)
+	}
+
+	// Knob E: the browsers and Spotify.
+	wantE := []Job{
+		{Kind: JobApp, Exe: "chrome.exe"}, {Kind: JobApp, Exe: "brave.exe"}, {Kind: JobApp, Exe: "firefox.exe"},
+		{Kind: JobApp, Exe: "opera.exe"}, {Kind: JobApp, Exe: "edge.exe"}, {Kind: JobApp, Exe: "msedge.exe"},
+		{Kind: JobApp, Exe: "spotify.exe"},
 	}
 	if !jobSlicesEqual(imp.Jobs[4], wantE) {
 		t.Errorf("knob E = %v, want %v", imp.Jobs[4], wantE)

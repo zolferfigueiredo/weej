@@ -19,12 +19,12 @@ func SetDarkTitleBar(hwnd windows.HWND, dark bool) {
 	if dark {
 		v = 1
 	}
-	windows.DwmSetWindowAttribute(hwnd, dwmwaUseImmersiveDarkMode, unsafe.Pointer(&v), uint32(unsafe.Sizeof(v)))
+	_ = windows.DwmSetWindowAttribute(hwnd, dwmwaUseImmersiveDarkMode, unsafe.Pointer(&v), uint32(unsafe.Sizeof(v)))
 }
 
 // SetMica returns no error: DwmSetWindowAttribute fails for this attribute on Windows 10, where
 // the backdrop simply does not apply, which is the documented and expected outcome.
 func SetMica(hwnd windows.HWND) {
 	v := int32(dwmSBTMainWindow)
-	windows.DwmSetWindowAttribute(hwnd, dwmwaSystemBackdropType, unsafe.Pointer(&v), uint32(unsafe.Sizeof(v)))
+	_ = windows.DwmSetWindowAttribute(hwnd, dwmwaSystemBackdropType, unsafe.Pointer(&v), uint32(unsafe.Sizeof(v)))
 }

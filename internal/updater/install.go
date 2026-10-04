@@ -194,5 +194,5 @@ func setUninstallDisplayVersion(version string) {
 		return // not installed via the installer: nothing to update
 	}
 	defer k.Close()
-	k.SetStringValue("DisplayVersion", version)
+	_ = k.SetStringValue("DisplayVersion", version) // best-effort: cosmetic uninstall-list metadata
 }

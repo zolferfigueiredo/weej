@@ -16,7 +16,7 @@ func runningProcessPath(exe string) string {
 	if err != nil {
 		return ""
 	}
-	defer windows.CloseHandle(snap)
+	defer func() { _ = windows.CloseHandle(snap) }()
 
 	var entry windows.ProcessEntry32
 	entry.Size = uint32(unsafe.Sizeof(entry))
@@ -41,7 +41,7 @@ func fullProcessImagePath(pid uint32) string {
 	if err != nil {
 		return ""
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 
 	buf := make([]uint16, windows.MAX_PATH)
 	size := uint32(len(buf))
