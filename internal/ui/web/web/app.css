@@ -28,10 +28,10 @@ review, the verdict, DESIGN.md, and every shipping raster carrying its provenanc
   --radius-sm: 4px;
   --font: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
   --font-display: "Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
-  --fs-title: 20px;
-  --fs-subtitle: 14px;
-  --fs-body: 14px;
-  --fs-caption: 12px;
+  --fs-title: 16px;
+  --fs-subtitle: 13px;
+  --fs-body: 13px;
+  --fs-caption: 11px;
   --motion-fast: 100ms;
   --motion: 150ms;
   --ease: cubic-bezier(0.1, 0.9, 0.2, 1);
@@ -773,4 +773,151 @@ select.select {
   height: 1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
+}
+
+/* --- Compact layout, matching TheeJ's Settings --- */
+
+.app {
+  padding: 8px 20px 0;
+  gap: 12px;
+}
+
+.page-title {
+  display: none;
+}
+
+.tab {
+  padding: 8px 2px;
+  margin-right: 16px;
+}
+
+.tabpanel {
+  gap: 14px;
+}
+
+.group {
+  gap: 4px;
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 2px 2px;
+}
+
+.group-head .group-title {
+  padding: 0;
+}
+
+.group-title {
+  font-size: var(--fs-subtitle);
+  font-weight: 600;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.group-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px 0;
+}
+
+.group-foot .group-note {
+  flex: 1 1 auto;
+  padding: 0;
+}
+
+.group-foot.end {
+  justify-content: flex-end;
+}
+
+.row {
+  gap: 10px;
+  padding: 6px 12px;
+  min-height: 38px;
+}
+
+.row-control {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+}
+
+.btn {
+  padding: 4px 12px;
+}
+
+.btn-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.input,
+.select {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.input-name {
+  width: 180px;
+}
+
+.select-inline {
+  width: auto;
+  max-width: 200px;
+}
+
+.job-list {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  text-align: right;
+}
+
+.job-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.job-line img {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.job-line.muted {
+  color: var(--text-secondary, inherit);
+}
+
+.chev {
+  color: var(--text-secondary, inherit);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.footer {
+  margin: 4px -20px 0;
+  padding: 10px 20px;
+}
+
+select.select.select-inline,
+.row-control select.select {
+  width: auto;
+  max-width: 220px;
+}
+
+select.select,
+.input {
+  padding-top: 4px;
+  padding-bottom: 4px;
 }

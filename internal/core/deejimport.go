@@ -3,7 +3,6 @@ package core
 import (
 	"fmt"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -46,43 +45,42 @@ func deejJob(entry string) (Job, bool) {
 
 // deej's own default direction is raw; TheeJ's (and so WeeJ's) is 1 - raw. Invert undoes that
 // difference, so it is the negation of deej's invert_sliders, not a copy of it.
+// Knobs follow the order slider_mapping lists them in, which is how people write their
+// boards top to bottom; the slider indexes say which input each knob is on, not its letter.
 func ImportDeej(yamlBytes []byte) (Import, error) {
 	var doc struct {
-		SliderMapping map[int]interface{} `yaml:"slider_mapping"`
-		InvertSliders bool                `yaml:"invert_sliders"`
+		SliderMapping yaml.Node `yaml:"slider_mapping"`
+		InvertSliders bool      `yaml:"invert_sliders"`
 	}
 	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
 		return Import{}, fmt.Errorf("core: deej import: %w", err)
 	}
-
-	cols := make([]int, 0, len(doc.SliderMapping))
-	for k := range doc.SliderMapping {
-		cols = append(cols, k)
-	}
-	sort.Ints(cols)
-
-	imp := Import{
-		Name:    "deej",
-		Columns: cols,
-		Invert:  !doc.InvertSliders,
-		Jobs:    make([][]Job, len(cols)),
+	if doc.SliderMapping.Kind != yaml.MappingNode {
+		return Import{}, fmt.Errorf("core: deej import: slider_mapping is missing")
 	}
 
-	for i, col := range cols {
+	imp := Import{Name: "deej", Invert: !doc.InvertSliders}
+	pairs := doc.SliderMapping.Content
+	for i := 0; i+1 < len(pairs); i += 2 {
+		col, err := strconv.Atoi(strings.TrimSpace(pairs[i].Value))
+		if err != nil {
+			imp.Skipped = append(imp.Skipped, pairs[i].Value)
+			continue
+		}
 		var entries []string
-		switch v := doc.SliderMapping[col].(type) {
-		case string:
-			entries = []string{v}
-		case []interface{}:
-			for _, e := range v {
-				if str, ok := e.(string); ok {
-					entries = append(entries, str)
+		switch v := pairs[i+1]; v.Kind {
+		case yaml.ScalarNode:
+			entries = []string{v.Value}
+		case yaml.SequenceNode:
+			for _, e := range v.Content {
+				if e.Kind == yaml.ScalarNode {
+					entries = append(entries, e.Value)
 				}
 			}
 		}
 
 		seenApps := map[string]bool{}
-		var jobs []Job
+		jobs := []Job{}
 		for _, entry := range entries {
 			job, ok := deejJob(entry)
 			if !ok {
@@ -97,7 +95,8 @@ func ImportDeej(yamlBytes []byte) (Import, error) {
 			}
 			jobs = append(jobs, job)
 		}
-		imp.Jobs[i] = jobs
+		imp.Columns = append(imp.Columns, col)
+		imp.Jobs = append(imp.Jobs, jobs)
 	}
 
 	return imp, nil

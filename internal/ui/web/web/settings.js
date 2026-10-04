@@ -77,6 +77,23 @@ function jobTitleFor(job) {
   return entry ? entry.short : job.kind;
 }
 
+function jobEntryFor(job) {
+  const k = jobKey(job);
+  return init.catalog.find((c) => jobKey(c.job) === k) || null;
+}
+
+function jobLines(jobs) {
+  if (!jobs.length) return `<span class="job-line muted">${esc(t("job.nothing"))}</span>`;
+  return jobs
+    .map((job) => {
+      const entry = jobEntryFor(job);
+      const title = entry ? entry.title : job.exe || job.kind;
+      const icon = entry && entry.icon ? `<img src="${entry.icon}" alt="" />` : "";
+      return `<span class="job-line">${icon}<span>${esc(title)}</span></span>`;
+    })
+    .join("");
+}
+
 function jobsSummary(jobs) {
   return jobs.map(jobTitleFor).join(", ");
 }
@@ -173,15 +190,16 @@ function renderGeneral() {
     ? draft.columns
         .map((col, i) => {
           const jobs = profile.jobs[i] || [];
-          const needsCal = (col === null || col === undefined || col === -1);
-          const desc = needsCal
-            ? `<span class="row-desc warning">${esc(t("needs_calibration"))}</span>`
-            : `<span class="row-desc">${esc(jobsSummary(jobs) || t("job.nothing"))}</span>`;
+          const needsCal = col === null || col === undefined || col === -1;
           return `
-            <div class="row clickable" type="button" role="button" tabindex="0" data-action="open-popover" data-knob="${i}">
+            <div class="row clickable knob-row" role="button" tabindex="0" data-action="open-popover" data-knob="${i}">
               <div class="row-main">
                 <span class="row-title">${esc(t("knob", { letter: letterFor(i) }))}</span>
-                ${desc}
+                ${needsCal ? `<span class="row-desc warning">${esc(t("needs_calibration"))}</span>` : ""}
+              </div>
+              <div class="row-control">
+                <div class="job-list">${jobLines(jobs)}</div>
+                <span class="chev" aria-hidden="true">&#x2304;</span>
               </div>
             </div>`;
         })
@@ -191,19 +209,20 @@ function renderGeneral() {
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel" role="tabpanel">
       <div class="group">
-        <h2 class="group-title">${esc(t("profiles"))}</h2>
+        <div class="group-head">
+          <h2 class="group-title">${esc(t("profile"))}</h2>
+          <select class="select select-inline" id="profile-select">${profileOptions}</select>
+          <span class="spacer"></span>
+          <span class="segmented">
+            <button class="btn btn-icon" type="button" data-action="add-profile" title="${escAttr(t("add_profile"))}" aria-label="${escAttr(t("add_profile"))}">+</button>
+            <button class="btn btn-icon" type="button" data-action="remove-profile" title="${escAttr(t("remove_profile"))}" aria-label="${escAttr(t("remove_profile"))}"${draft.profiles.length <= 1 ? " disabled" : ""}>&minus;</button>
+          </span>
+        </div>
         <div class="card">
-          <div class="row">
-            <div class="row-main"><select class="select" id="profile-select" data-style="max-width:220px">${profileOptions}</select></div>
-            <div class="row-control">
-              <button class="btn btn-icon" type="button" data-action="add-profile" title="${escAttr(t("add_profile"))}" aria-label="${escAttr(t("add_profile"))}">+</button>
-              <button class="btn btn-icon" type="button" data-action="remove-profile" title="${escAttr(t("remove_profile"))}" aria-label="${escAttr(t("remove_profile"))}"${draft.profiles.length <= 1 ? " disabled" : ""}>&minus;</button>
-            </div>
-          </div>
           <div class="row">
             <div class="row-main"><span class="row-title">${esc(t("name"))}</span></div>
             <div class="row-control">
-              <input class="input" id="profile-name" type="text" data-style="width:180px" value="${escAttr(profile.name)}" placeholder="${escAttr(t("profile_n", { n: String(draft.profile + 1) }))}" />
+              <input class="input input-name" id="profile-name" type="text" value="${escAttr(profile.name)}" placeholder="${escAttr(t("profile_n", { n: String(draft.profile + 1) }))}" />
             </div>
           </div>
           <div class="row">
@@ -214,15 +233,18 @@ function renderGeneral() {
       </div>
 
       <div class="group">
-        <h2 class="group-title">${esc(t("knobs"))}</h2>
-        <div class="card">${knobsHtml}</div>
-        <div class="group-note">
-          ${esc(t("jobs_note"))}
-          <button class="btn-link" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
+        <div class="group-head">
+          <h2 class="group-title">${esc(t("knobs"))}</h2>
+          <span class="spacer"></span>
+          <span class="segmented">
+            <button class="btn btn-icon" type="button" data-action="add-knob" title="${escAttr(t("add_knob"))}" aria-label="${escAttr(t("add_knob"))}"${draft.columns.length >= 26 ? " disabled" : ""}>+</button>
+            <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${draft.columns.length === 0 ? " disabled" : ""}>&minus;</button>
+          </span>
         </div>
-        <div data-style="display:flex;gap:8px;margin-top:6px;">
-          <button class="btn btn-icon" type="button" data-action="add-knob" title="${escAttr(t("add_knob"))}" aria-label="${escAttr(t("add_knob"))}"${draft.columns.length >= 26 ? " disabled" : ""}>+</button>
-          <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${draft.columns.length === 0 ? " disabled" : ""}>&minus;</button>
+        <div class="card">${knobsHtml}</div>
+        <div class="group-foot">
+          <span class="group-note">${esc(t("jobs_note"))}</span>
+          <button class="btn" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
         </div>
       </div>
 
@@ -236,11 +258,10 @@ function renderGeneral() {
             <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft.invertKnobs ? " checked" : ""} /></div>
           </div>
         </div>
-      </div>
-
-      <div class="group">
-        <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
-        ${importNote ? `<p class="group-note">${esc(importNote)}</p>` : ""}
+        <div class="group-foot end">
+          ${importNote ? `<span class="group-note">${esc(importNote)}</span>` : ""}
+          <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
+        </div>
       </div>
     </div>`;
 }
@@ -274,9 +295,11 @@ function renderApp() {
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel" role="tabpanel">
       <div class="group">
-        <h2 class="group-title">${esc(t("language"))}</h2>
         <div class="card">
-          <div class="row"><div class="row-main"><select class="select" id="language-select" data-style="max-width:220px">${langOptions}</select></div></div>
+          <div class="row">
+            <div class="row-main"><span class="row-title">${esc(t("language"))}</span></div>
+            <div class="row-control"><select class="select" id="language-select">${langOptions}</select></div>
+          </div>
         </div>
       </div>
 

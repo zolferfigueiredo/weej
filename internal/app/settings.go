@@ -136,7 +136,7 @@ func (app *App) openSettings(tab string) {
 	app.mu.Unlock()
 
 	w, err := web.Open(app.loop.Invoke, "settings", web.Options{
-		Title: app.tr("settings"), Width: 560, Height: 640,
+		Title: app.tr("settings"), Width: 460, Height: 560,
 		OnClose: func() {
 			app.mu.Lock()
 			app.settingsWin = nil
