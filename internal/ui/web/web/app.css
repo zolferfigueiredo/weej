@@ -47,6 +47,7 @@ review, the verdict, DESIGN.md, and every shipping raster carrying its provenanc
   --text-secondary: #5d5d5d;
   --text-disabled: #9b9b9b;
   --danger: #c42b1c;
+  --danger-fill: #c42b1c;
   --warning: #9d5d00;
   --success: #0f7b0f;
   --shadow-flyout: 0 4px 16px rgba(0, 0, 0, 0.14), 0 0 2px rgba(0, 0, 0, 0.08);
@@ -389,6 +390,17 @@ p {
 
 .btn-danger {
   color: var(--danger);
+}
+
+.btn-primary.btn-danger {
+  background: var(--danger-fill);
+  border-color: var(--danger-fill);
+  color: #ffffff;
+}
+
+.btn-primary.btn-danger:hover {
+  background: var(--danger-fill);
+  filter: brightness(1.1);
 }
 
 .btn-icon {
