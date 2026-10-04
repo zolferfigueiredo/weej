@@ -326,6 +326,10 @@ p {
   color: var(--danger);
 }
 
+.row-desc.status-ok {
+  color: var(--success);
+}
+
 .row-control {
   flex: none;
   display: flex;

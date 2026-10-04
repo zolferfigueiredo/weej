@@ -327,3 +327,23 @@ func TestSettingsSurviveRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestPortAndBaudSurviveSaving(t *testing.T) {
+	s := DefaultSettings("Default")
+	s.Port = "COM6"
+	s.Baud = 115200
+	data, err := EncodeSettings(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, _ := DecodeSettings(data, "Default")
+	if back.Port != "COM6" || back.BaudRate() != 115200 {
+		t.Errorf("round trip = %q at %d, want COM6 at 115200", back.Port, back.BaudRate())
+	}
+
+	// Older settings files have neither key: automatic port at deej's default speed.
+	old, _ := DecodeSettings([]byte(`{"profiles":[{"name":"Default","jobs":[]}]}`), "Default")
+	if old.Port != "" || old.BaudRate() != DefaultBaud {
+		t.Errorf("old file = %q at %d, want automatic at %d", old.Port, old.BaudRate(), DefaultBaud)
+	}
+}
