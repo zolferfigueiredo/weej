@@ -1,0 +1,94 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./internal/core/... ./internal/lang/... ./internal/draw/...
+
+  lint-and-build:
+    name: Lint and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GOOS: windows
+      GOARCH: amd64
+      CGO_ENABLED: 0
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13
+      - run: go build ./...
+
+  scripts:
+    name: Scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Shellcheck the scripts
+        run: |
+          command -v shellcheck >/dev/null || sudo apt-get install -y shellcheck
+          shellcheck -x build.sh run.sh install.sh release.sh scripts/env.sh .githooks/pre-commit
+      - name: No em or en dashes in user-facing text
+        run: |
+          dirs=()
+          for d in internal/lang/catalogs internal/app/web; do
+            [ -d "$d" ] && dirs+=("$d")
+          done
+          if [ "${#dirs[@]}" -eq 0 ]; then
+            echo "No catalogs or web directories yet."
+            exit 0
+          fi
+          if grep -rnP '\x{2014}|\x{2013}' "${dirs[@]}"; then
+            echo "Found an em or en dash above. Use a comma, colon, full stop or parentheses instead." >&2
+            exit 1
+          fi
+      - name: JSON files are strict
+        run: |
+          git ls-files '*.json' | while IFS= read -r f; do
+            jq empty "$f"
+          done
+
+  version:
+    name: Version
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the version check compares with the base branch
+      - name: A change to the app raises its version
+        run: |
+          base=origin/${{ github.base_ref }}
+          if git diff --quiet "$base"...HEAD -- main.go internal tools go.mod go.sum winres; then echo "The app is unchanged."; exit 0; fi
+          version() { git show "$1:internal/core/version.go" 2>/dev/null | sed -n 's/^const AppVersion = "\(.*\)"$/\1/p'; }
+          old=$(version "$base") new=$(version HEAD)
+          if [ -z "$old" ]; then
+            echo "First version: $new"
+            exit 0
+          fi
+          if [ "$new" = "$old" ] || [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -n 1)" != "$new" ]; then
+            echo "::error file=internal/core/version.go::The app changed, so AppVersion has to go above $old (it is $new)."
+            exit 1
+          fi
+          echo "$old -> $new"

@@ -1,0 +1,36 @@
+name: Bug report
+description: Something doesn't work as it should
+labels: [bug]
+body:
+  - type: textarea
+    attributes:
+      label: What happened?
+      description: What you expected, what you got instead, and a screenshot if it helps.
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Give knob A the job ...
+        2. Turn it ...
+  - type: input
+    attributes:
+      label: WeeJ version
+      description: Shown in the About tab of Settings.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Windows version
+      description: Run winver to see it.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: PC and board
+      description: Your deej board (how many knobs, which Arduino).
+  - type: input
+    attributes:
+      label: Screens and keyboards
+      description: Only if it's about one, for example a Dell U2723QE over USB-C, or a Keychron K8 Pro.
