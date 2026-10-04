@@ -21,7 +21,10 @@ import (
 func (app *App) setupTray(l *winui.Loop) {
 	app.tray = l.NewTray(app.onTrayClick, func() { app.manualCheckUpdate() })
 	app.hud = l.NewHUD()
-	l.OnThemeChange(func() { app.refreshTray() })
+	l.OnThemeChange(func() {
+		app.refreshTray()
+		app.applyThemeToWebWindows()
+	})
 	app.refreshTray()
 }
 

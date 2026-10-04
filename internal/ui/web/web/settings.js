@@ -173,7 +173,7 @@ function renderGeneral() {
     ? draft.columns
         .map((col, i) => {
           const jobs = profile.jobs[i] || [];
-          const needsCal = col === -1;
+          const needsCal = (col === null || col === undefined || col === -1);
           const desc = needsCal
             ? `<span class="row-desc warning">${esc(t("needs_calibration"))}</span>`
             : `<span class="row-desc">${esc(jobsSummary(jobs) || t("job.nothing"))}</span>`;
@@ -194,7 +194,7 @@ function renderGeneral() {
         <h2 class="group-title">${esc(t("profiles"))}</h2>
         <div class="card">
           <div class="row">
-            <div class="row-main"><select class="select" id="profile-select" style="max-width:220px">${profileOptions}</select></div>
+            <div class="row-main"><select class="select" id="profile-select" data-style="max-width:220px">${profileOptions}</select></div>
             <div class="row-control">
               <button class="btn btn-icon" type="button" data-action="add-profile" title="${escAttr(t("add_profile"))}" aria-label="${escAttr(t("add_profile"))}">+</button>
               <button class="btn btn-icon" type="button" data-action="remove-profile" title="${escAttr(t("remove_profile"))}" aria-label="${escAttr(t("remove_profile"))}"${draft.profiles.length <= 1 ? " disabled" : ""}>&minus;</button>
@@ -203,7 +203,7 @@ function renderGeneral() {
           <div class="row">
             <div class="row-main"><span class="row-title">${esc(t("name"))}</span></div>
             <div class="row-control">
-              <input class="input" id="profile-name" type="text" style="width:180px" value="${escAttr(profile.name)}" placeholder="${escAttr(t("profile_n", { n: String(draft.profile + 1) }))}" />
+              <input class="input" id="profile-name" type="text" data-style="width:180px" value="${escAttr(profile.name)}" placeholder="${escAttr(t("profile_n", { n: String(draft.profile + 1) }))}" />
             </div>
           </div>
           <div class="row">
@@ -220,7 +220,7 @@ function renderGeneral() {
           ${esc(t("jobs_note"))}
           <button class="btn-link" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
         </div>
-        <div style="display:flex;gap:8px;margin-top:6px;">
+        <div data-style="display:flex;gap:8px;margin-top:6px;">
           <button class="btn btn-icon" type="button" data-action="add-knob" title="${escAttr(t("add_knob"))}" aria-label="${escAttr(t("add_knob"))}"${draft.columns.length >= 26 ? " disabled" : ""}>+</button>
           <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${draft.columns.length === 0 ? " disabled" : ""}>&minus;</button>
         </div>
@@ -262,7 +262,7 @@ function renderApp() {
 
   const trayPreview =
     init.iconPreviews && init.iconPreviews[draft.trayIcon]
-      ? `<img src="${init.iconPreviews[draft.trayIcon]}" alt="" style="width:20px;height:20px;border-radius:4px;" />`
+      ? `<img src="${init.iconPreviews[draft.trayIcon]}" alt="" data-style="width:20px;height:20px;border-radius:4px;" />`
       : "";
   const iconOptions = ["mixer", "dial", "app"]
     .map((style) => `<option value="${style}"${draft.trayIcon === style ? " selected" : ""}>${esc(t("icon." + style))}</option>`)
@@ -276,7 +276,7 @@ function renderApp() {
       <div class="group">
         <h2 class="group-title">${esc(t("language"))}</h2>
         <div class="card">
-          <div class="row"><div class="row-main"><select class="select" id="language-select" style="max-width:220px">${langOptions}</select></div></div>
+          <div class="row"><div class="row-main"><select class="select" id="language-select" data-style="max-width:220px">${langOptions}</select></div></div>
         </div>
       </div>
 
@@ -306,14 +306,14 @@ function renderApp() {
             <div class="row-control"><input class="toggle" id="hide-icon" type="checkbox" role="switch"${draft.hideTrayIcon ? " checked" : ""} /></div>
           </div>
           <div class="row">
-            <div class="row-main"><span class="row-title"${draft.hideTrayIcon ? ' style="color:var(--text-disabled)"' : ""}>${esc(t("icon"))}</span></div>
+            <div class="row-main"><span class="row-title"${draft.hideTrayIcon ? ' data-style="color:var(--text-disabled)"' : ""}>${esc(t("icon"))}</span></div>
             <div class="row-control">
               ${trayPreview}
               <select class="select" id="tray-icon-style"${draft.hideTrayIcon ? " disabled" : ""}>${iconOptions}</select>
             </div>
           </div>
           <div class="row">
-            <div class="row-main"><span class="row-title"${draft.hideTrayIcon ? ' style="color:var(--text-disabled)"' : ""}>${esc(t("profile_list"))}</span></div>
+            <div class="row-main"><span class="row-title"${draft.hideTrayIcon ? ' data-style="color:var(--text-disabled)"' : ""}>${esc(t("profile_list"))}</span></div>
             <div class="row-control"><input class="toggle" id="show-profile-list" type="checkbox" role="switch"${draft.showProfileList ? " checked" : ""}${draft.hideTrayIcon ? " disabled" : ""} /></div>
           </div>
         </div>
@@ -344,12 +344,12 @@ function hostnameOf(url) {
 
 function renderAbout() {
   document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel" style="align-items:center;text-align:center;padding-top:4px;">
-      <img src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" style="border-radius:14px;" />
-      <h2 style="font:600 16px var(--font-display);margin:14px 0 2px;">WeeJ</h2>
+    <div class="tabpanel" role="tabpanel" data-style="align-items:center;text-align:center;padding-top:4px;">
+      <img src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" data-style="border-radius:14px;" />
+      <h2 data-style="font:600 16px var(--font-display);margin:14px 0 2px;">WeeJ</h2>
       <p class="row-desc">${esc(t("version", { version: init.version }))}</p>
-      <button class="btn" type="button" data-action="check-updates" style="margin-top:14px;">${esc(t("check"))}</button>
-      <p style="margin-top:18px;"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
+      <button class="btn" type="button" data-action="check-updates" data-style="margin-top:14px;">${esc(t("check"))}</button>
+      <p data-style="margin-top:18px;"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
       <p class="row-desc">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">${esc(hostnameOf(init.madeBy))}</a></p>
       <p class="row-desc">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
     </div>`;
@@ -359,7 +359,7 @@ function renderPopover() {
   const knobJobs = activeProfile().jobs[popover.knob] || [];
   const bySection = sectionsFromCatalog();
   let html = `<div class="popover-scrim" data-action="close-popover"></div>`;
-  html += `<div class="popover" style="top:${popover.top}px;left:${popover.left}px;">`;
+  html += `<div class="popover" data-style="top:${popover.top}px;left:${popover.left}px;">`;
   html += `<div class="popover-item" data-action="clear-jobs" data-knob="${popover.knob}"><span>${esc(t("clear"))}</span></div>`;
   html += `<div class="popover-sep"></div>`;
   for (const [section, entries] of bySection) {
@@ -383,7 +383,7 @@ function popoverItem(entry, knobJobs) {
   return `<label class="popover-item" for="${id}">
     <input class="chk" type="checkbox" id="${id}" data-action="toggle-job" data-knob="${popover.knob}" data-job='${escAttr(JSON.stringify(entry.job))}'${checked ? " checked" : ""} />
     <img src="${entry.icon}" alt="" />
-    <span style="flex:1 1 auto;">${esc(entry.title)}</span>
+    <span data-style="flex:1 1 auto;">${esc(entry.title)}</span>
     ${badge}
   </label>`;
 }
@@ -513,6 +513,7 @@ function stopRecording(notifyGo) {
 // --- Events -----------------------------------------------------------------
 
 function doSave() {
+  if (!draft) return;
   send({ type: "save", setup: draft });
 }
 

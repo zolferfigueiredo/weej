@@ -61,23 +61,26 @@ func columnsFromJSON(ptrs []*int) []int {
 }
 
 func setupToJSON(s core.Setup) setupJSON {
+	columns := s.Columns
+	if columns == nil {
+		columns = []int{}
+	}
+	// One jobs row per knob: the page adds and removes knobs by index.
 	profiles := make([]core.Profile, len(s.Profiles))
 	for i, p := range s.Profiles {
-		jobs := p.Jobs
-		if jobs == nil {
-			jobs = [][]core.Job{}
+		rows := len(p.Jobs)
+		if rows < len(columns) {
+			rows = len(columns)
 		}
-		for j, row := range jobs {
-			if row == nil {
-				jobs[j] = []core.Job{}
+		jobs := make([][]core.Job, rows)
+		for j := range jobs {
+			jobs[j] = []core.Job{}
+			if j < len(p.Jobs) && p.Jobs[j] != nil {
+				jobs[j] = p.Jobs[j]
 			}
 		}
 		p.Jobs = jobs
 		profiles[i] = p
-	}
-	columns := s.Columns
-	if columns == nil {
-		columns = []int{}
 	}
 	return setupJSON{
 		Columns:         columnsToJSON(columns),
@@ -162,17 +165,19 @@ func (app *App) onSettingsMessage(data []byte) {
 	if err := json.Unmarshal(data, &probe); err != nil {
 		return
 	}
+	// Page messages arrive inside a WebView2 callback, so anything that opens a window or a
+	// modal dialog is deferred to the main loop instead of nesting a message loop here.
 	switch probe.Type {
 	case "ready":
 		app.sendSettingsInit()
 	case "save":
 		app.handleSettingsSave(data)
 	case "calibrate":
-		app.startCalibration(false)
+		app.loop.Invoke(func() { app.startCalibration(false) })
 	case "pickApp":
-		app.handleSettingsPickApp(data)
+		app.loop.Invoke(func() { app.handleSettingsPickApp(data) })
 	case "importDeej":
-		app.handleSettingsImportDeej()
+		app.loop.Invoke(app.handleSettingsImportDeej)
 	case "setLanguage":
 		app.handleSettingsSetLanguage(data)
 	case "record":
@@ -212,7 +217,7 @@ func (app *App) sendSettingsInit() {
 	payload["icon"] = appIconDataURL(64)
 	payload["languages"] = languagesPayload()
 	payload["language"] = s.Language
-	payload["setup"] = setupToJSON(s.Setup)
+	payload["setup"] = setupToJSONWithLanguage(s)
 	payload["catalog"] = app.buildCatalog(s.Setup)
 	payload["iconPreviews"] = app.iconPreviews()
 	payload["labels"] = app.shortcutLabels(s.Setup)
@@ -228,6 +233,13 @@ func (app *App) handleSettingsSave(data []byte) {
 		return
 	}
 	newSetup := setupFromJSON(msg.Setup)
+	if len(newSetup.Profiles) == 0 {
+		app.log("Ignored a Settings save with no profiles")
+		return
+	}
+	if newSetup.Active < 0 || newSetup.Active >= len(newSetup.Profiles) {
+		newSetup.Active = 0
+	}
 
 	for i := range newSetup.Profiles {
 		if strings.TrimSpace(newSetup.Profiles[i].Name) == "" {
@@ -249,7 +261,7 @@ func (app *App) handleSettingsSave(data []byte) {
 	}
 
 	if hasUncalibratedColumn(cur.Columns) {
-		app.startCalibration(true)
+		app.loop.Invoke(func() { app.startCalibration(true) })
 	}
 }
 

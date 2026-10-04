@@ -23,6 +23,7 @@ import (
 
 func (app *App) setup(l *winui.Loop) {
 	app.loop = l
+	web.SetLogger(func(msg string) { app.log(msg) })
 
 	webVersion, webOK := web.Available()
 	if !webOK {

@@ -9,6 +9,36 @@ let handler = null;
 let rootEl = null;
 let sendImpl = null;
 let pendingHeight = null;
+let initDone = false;
+let early = [];
+
+function reportError(message, source, line) {
+  send({ type: "pageError", message: String(message), source: String(source || ""), line: Number(line) || 0 });
+}
+window.addEventListener("error", (e) => reportError(e.message, e.filename, e.lineno));
+window.addEventListener("unhandledrejection", (e) =>
+  reportError(e.reason && e.reason.message ? e.reason.message : e.reason, "promise", 0)
+);
+document.addEventListener("securitypolicyviolation", (e) =>
+  reportError("CSP blocked " + e.violatedDirective, e.sourceFile || e.blockedURI, e.lineNumber)
+);
+
+// The CSP forbids style attributes in markup but not CSSOM, so pages write data-style and
+// it is applied here as soon as the element appears.
+function applyDataStyles(node) {
+  if (node.nodeType !== 1) return;
+  if (node.hasAttribute("data-style")) node.style.cssText = node.getAttribute("data-style");
+  node.querySelectorAll("[data-style]").forEach((el) => {
+    el.style.cssText = el.getAttribute("data-style");
+  });
+}
+new MutationObserver((mutations) => {
+  for (const m of mutations) {
+    if (m.type === "attributes") applyDataStyles(m.target);
+    m.addedNodes.forEach(applyDataStyles);
+  }
+}).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-style"] });
+applyDataStyles(document.documentElement);
 
 // --- i18n -------------------------------------------------------------------
 
@@ -107,10 +137,16 @@ function applyTheme(theme) {
 
 // --- Height reporting -----------------------------------------------------
 
+// Physical pixels, so Go sizes the window right for any DPI and Windows text size.
 function reportHeight() {
   if (!rootEl) return;
-  const value = Math.ceil(rootEl.getBoundingClientRect().height);
-  send({ type: "height", value });
+  const body = getComputedStyle(document.body);
+  const css =
+    rootEl.getBoundingClientRect().bottom +
+    window.scrollY +
+    parseFloat(body.paddingBottom || "0") +
+    parseFloat(body.marginBottom || "0");
+  send({ type: "height", value: Math.ceil(css * (window.devicePixelRatio || 1)) });
 }
 
 function scheduleHeightReport() {
@@ -125,7 +161,14 @@ function scheduleHeightReport() {
 
 function dispatch(msg) {
   if (!msg || typeof msg !== "object") return;
+  // Anything Go pushes before init (tab, profile, columns, step) waits and is replayed after it.
+  if (!initDone && msg.type !== "init") {
+    if (msg.type === "theme") applyTheme(msg);
+    early.push(msg);
+    return;
+  }
   if (msg.type === "init") {
+    initDone = true;
     if (typeof msg.lang === "string") lang = msg.lang;
     if (msg.strings) strings = msg.strings;
     if (msg.theme) applyTheme(msg.theme);
@@ -137,6 +180,11 @@ function dispatch(msg) {
   }
   if (handler) handler(msg);
   scheduleHeightReport();
+  if (msg.type === "init" && early.length) {
+    const queued = early;
+    early = [];
+    queued.forEach(dispatch);
+  }
 }
 
 // --- Transport: real WebView2 ------------------------------------------------
@@ -691,6 +739,10 @@ export function connect(rootId, onMsg) {
     const page = params.get("mock") || document.body.dataset.page || "settings";
     connectMock(page);
   }
+
+  const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+  applyTheme({ dark: systemDark.matches });
+  systemDark.addEventListener("change", (e) => applyTheme({ dark: e.matches }));
 
   if (rootEl && "ResizeObserver" in window) {
     new ResizeObserver(scheduleHeightReport).observe(rootEl);

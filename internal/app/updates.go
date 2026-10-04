@@ -270,11 +270,13 @@ func (app *App) onUpdateMessage(data []byte) {
 			win.Send(payload)
 		}
 	case "reopen":
-		if err := updater.Reopen(app.self, app.launchArgs); err != nil {
-			app.loop.Alert(core.AppName, app.trVars("reopen_failed", v1("error", err.Error())))
-			return
-		}
-		app.shutdown()
-		app.loop.Quit(0)
+		app.loop.Invoke(func() {
+			if err := updater.Reopen(app.self, app.launchArgs); err != nil {
+				app.loop.Alert(core.AppName, app.trVars("reopen_failed", v1("error", err.Error())))
+				return
+			}
+			app.shutdown()
+			app.loop.Quit(0)
+		})
 	}
 }

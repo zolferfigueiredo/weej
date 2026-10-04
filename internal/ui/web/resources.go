@@ -59,11 +59,16 @@ func onWebResourceRequested(chromium *edge.Chromium) func(*edge.ICoreWebView2Web
 		}
 
 		headers := "Content-Type: " + contentTypeFor(name) + "\r\n" + cspHeader
-		resp, err := chromium.Environment().CreateWebResourceResponse(data, status, reason, headers)
+		// go-webview2 v1.0.23 drops the body given to CreateWebResourceResponse (it shadows its
+		// stream variable), so every page came up blank; PutByteContent sets it correctly.
+		resp, err := chromium.Environment().CreateWebResourceResponse(nil, status, reason, headers)
 		if err != nil {
 			return
 		}
 		defer func() { _ = resp.Release() }()
+		if err := resp.PutByteContent(data); err != nil {
+			return
+		}
 		_ = args.PutResponse(resp)
 	}
 }

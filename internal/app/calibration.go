@@ -124,12 +124,15 @@ func (app *App) finishCalibration() {
 	if !changed {
 		return
 	}
-	app.openSettings("general")
-	if wasOpen {
-		if win := app.settingsWin; win != nil {
-			win.Send(map[string]any{"type": "columns", "columns": result})
+	// Finish arrives inside a WebView2 callback; opening a window there would nest message loops.
+	app.loop.Invoke(func() {
+		app.openSettings("general")
+		if wasOpen {
+			if win := app.settingsWin; win != nil {
+				win.Send(map[string]any{"type": "columns", "columns": columnsToJSON(result)})
+			}
 		}
-	}
+	})
 }
 
 func intSliceEqual(a, b []int) bool {
