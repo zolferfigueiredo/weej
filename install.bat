@@ -8,7 +8,7 @@ set "LOG=%%TEMP%%\weej.log"
 if "%~1"=="--uninstall" goto do_uninstall
 
 if exist "build\WeeJ.exe" goto have_exe
-call build.bat
+call "%~dp0build.bat"
 if errorlevel 1 exit /b 1
 :have_exe
 "build\WeeJ.exe" --quit
@@ -29,7 +29,7 @@ exit /b 0
 
 :do_uninstall
 if exist "build\WeeJ.exe" goto have_exe_u
-call build.bat
+call "%~dp0build.bat"
 if errorlevel 1 exit /b 1
 :have_exe_u
 "build\WeeJ.exe" --quit

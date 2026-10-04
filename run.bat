@@ -14,7 +14,7 @@ echo Enabled the repository git hooks.
 
 if exist "build\WeeJ.exe" "build\WeeJ.exe" --quit
 
-call build.bat --console
+call "%~dp0build.bat" --console
 if errorlevel 1 exit /b 1
 
 "build\WeeJ.exe" %*
