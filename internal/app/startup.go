@@ -14,6 +14,7 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/lang"
 	"github.com/zolferfigueiredo/weej/internal/platform/audio"
 	"github.com/zolferfigueiredo/weej/internal/platform/display"
+	"github.com/zolferfigueiredo/weej/internal/platform/nightlight"
 	"github.com/zolferfigueiredo/weej/internal/platform/serialport"
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/platform/via"
@@ -56,6 +57,7 @@ func (app *App) setup(l *winui.Loop) {
 	app.ddc = display.NewDDC(app.log)
 	app.via = via.NewVIA(app.log)
 	app.zoom = zoom.New(app.log)
+	app.nightlight = nightlight.New(app.log)
 
 	app.setupTray(l)
 	app.checkUpdateComplete()
