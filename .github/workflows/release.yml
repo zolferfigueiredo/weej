@@ -3,6 +3,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 permissions:
   contents: write
 defaults:
@@ -19,13 +20,17 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Check the tag matches AppVersion
+      - name: Determine the version to build
         run: |
           v=$(sed -n 's/^const AppVersion = "\(.*\)"$/\1/p' internal/core/version.go)
-          tag=${GITHUB_REF#refs/tags/}
-          if [ "$tag" != "v$v" ]; then
-            echo "::error::Tag $tag does not match AppVersion $v in internal/core/version.go." >&2
-            exit 1
+          # workflow_dispatch is a manual build-only run (an .exe and installer to try before
+          # tagging a release), so there's no tag yet to check against AppVersion.
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            tag=${GITHUB_REF#refs/tags/}
+            if [ "$tag" != "v$v" ]; then
+              echo "::error::Tag $tag does not match AppVersion $v in internal/core/version.go." >&2
+              exit 1
+            fi
           fi
           echo "V=$v" >> "$GITHUB_ENV"
 
@@ -67,6 +72,7 @@ jobs:
           (cd dist && sha256sum "WeeJ-$V-x64.zip" "WeeJ-$V-x64-setup.exe" > SHA256SUMS)
 
       - name: Publish the release
+        if: github.event_name != 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -78,3 +84,14 @@ jobs:
             "dist/latest.json" \
             "dist/SHA256SUMS" \
             --title "WeeJ $V" --generate-notes
+
+      - name: Upload the build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v5
+        with:
+          name: WeeJ-${{ env.V }}-build
+          retention-days: 14
+          path: |
+            dist/WeeJ.exe
+            dist/WeeJ-${{ env.V }}-x64-setup.exe
+            dist/WeeJ-${{ env.V }}-x64.zip
