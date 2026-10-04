@@ -29,7 +29,9 @@ func (app *App) checkUpdateComplete() {
 	app.loop.Alert(app.tr("update_complete"), app.trVars("now_using", v1("version", core.AppVersion)))
 	s2 := app.snapshotSettings()
 	s2.UpdatedTo = ""
-	app.persistSettings(s2)
+	if err := app.persistSettings(s2); err != nil {
+		app.log("Could not save settings: " + err.Error())
+	}
 }
 
 func (app *App) postTestNotification() {
@@ -52,14 +54,18 @@ func (app *App) autoCheckUpdate() {
 				app.lastRelease = rel
 				app.mu.Unlock()
 			}
-			app.persistSettings(s)
+			if err := app.persistSettings(s); err != nil {
+				app.log("Could not save settings: " + err.Error())
+			}
 			if err != nil {
 				return
 			}
 			if core.IsNewer(rel.Version, core.AppVersion) && s.NotifiedVersion != rel.Version {
 				s2 := app.snapshotSettings()
 				s2.NotifiedVersion = rel.Version
-				app.persistSettings(s2)
+				if err := app.persistSettings(s2); err != nil {
+					app.log("Could not save settings: " + err.Error())
+				}
 				app.notifyUpdateAvailable(rel.Version)
 			}
 			app.refreshTray()
@@ -109,7 +115,9 @@ func (app *App) manualCheckUpdate() {
 				app.lastRelease = rel
 				app.mu.Unlock()
 			}
-			app.persistSettings(s)
+			if err := app.persistSettings(s); err != nil {
+				app.log("Could not save settings: " + err.Error())
+			}
 
 			if err != nil {
 				app.loop.Alert(app.tr("check_failed"), app.tr("check_connection"))
@@ -214,7 +222,9 @@ func (app *App) beginInstall() {
 			}
 			s := app.snapshotSettings()
 			s.UpdatedTo = version
-			app.persistSettings(s)
+			if err := app.persistSettings(s); err != nil {
+				app.log("Could not save settings: " + err.Error())
+			}
 		})
 	}()
 }

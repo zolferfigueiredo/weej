@@ -79,7 +79,7 @@ func (d *hidDevice) open() error {
 
 func (d *hidDevice) close() {
 	if d.handle != 0 && d.handle != windows.InvalidHandle {
-		windows.CloseHandle(d.handle)
+		_ = windows.CloseHandle(d.handle)
 	}
 	d.handle = 0
 }
@@ -176,7 +176,7 @@ func probeVIADevice(path string) *hidDevice {
 	if err != nil {
 		return nil
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 
 	var preparsed uintptr
 	r, _, _ := procHidDGetPreparsedData.Call(uintptr(h), uintptr(unsafe.Pointer(&preparsed)))

@@ -237,7 +237,9 @@ func (app *App) handleSettingsSave(data []byte) {
 
 	cur := app.snapshotSettings()
 	cur.Setup = newSetup
-	app.persistSettings(cur)
+	if err := app.persistSettings(cur); err != nil {
+		app.log("Could not save settings: " + err.Error())
+	}
 
 	app.registerHotkeys(cur.Setup)
 	app.refreshTray()
@@ -350,7 +352,9 @@ func (app *App) setLanguage(code string) {
 	}
 	s := app.snapshotSettings()
 	s.Language = code
-	app.persistSettings(s)
+	if err := app.persistSettings(s); err != nil {
+		app.log("Could not save settings: " + err.Error())
+	}
 
 	payload := map[string]any{"type": "strings", "lang": code, "strings": lang.Catalog(code)}
 	for _, win := range app.openWebWindows() {

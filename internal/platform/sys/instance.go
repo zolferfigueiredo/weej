@@ -29,7 +29,7 @@ func Acquire() (release func(), ok bool) {
 	}
 	handle, err := windows.CreateMutex(nil, false, namePtr)
 	if err == windows.ERROR_ALREADY_EXISTS {
-		windows.CloseHandle(handle)
+		_ = windows.CloseHandle(handle)
 		return nil, false
 	}
 	if err != nil {
@@ -41,7 +41,7 @@ func Acquire() (release func(), ok bool) {
 			return
 		}
 		released = true
-		windows.CloseHandle(handle)
+		_ = windows.CloseHandle(handle)
 	}
 	return release, true
 }

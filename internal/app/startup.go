@@ -38,7 +38,9 @@ func (app *App) setup(l *winui.Loop) {
 		settings.Language = code
 	}
 	app.replaceSettings(settings)
-	app.persistSettings(settings)
+	if err := app.persistSettings(settings); err != nil {
+		app.log("Could not save settings: " + err.Error())
+	}
 
 	app.printStartupSummary()
 
