@@ -303,6 +303,10 @@ type Setup struct {
 	ShowProfiles bool
 	Icon         IconStyle
 	Speed        Speed
+	// Port is a COM port to use instead of finding the board automatically; empty means automatic.
+	Port string
+	// Baud is the serial speed; 0 means DefaultBaud.
+	Baud int
 }
 
 func (s Setup) activeJobs() [][]Job {
@@ -399,4 +403,17 @@ func Clipped(name string, limit int) string {
 		return name
 	}
 	return strings.TrimRight(string(r[:limit-1]), " \t\n") + "…"
+}
+
+// DefaultBaud is what deej's sketch (and so most boards) passes to Serial.begin().
+const DefaultBaud = 9600
+
+// BaudRates are the speeds offered in Settings; a board's sketch has to use the same one.
+var BaudRates = []int{9600, 19200, 38400, 57600, 115200}
+
+func (s Setup) BaudRate() int {
+	if s.Baud <= 0 {
+		return DefaultBaud
+	}
+	return s.Baud
 }

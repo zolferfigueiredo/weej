@@ -25,11 +25,14 @@ const (
 	dropCanceled
 )
 
-func openPort(name string) (serial.Port, error) {
+func openPort(name string, baud int) (serial.Port, error) {
+	if baud <= 0 {
+		baud = core.DefaultBaud
+	}
 	// InitialStatusBits left nil: DTR and RTS come up on, which is what resets the CH340 and
 	// its kin on open.
 	port, err := serial.Open(name, &serial.Mode{
-		BaudRate: 9600,
+		BaudRate: baud,
 		DataBits: 8,
 		Parity:   serial.NoParity,
 		StopBits: serial.OneStopBit,

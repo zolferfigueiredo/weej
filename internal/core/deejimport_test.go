@@ -47,6 +47,9 @@ func TestImportDeej(t *testing.T) {
 	if imp.Invert {
 		t.Error("Invert = true, want false (invert_sliders: true negates to false)")
 	}
+	if imp.Baud != 9600 {
+		t.Errorf("Baud = %d, want 9600 from baud_rate", imp.Baud)
+	}
 	if len(imp.Skipped) != 0 {
 		t.Errorf("Skipped = %v, want none", imp.Skipped)
 	}

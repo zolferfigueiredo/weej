@@ -63,6 +63,7 @@ type App struct {
 
 	reconnectCh  chan struct{}
 	cancelSerial context.CancelFunc
+	serialDone   chan struct{}
 
 	tray *winui.Tray
 	hud  *winui.HUD

@@ -14,6 +14,9 @@ type Import struct {
 	Columns []int
 	Jobs    [][]Job
 	Invert  bool
+	// Baud is deej's baud_rate, 0 when the file has none. Its com_port is left out on purpose:
+	// WeeJ finds the board by itself, and a fixed port breaks when Windows renumbers it.
+	Baud    int
 	Skipped []string
 }
 
@@ -51,6 +54,7 @@ func ImportDeej(yamlBytes []byte) (Import, error) {
 	var doc struct {
 		SliderMapping yaml.Node `yaml:"slider_mapping"`
 		InvertSliders bool      `yaml:"invert_sliders"`
+		BaudRate      int       `yaml:"baud_rate"`
 	}
 	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
 		return Import{}, fmt.Errorf("core: deej import: %w", err)
@@ -59,7 +63,7 @@ func ImportDeej(yamlBytes []byte) (Import, error) {
 		return Import{}, fmt.Errorf("core: deej import: slider_mapping is missing")
 	}
 
-	imp := Import{Name: "deej", Invert: !doc.InvertSliders}
+	imp := Import{Name: "deej", Invert: !doc.InvertSliders, Baud: doc.BaudRate}
 	pairs := doc.SliderMapping.Content
 	for i := 0; i+1 < len(pairs); i += 2 {
 		col, err := strconv.Atoi(strings.TrimSpace(pairs[i].Value))
