@@ -22,6 +22,8 @@ var nightLightFixtures = map[string]string{
 	"settings":          "43 42 01 00 0A 02 01 00 2A 06 8D EF F7 B5 06 2A 2B 0E 15 43 42 01 00 CA 14 0E 15 00 CA 1E 0E 07 00 CA 32 00 CA 3C 00 00 00 00 00",
 	"stateperdevice":    "43 42 01 00 0A 02 01 00 2A 06 81 91 AF C6 06 2A 2B 0E 14 43 42 01 00 D0 0A 02 C6 14 AB C8 DD 9A A5 9E 89 EE 01 01 00 00 00 00",
 	"settingsperdevice": "43 42 01 00 0A 02 01 00 2A 06 FF 90 AF C6 06 2A 2B 0E 16 43 42 01 00 CA 14 0E 15 00 CA 1E 0E 07 00 CA 32 00 CA 3C 00 01 00 00 00 00",
+	// The default state after Windows itself switched Night light: its transition time changed.
+	"staterewritten": "43 42 01 00 0A 02 01 00 2A 06 8C 92 8B D6 06 2A 2B 0E 13 43 42 01 00 D0 0A 02 C6 14 85 89 DB B3 98 89 D5 EE 01 00 00 00 00",
 }
 
 func TestNightLightFixturesRoundTrip(t *testing.T) {
@@ -170,5 +172,38 @@ func TestNightLightRejectsSettingsShapeForState(t *testing.T) {
 	blob := mustHex(t, nightLightFixtures["settings"])
 	if _, err := IsOn(blob); err == nil {
 		t.Error("want error: a settings blob is not a state blob")
+	}
+}
+
+func TestSetOnKeepsWindowsTransitionTime(t *testing.T) {
+	blob := mustHex(t, nightLightFixtures["staterewritten"])
+	on, err := SetOn(blob, true, time.Unix(1791150300, 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := mustHex(t, "43 42 01 00 0A 02 01 00 2A 06 DC 91 8B D6 06 2A 2B 0E 15 43 42 01 00 10 00 D0 0A 02 C6 14 85 89 DB B3 98 89 D5 EE 01 00 00 00 00")
+	if !bytes.Equal(on, want) {
+		t.Errorf("SetOn =\n%X\nwant\n%X", on, want)
+	}
+}
+
+func TestNightLightStamp(t *testing.T) {
+	ts, err := NightLightStamp(mustHex(t, nightLightFixtures["staterewritten"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ts != 1791150348 {
+		t.Errorf("NightLightStamp = %d, want 1791150348", ts)
+	}
+}
+
+func TestNightLightKelvinFollowsTheKnob(t *testing.T) {
+	for _, c := range []struct {
+		s    float64
+		want int
+	}{{0, 6500}, {0.5, 3850}, {1, 1200}} {
+		if got := NightLightKelvin(c.s); got != c.want {
+			t.Errorf("NightLightKelvin(%v) = %d, want %d", c.s, got, c.want)
+		}
 	}
 }

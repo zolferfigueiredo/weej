@@ -117,10 +117,7 @@ func (app *App) buildCatalog(setup core.Setup) []catalogEntry {
 	for i := 0; i < n; i++ {
 		add(core.Job{Kind: core.JobContrast, Screen: i}, draw.GlyphContrast)
 	}
-	// Night light has no backend on Windows yet; offer it only where an old profile still has it.
-	if assignedAnywhere(setup, core.JobNightLight) {
-		add(core.Job{Kind: core.JobNightLight}, draw.GlyphMoon)
-	}
+	add(core.Job{Kind: core.JobNightLight}, draw.GlyphMoon)
 	add(core.Job{Kind: core.JobExternalKeyboard}, draw.GlyphKeyboard)
 	add(core.Job{Kind: core.JobZoom}, draw.GlyphZoom)
 
