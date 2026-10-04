@@ -7,6 +7,10 @@ import (
 
 func namedKey(vk uint16) (string, bool) {
 	switch {
+	// With Ctrl+Alt held (AltGr on many layouts) the typed character is often a symbol such as
+	// "€", so letters and digits are named from the key itself.
+	case vk >= '0' && vk <= '9', vk >= 'A' && vk <= 'Z':
+		return string(rune(vk)), true
 	case vk >= 0x70 && vk <= 0x87:
 		return "F" + strconv.Itoa(int(vk-0x70+1)), true
 	case vk == 0x26:
@@ -66,8 +70,16 @@ func Label(s Shortcut, ctrlName string) string {
 	return strings.Join(parts, "+")
 }
 
+func isModifierVK(vk uint16) bool {
+	switch vk {
+	case 0x10, 0x11, 0x12, 0x5B, 0x5C, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5:
+		return true
+	}
+	return false
+}
+
 func Valid(s Shortcut) bool {
-	return s.Key != "" && s.Mods&(ModControl|ModAlt) != 0
+	return s.Key != "" && s.Mods&(ModControl|ModAlt) != 0 && !isModifierVK(s.VK)
 }
 
 func Clash(a, b *Shortcut) bool {

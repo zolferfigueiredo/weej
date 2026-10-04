@@ -2,12 +2,6 @@
 
 package web
 
-// Raw Win32 declarations for this package only (platform.md: no shared bindings
-// package). golang.org/x/sys/windows covers kernel/dwm/registry calls but not the
-// classic GUI surface (window class, CreateWindowEx, the message loop), so those
-// are declared here; DwmSetWindowAttribute is redeclared too, so this package
-// never reaches into winui's or another package's syscall wiring.
-
 import (
 	"sync"
 	"unsafe"
@@ -19,6 +13,7 @@ var (
 	user32   = windows.NewLazySystemDLL("user32.dll")
 	kernel32 = windows.NewLazySystemDLL("kernel32.dll")
 	dwmapi   = windows.NewLazySystemDLL("dwmapi.dll")
+	gdi32    = windows.NewLazySystemDLL("gdi32.dll")
 
 	procRegisterClassExW      = user32.NewProc("RegisterClassExW")
 	procCreateWindowExW       = user32.NewProc("CreateWindowExW")
@@ -39,8 +34,16 @@ var (
 	procGetSystemMenu         = user32.NewProc("GetSystemMenu")
 	procDeleteMenu            = user32.NewProc("DeleteMenu")
 	procSetWindowTextW        = user32.NewProc("SetWindowTextW")
+	procSetTimer              = user32.NewProc("SetTimer")
+	procKillTimer             = user32.NewProc("KillTimer")
+	procFillRect              = user32.NewProc("FillRect")
+	procInvalidateRect        = user32.NewProc("InvalidateRect")
+
+	procCreateSolidBrush = gdi32.NewProc("CreateSolidBrush")
+	procDeleteObject     = gdi32.NewProc("DeleteObject")
 
 	procGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
+	procRtlMoveMemory    = kernel32.NewProc("RtlMoveMemory")
 
 	procDwmSetWindowAttribute = dwmapi.NewProc("DwmSetWindowAttribute")
 )
@@ -61,14 +64,20 @@ const (
 	csHRedraw = 0x0002
 	csVRedraw = 0x0001
 
-	colorWindowBrush = 6 // COLOR_WINDOW + 1, a stock brush handle, not a GDI object to free
-
 	idcArrow = 32512
 
+	wmMove       = 0x0003
 	wmSize       = 0x0005
+	wmActivate   = 0x0006
+	wmSetFocus   = 0x0007
 	wmClose      = 0x0010
 	wmDestroy    = 0x0002
+	wmEraseBkgnd = 0x0014
+	wmTimer      = 0x0113
 	wmSysCommand = 0x0112
+	wmDpiChanged = 0x02E0
+
+	waInactive = 0
 
 	scClose     = 0xF060
 	mfByCommand = 0x00000000
@@ -80,8 +89,6 @@ const (
 	swpNoMove     = 0x0002
 
 	dwmwaUseImmersiveDarkMode = 20
-	dwmwaSystemBackdropType   = 38
-	dwmSBTMainWindow          = 2 // DWMSBT_MAINWINDOW, i.e. Mica
 )
 
 type wndClassExW struct {
@@ -135,12 +142,11 @@ func registerWindowClass() {
 		moduleHandle, _, _ := procGetModuleHandleW.Call(0)
 		cursor, _, _ := procLoadCursorW.Call(0, uintptr(idcArrow))
 		wc := wndClassExW{
-			style:      csHRedraw | csVRedraw,
-			wndProc:    wndProcPtr,
-			instance:   moduleHandle,
-			cursor:     cursor,
-			background: colorWindowBrush,
-			className:  windowClassName,
+			style:     csHRedraw | csVRedraw,
+			wndProc:   wndProcPtr,
+			instance:  moduleHandle,
+			cursor:    cursor,
+			className: windowClassName,
 		}
 		wc.size = uint32(unsafe.Sizeof(wc))
 		procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
@@ -232,10 +238,25 @@ func setDarkTitleBar(hwnd uintptr, dark bool) {
 	procDwmSetWindowAttribute.Call(hwnd, uintptr(dwmwaUseImmersiveDarkMode), uintptr(unsafe.Pointer(&v)), unsafe.Sizeof(v))
 }
 
-func setMica(hwnd uintptr) {
-	v := int32(dwmSBTMainWindow)
-	// Ignored by DWM on Windows 10, which has no Mica; nothing to fall back to.
-	procDwmSetWindowAttribute.Call(hwnd, uintptr(dwmwaSystemBackdropType), uintptr(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+func setTimer(hwnd uintptr, id, ms uintptr) {
+	procSetTimer.Call(hwnd, id, ms, 0)
+}
+
+func killTimer(hwnd uintptr, id uintptr) {
+	procKillTimer.Call(hwnd, id)
+}
+
+func createSolidBrush(r, g, b uint8) uintptr {
+	h, _, _ := procCreateSolidBrush.Call(uintptr(r) | uintptr(g)<<8 | uintptr(b)<<16)
+	return h
+}
+
+func deleteObject(h uintptr) {
+	procDeleteObject.Call(h)
+}
+
+func invalidate(hwnd uintptr) {
+	procInvalidateRect.Call(hwnd, 0, 1)
 }
 
 // pumpOne runs one GetMessage/Translate/Dispatch cycle. It reports whether a
@@ -283,11 +304,44 @@ func windowFor(hwnd uintptr) *Window {
 func wndProcDispatch(hwnd uintptr, message uint32, wparam, lparam uintptr) uintptr {
 	w := windowFor(hwnd)
 	switch message {
+	case wmEraseBkgnd:
+		if w != nil && w.brush != 0 {
+			r := clientRect(hwnd)
+			procFillRect.Call(wparam, uintptr(unsafe.Pointer(&r)), w.brush)
+			return 1
+		}
 	case wmSize:
-		if w != nil && w.chromium != nil {
-			w.chromium.Resize()
+		if w != nil {
+			w.resizeWebView()
 		}
 		return 0
+	case wmMove:
+		if w != nil && w.chromium != nil && !w.isClosed() {
+			_ = w.chromium.NotifyParentWindowPositionChanged()
+		}
+	case wmActivate:
+		if w != nil && wparam&0xFFFF != waInactive {
+			w.focusWebView()
+		}
+	case wmSetFocus:
+		if w != nil {
+			w.focusWebView()
+		}
+		return 0
+	case wmTimer:
+		if w != nil && wparam == showFallbackTimer {
+			w.showOnce()
+		}
+		return 0
+	case wmDpiChanged:
+		if w != nil {
+			// lparam points at a RECT owned by Windows; copy it rather than convert the address.
+			var suggested rect32
+			procRtlMoveMemory.Call(uintptr(unsafe.Pointer(&suggested)), lparam, unsafe.Sizeof(suggested))
+			w.scale = float64(wparam&0xFFFF) / 96.0
+			setWindowPos(hwnd, suggested.Left, suggested.Top, suggested.Right-suggested.Left, suggested.Bottom-suggested.Top, swpNoZorder|swpNoActivate)
+			return 0
+		}
 	case wmClose:
 		if w != nil && w.opts.NoClose {
 			return 0

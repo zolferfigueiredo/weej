@@ -27,12 +27,13 @@ func (app *App) showLanguagePrompt(preselect string) string {
 			if win == nil {
 				return
 			}
-			win.Send(map[string]any{
-				"type":      "init",
-				"languages": languagesPayload(),
-				"selected":  preselect,
-				"icon":      appIconDataURL(64),
-			})
+			payload := app.baseInitFields()
+			payload["lang"] = preselect
+			payload["strings"] = lang.Catalog(preselect)
+			payload["languages"] = languagesPayload()
+			payload["selected"] = preselect
+			payload["icon"] = appIconDataURL(64)
+			win.Send(payload)
 		case "preview":
 			if !lang.Valid(probe.Code) || win == nil {
 				return

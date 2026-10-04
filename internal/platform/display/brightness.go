@@ -134,10 +134,14 @@ func hasBrightnessInstances(service *ole.IDispatch) bool {
 	defer result.Release()
 
 	found := false
-	oleutil.ForEach(result, func(v *ole.VARIANT) error {
+	// A ForEach error means the collection could not be enumerated at all, i.e. no usable
+	// instances; the callback itself never returns a non-nil error.
+	if err := oleutil.ForEach(result, func(v *ole.VARIANT) error {
 		found = true
 		return nil
-	})
+	}); err != nil {
+		return false
+	}
 	return found
 }
 
@@ -148,12 +152,17 @@ func setBrightnessInstances(service *ole.IDispatch, percent int) {
 	}
 	defer result.Release()
 
-	oleutil.ForEach(result, func(v *ole.VARIANT) error {
+	// Setting the builtin panel's brightness is best-effort: there is nothing useful to do with
+	// a failure here, so both the enumeration and the method call are ignored explicitly.
+	_ = oleutil.ForEach(result, func(v *ole.VARIANT) error {
 		item := v.ToIDispatch()
 		if item == nil {
 			return nil
 		}
-		oleutil.CallMethod(item, "WmiSetBrightness", 0, percent)
+		variant, err := oleutil.CallMethod(item, "WmiSetBrightness", 0, percent)
+		if err == nil && variant != nil {
+			_ = variant.Clear()
+		}
 		return nil
 	})
 }

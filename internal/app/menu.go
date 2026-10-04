@@ -21,7 +21,10 @@ import (
 func (app *App) setupTray(l *winui.Loop) {
 	app.tray = l.NewTray(app.onTrayClick, func() { app.manualCheckUpdate() })
 	app.hud = l.NewHUD()
-	l.OnThemeChange(func() { app.refreshTray() })
+	l.OnThemeChange(func() {
+		app.refreshTray()
+		app.applyThemeToWebWindows()
+	})
 	app.refreshTray()
 }
 
@@ -65,7 +68,9 @@ func (app *App) refreshTrayNow() {
 		app.tray.Balloon(app.tr("tray_tip_title"), app.tr("tray_tip"))
 		next := app.snapshotSettings()
 		next.TrayTipShown = true
-		app.persistSettings(next)
+		if err := app.persistSettings(next); err != nil {
+			app.log("Could not save settings: " + err.Error())
+		}
 	}
 }
 
@@ -84,7 +89,9 @@ func (app *App) buildMenu() []winui.MenuItem {
 		OnClick: func() {
 			cur := app.snapshotSettings()
 			cur.ShowDataInMenu = !cur.ShowDataInMenu
-			app.persistSettings(cur)
+			if err := app.persistSettings(cur); err != nil {
+				app.log("Could not save settings: " + err.Error())
+			}
 		},
 	})
 	if connected && s.ShowDataInMenu {
@@ -173,7 +180,9 @@ func (app *App) switchProfile(i int) {
 		return
 	}
 	s.Active = i
-	app.persistSettings(s)
+	if err := app.persistSettings(s); err != nil {
+		app.log("Could not save settings: " + err.Error())
+	}
 	app.refreshTray()
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "profile", "profile": i})
@@ -247,7 +256,9 @@ func (app *App) autoUpdateMenuItems(every int) []winui.MenuItem {
 			OnClick: func() {
 				cur := app.snapshotSettings()
 				cur.UpdateEvery = seconds
-				app.persistSettings(cur)
+				if err := app.persistSettings(cur); err != nil {
+					app.log("Could not save settings: " + err.Error())
+				}
 			},
 		})
 	}

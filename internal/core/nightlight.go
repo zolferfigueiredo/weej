@@ -3,6 +3,7 @@ package core
 import (
 	"bytes"
 	"errors"
+	"math"
 	"time"
 )
 
@@ -22,10 +23,9 @@ var (
 	// after the inner header, but no capture confirms its exact placement once set.
 	nlOnField = []byte{0x10, 0x00}
 
-	// The literal tail of a state blob's fields, after the optional on field. Both captures (with
-	// and without the per-device byte) shared this exactly; what varies inside it, if anything,
-	// is not settled by the samples.
-	nlStateTail = []byte{0xD0, 0x0A, 0x02, 0xC6, 0x14, 0xAB, 0xC8, 0xDD, 0x9A, 0xA5, 0x9E, 0x89, 0xEE, 0x01}
+	// A state blob's fields after the optional on field: this, then a LEB128 FILETIME that
+	// Windows rewrites whenever Night light actually switches, copied through untouched here.
+	nlStatePrefix = []byte{0xD0, 0x0A, 0x02, 0xC6, 0x14}
 
 	nlSettingsHead = []byte{0xCA, 0x14, 0x0E, 0x15, 0x00, 0xCA, 0x1E, 0x0E, 0x07, 0x00}
 	nlSettingsTail = []byte{0xCA, 0x32, 0x00, 0xCA, 0x3C, 0x00}
@@ -120,8 +120,9 @@ func buildOuter(fields []byte, now time.Time) []byte {
 }
 
 type nlState struct {
-	on        bool
-	perDevice bool
+	on         bool
+	transition uint64
+	perDevice  bool
 }
 
 func parseStateFields(fields []byte) (nlState, error) {
@@ -133,13 +134,21 @@ func parseStateFields(fields []byte) (nlState, error) {
 	if on {
 		body = body[len(nlOnField):]
 	}
-	switch {
-	case bytes.Equal(body, nlStateTail):
-		return nlState{on: on, perDevice: false}, nil
-	case len(body) == len(nlStateTail)+1 && bytes.Equal(body[:len(nlStateTail)], nlStateTail) && body[len(nlStateTail)] == nlPerDeviceByte:
-		return nlState{on: on, perDevice: true}, nil
-	default:
+	if !bytes.HasPrefix(body, nlStatePrefix) {
 		return nlState{}, errors.New("core: night light state: unexpected body")
+	}
+	transition, n, err := decodeLEB128(body[len(nlStatePrefix):])
+	if err != nil {
+		return nlState{}, err
+	}
+	rest := body[len(nlStatePrefix)+n:]
+	switch {
+	case len(rest) == 0:
+		return nlState{on: on, transition: transition, perDevice: false}, nil
+	case len(rest) == 1 && rest[0] == nlPerDeviceByte:
+		return nlState{on: on, transition: transition, perDevice: true}, nil
+	default:
+		return nlState{}, errors.New("core: night light state: unexpected tail")
 	}
 }
 
@@ -148,7 +157,8 @@ func buildStateFields(s nlState) []byte {
 	if s.on {
 		body = append(body, nlOnField...)
 	}
-	body = append(body, nlStateTail...)
+	body = append(body, nlStatePrefix...)
+	body = append(body, encodeLEB128(s.transition)...)
 	if s.perDevice {
 		body = append(body, nlPerDeviceByte)
 	}
@@ -253,6 +263,25 @@ func SetKelvin(blob []byte, k int, now time.Time) ([]byte, error) {
 	}
 	settings.kelvin = clampKelvin(k)
 	return buildOuter(buildSettingsFields(settings), now), nil
+}
+
+// NightLightStamp is the Unix second a blob was written at. Windows ignores a blob that is
+// older than the one it last applied, so every write has to be stamped later than this.
+func NightLightStamp(blob []byte) (int64, error) {
+	if _, err := parseOuter(blob); err != nil {
+		return 0, err
+	}
+	ts, _, err := decodeLEB128(blob[10:])
+	if err != nil {
+		return 0, err
+	}
+	return int64(ts), nil
+}
+
+// NightLightKelvin maps a knob position to the colour temperature Windows' strength slider
+// uses: 6500 K (barely warm) just above the bottom, 1200 K at the top.
+func NightLightKelvin(s float64) int {
+	return clampKelvin(6500 - int(math.Round(s*(6500-1200))))
 }
 
 func Kelvin(blob []byte) (int, error) {

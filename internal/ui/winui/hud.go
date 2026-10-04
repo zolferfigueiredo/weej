@@ -146,7 +146,7 @@ func ensureHUDClass() {
 			cursor:    loadCursorArrow(),
 			className: mustUTF16PtrFromString(hudClassName),
 		}
-		registerClassExW(&wc)
+		_, _ = registerClassExW(&wc)
 	})
 }
 

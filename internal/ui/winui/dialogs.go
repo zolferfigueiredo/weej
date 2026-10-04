@@ -81,7 +81,8 @@ func (l *Loop) Alert(title, text string) {
 
 	var chosen int32
 	if !taskDialogIndirect(&cfg, &chosen) {
-		windows.MessageBox(l.hwnd, mustUTF16PtrFromString(text), mustUTF16PtrFromString(title), mbOK)
+		// Alert has only one button; the choice MessageBox returns is not needed.
+		_, _ = windows.MessageBox(l.hwnd, mustUTF16PtrFromString(text), mustUTF16PtrFromString(title), mbOK)
 	}
 }
 

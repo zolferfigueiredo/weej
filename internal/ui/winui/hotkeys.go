@@ -29,6 +29,18 @@ func (h *Hotkeys) Register(id int, mods, vk uint16) bool {
 	return r != 0
 }
 
+func (h *Hotkeys) Unregister(id int) {
+	h.mu.Lock()
+	for i, have := range h.ids {
+		if have == id {
+			h.ids = append(h.ids[:i], h.ids[i+1:]...)
+			break
+		}
+	}
+	h.mu.Unlock()
+	procUnregisterHotKey.Call(uintptr(h.loop.hwnd), uintptr(id))
+}
+
 func (h *Hotkeys) UnregisterAll() {
 	h.mu.Lock()
 	ids := h.ids

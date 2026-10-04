@@ -84,7 +84,7 @@ func WaitPID(pid uint32, timeout time.Duration) bool {
 	if err != nil {
 		return true
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 	event, err := windows.WaitForSingleObject(h, uint32(timeout.Milliseconds()))
 	return err == nil && event == windows.WAIT_OBJECT_0
 }

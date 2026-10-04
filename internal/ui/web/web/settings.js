@@ -77,6 +77,23 @@ function jobTitleFor(job) {
   return entry ? entry.short : job.kind;
 }
 
+function jobEntryFor(job) {
+  const k = jobKey(job);
+  return init.catalog.find((c) => jobKey(c.job) === k) || null;
+}
+
+function jobLines(jobs) {
+  if (!jobs.length) return `<span class="job-line muted">${esc(t("job.nothing"))}</span>`;
+  return jobs
+    .map((job) => {
+      const entry = jobEntryFor(job);
+      const title = entry ? entry.title : job.exe || job.kind;
+      const icon = entry && entry.icon ? `<img src="${entry.icon}" alt="" />` : "";
+      return `<span class="job-line">${icon}<span>${esc(title)}</span></span>`;
+    })
+    .join("");
+}
+
 function jobsSummary(jobs) {
   return jobs.map(jobTitleFor).join(", ");
 }
@@ -173,15 +190,16 @@ function renderGeneral() {
     ? draft.columns
         .map((col, i) => {
           const jobs = profile.jobs[i] || [];
-          const needsCal = col === -1;
-          const desc = needsCal
-            ? `<span class="row-desc warning">${esc(t("needs_calibration"))}</span>`
-            : `<span class="row-desc">${esc(jobsSummary(jobs) || t("job.nothing"))}</span>`;
+          const needsCal = col === null || col === undefined || col === -1;
           return `
-            <div class="row clickable" type="button" role="button" tabindex="0" data-action="open-popover" data-knob="${i}">
+            <div class="row clickable knob-row" role="button" tabindex="0" data-action="open-popover" data-knob="${i}">
               <div class="row-main">
                 <span class="row-title">${esc(t("knob", { letter: letterFor(i) }))}</span>
-                ${desc}
+                ${needsCal ? `<span class="row-desc warning">${esc(t("needs_calibration"))}</span>` : ""}
+              </div>
+              <div class="row-control">
+                <div class="job-list">${jobLines(jobs)}</div>
+                <span class="chev" aria-hidden="true">&#x2304;</span>
               </div>
             </div>`;
         })
@@ -191,19 +209,20 @@ function renderGeneral() {
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel" role="tabpanel">
       <div class="group">
-        <h2 class="group-title">${esc(t("profiles"))}</h2>
+        <div class="group-head">
+          <h2 class="group-title">${esc(t("profile"))}</h2>
+          <select class="select select-inline" id="profile-select">${profileOptions}</select>
+          <span class="spacer"></span>
+          <span class="segmented">
+            <button class="btn btn-icon" type="button" data-action="add-profile" title="${escAttr(t("add_profile"))}" aria-label="${escAttr(t("add_profile"))}">+</button>
+            <button class="btn btn-icon" type="button" data-action="remove-profile" title="${escAttr(t("remove_profile"))}" aria-label="${escAttr(t("remove_profile"))}"${draft.profiles.length <= 1 ? " disabled" : ""}>&minus;</button>
+          </span>
+        </div>
         <div class="card">
-          <div class="row">
-            <div class="row-main"><select class="select" id="profile-select" style="max-width:220px">${profileOptions}</select></div>
-            <div class="row-control">
-              <button class="btn btn-icon" type="button" data-action="add-profile" title="${escAttr(t("add_profile"))}" aria-label="${escAttr(t("add_profile"))}">+</button>
-              <button class="btn btn-icon" type="button" data-action="remove-profile" title="${escAttr(t("remove_profile"))}" aria-label="${escAttr(t("remove_profile"))}"${draft.profiles.length <= 1 ? " disabled" : ""}>&minus;</button>
-            </div>
-          </div>
           <div class="row">
             <div class="row-main"><span class="row-title">${esc(t("name"))}</span></div>
             <div class="row-control">
-              <input class="input" id="profile-name" type="text" style="width:180px" value="${escAttr(profile.name)}" placeholder="${escAttr(t("profile_n", { n: String(draft.profile + 1) }))}" />
+              <input class="input input-name" id="profile-name" type="text" value="${escAttr(profile.name)}" placeholder="${escAttr(t("profile_n", { n: String(draft.profile + 1) }))}" />
             </div>
           </div>
           <div class="row">
@@ -214,15 +233,18 @@ function renderGeneral() {
       </div>
 
       <div class="group">
-        <h2 class="group-title">${esc(t("knobs"))}</h2>
-        <div class="card">${knobsHtml}</div>
-        <div class="group-note">
-          ${esc(t("jobs_note"))}
-          <button class="btn-link" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
+        <div class="group-head">
+          <h2 class="group-title">${esc(t("knobs"))}</h2>
+          <span class="spacer"></span>
+          <span class="segmented">
+            <button class="btn btn-icon" type="button" data-action="add-knob" title="${escAttr(t("add_knob"))}" aria-label="${escAttr(t("add_knob"))}"${draft.columns.length >= 26 ? " disabled" : ""}>+</button>
+            <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${draft.columns.length === 0 ? " disabled" : ""}>&minus;</button>
+          </span>
         </div>
-        <div style="display:flex;gap:8px;margin-top:6px;">
-          <button class="btn btn-icon" type="button" data-action="add-knob" title="${escAttr(t("add_knob"))}" aria-label="${escAttr(t("add_knob"))}"${draft.columns.length >= 26 ? " disabled" : ""}>+</button>
-          <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${draft.columns.length === 0 ? " disabled" : ""}>&minus;</button>
+        <div class="card">${knobsHtml}</div>
+        <div class="group-foot">
+          <span class="group-note">${esc(t("jobs_note"))}</span>
+          <button class="btn" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
         </div>
       </div>
 
@@ -236,11 +258,10 @@ function renderGeneral() {
             <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft.invertKnobs ? " checked" : ""} /></div>
           </div>
         </div>
-      </div>
-
-      <div class="group">
-        <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
-        ${importNote ? `<p class="group-note">${esc(importNote)}</p>` : ""}
+        <div class="group-foot end">
+          ${importNote ? `<span class="group-note">${esc(importNote)}</span>` : ""}
+          <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
+        </div>
       </div>
     </div>`;
 }
@@ -262,7 +283,7 @@ function renderApp() {
 
   const trayPreview =
     init.iconPreviews && init.iconPreviews[draft.trayIcon]
-      ? `<img src="${init.iconPreviews[draft.trayIcon]}" alt="" style="width:20px;height:20px;border-radius:4px;" />`
+      ? `<img src="${init.iconPreviews[draft.trayIcon]}" alt="" data-style="width:20px;height:20px;border-radius:4px;" />`
       : "";
   const iconOptions = ["mixer", "dial", "app"]
     .map((style) => `<option value="${style}"${draft.trayIcon === style ? " selected" : ""}>${esc(t("icon." + style))}</option>`)
@@ -274,9 +295,11 @@ function renderApp() {
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel" role="tabpanel">
       <div class="group">
-        <h2 class="group-title">${esc(t("language"))}</h2>
         <div class="card">
-          <div class="row"><div class="row-main"><select class="select" id="language-select" style="max-width:220px">${langOptions}</select></div></div>
+          <div class="row">
+            <div class="row-main"><span class="row-title">${esc(t("language"))}</span></div>
+            <div class="row-control"><select class="select" id="language-select">${langOptions}</select></div>
+          </div>
         </div>
       </div>
 
@@ -306,14 +329,14 @@ function renderApp() {
             <div class="row-control"><input class="toggle" id="hide-icon" type="checkbox" role="switch"${draft.hideTrayIcon ? " checked" : ""} /></div>
           </div>
           <div class="row">
-            <div class="row-main"><span class="row-title"${draft.hideTrayIcon ? ' style="color:var(--text-disabled)"' : ""}>${esc(t("icon"))}</span></div>
+            <div class="row-main"><span class="row-title"${draft.hideTrayIcon ? ' data-style="color:var(--text-disabled)"' : ""}>${esc(t("icon"))}</span></div>
             <div class="row-control">
               ${trayPreview}
               <select class="select" id="tray-icon-style"${draft.hideTrayIcon ? " disabled" : ""}>${iconOptions}</select>
             </div>
           </div>
           <div class="row">
-            <div class="row-main"><span class="row-title"${draft.hideTrayIcon ? ' style="color:var(--text-disabled)"' : ""}>${esc(t("profile_list"))}</span></div>
+            <div class="row-main"><span class="row-title"${draft.hideTrayIcon ? ' data-style="color:var(--text-disabled)"' : ""}>${esc(t("profile_list"))}</span></div>
             <div class="row-control"><input class="toggle" id="show-profile-list" type="checkbox" role="switch"${draft.showProfileList ? " checked" : ""}${draft.hideTrayIcon ? " disabled" : ""} /></div>
           </div>
         </div>
@@ -344,12 +367,12 @@ function hostnameOf(url) {
 
 function renderAbout() {
   document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel" style="align-items:center;text-align:center;padding-top:4px;">
-      <img src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" style="border-radius:14px;" />
-      <h2 style="font:600 16px var(--font-display);margin:14px 0 2px;">WeeJ</h2>
+    <div class="tabpanel" role="tabpanel" data-style="align-items:center;text-align:center;padding-top:4px;">
+      <img src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" data-style="border-radius:14px;" />
+      <h2 data-style="font:600 16px var(--font-display);margin:14px 0 2px;">WeeJ</h2>
       <p class="row-desc">${esc(t("version", { version: init.version }))}</p>
-      <button class="btn" type="button" data-action="check-updates" style="margin-top:14px;">${esc(t("check"))}</button>
-      <p style="margin-top:18px;"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
+      <button class="btn" type="button" data-action="check-updates" data-style="margin-top:14px;">${esc(t("check"))}</button>
+      <p data-style="margin-top:18px;"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
       <p class="row-desc">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">${esc(hostnameOf(init.madeBy))}</a></p>
       <p class="row-desc">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
     </div>`;
@@ -359,7 +382,7 @@ function renderPopover() {
   const knobJobs = activeProfile().jobs[popover.knob] || [];
   const bySection = sectionsFromCatalog();
   let html = `<div class="popover-scrim" data-action="close-popover"></div>`;
-  html += `<div class="popover" style="top:${popover.top}px;left:${popover.left}px;">`;
+  html += `<div class="popover" data-style="top:${popover.top}px;left:${popover.left}px;">`;
   html += `<div class="popover-item" data-action="clear-jobs" data-knob="${popover.knob}"><span>${esc(t("clear"))}</span></div>`;
   html += `<div class="popover-sep"></div>`;
   for (const [section, entries] of bySection) {
@@ -383,7 +406,7 @@ function popoverItem(entry, knobJobs) {
   return `<label class="popover-item" for="${id}">
     <input class="chk" type="checkbox" id="${id}" data-action="toggle-job" data-knob="${popover.knob}" data-job='${escAttr(JSON.stringify(entry.job))}'${checked ? " checked" : ""} />
     <img src="${entry.icon}" alt="" />
-    <span style="flex:1 1 auto;">${esc(entry.title)}</span>
+    <span data-style="flex:1 1 auto;">${esc(entry.title)}</span>
     ${badge}
   </label>`;
 }
@@ -467,6 +490,8 @@ function currentDraftShortcuts() {
   };
 }
 
+const MODIFIER_KEYS = new Set(["Control", "Alt", "AltGraph", "Shift", "Meta", "OS"]);
+
 function onRecordKeydown(e) {
   if (!recording) return;
   e.preventDefault();
@@ -475,6 +500,8 @@ function onRecordKeydown(e) {
     stopRecording(true);
     return;
   }
+  // Holding Ctrl or Alt fires a keydown for the modifier itself; wait for the real key.
+  if (MODIFIER_KEYS.has(e.key)) return;
   const isClear = (e.key === "Delete" || e.key === "Backspace") && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
   if (!isClear && !e.ctrlKey && !e.altKey) return; // wait for a real Ctrl/Alt chord
   send({
@@ -492,6 +519,8 @@ function onRecordKeydown(e) {
 
 function startRecording(field) {
   recording = { field };
+  // Go releases the saved hotkeys meanwhile, or a chord already in use never reaches the page.
+  send({ type: "record" });
   window.addEventListener("keydown", onRecordKeydown, true);
   window.addEventListener("blur", onWindowBlurWhileRecording);
   render();
@@ -513,6 +542,7 @@ function stopRecording(notifyGo) {
 // --- Events -----------------------------------------------------------------
 
 function doSave() {
+  if (!draft) return;
   send({ type: "save", setup: draft });
 }
 
@@ -686,7 +716,7 @@ function onMessage(msg) {
     case "recorded":
       if (msg.shortcut) labels[shortcutKeyJSON(msg.shortcut)] = msg.label;
       applyRecorded(msg.field, msg.shortcut);
-      stopRecording(false);
+      stopRecording(true);
       break;
     case "rejected":
       break;
