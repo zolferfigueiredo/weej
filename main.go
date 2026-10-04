@@ -3,11 +3,11 @@
 package main
 
 import (
-	"fmt"
+	"os"
 
-	"github.com/zolferfigueiredo/weej/internal/core"
+	"github.com/zolferfigueiredo/weej/internal/app"
 )
 
 func main() {
-	fmt.Println(core.AppName, core.AppVersion)
+	os.Exit(app.Main(os.Args[1:]))
 }

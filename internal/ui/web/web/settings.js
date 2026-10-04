@@ -690,6 +690,24 @@ function onMessage(msg) {
       break;
     case "rejected":
       break;
+    // Go-initiated, not a reply to any message this page sent: a hotkey or a
+    // tray profile click moved the active profile while Settings was open.
+    case "profile":
+      draft.profile = clampIndex(msg.profile, draft.profiles.length);
+      render();
+      break;
+    // Go-initiated: Calibration finished with a different column mapping
+    // while this window was already open, so the draft's columns are stale.
+    case "columns":
+      draft.columns = msg.columns;
+      render();
+      break;
+    // Go-initiated: the window was already open and got asked to switch tab
+    // (e.g. the tray's About item) instead of opening a new one.
+    case "tab":
+      activeTab = msg.tab || activeTab;
+      render();
+      break;
   }
 }
 
