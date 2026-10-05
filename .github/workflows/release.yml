@@ -35,31 +35,46 @@ jobs:
           fi
           echo "V=$v" >> "$GITHUB_ENV"
 
-      - run: go test ./...
+      # 32-bit binaries run on this 64-bit runner, so the 386 tests run for real.
+      - name: Test
+        run: |
+          go test ./...
+          GOARCH=386 go test ./...
       - run: go run ./tools/mkicon winres
       - name: Make resources
-        run: go tool go-winres make --in winres/winres.json --arch amd64 --product-version "$V.0" --file-version "$V.0"
+        run: go tool go-winres make --in winres/winres.json --arch amd64,386 --product-version "$V.0" --file-version "$V.0"
       - name: Build
         run: |
-          mkdir -p dist
-          CGO_ENABLED=0 GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/WeeJ.exe .
+          mkdir -p dist/x64 dist/x86
+          CGO_ENABLED=0 GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/x64/WeeJ.exe .
+          CGO_ENABLED=0 GOARCH=386 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/x86/WeeJ.exe .
 
       - name: Zip
         shell: pwsh
-        run: Compress-Archive -Path dist/WeeJ.exe, LICENSE -DestinationPath "dist/WeeJ-$env:V-x64.zip"
+        run: |
+          foreach ($arch in 'x64', 'x86') {
+            Compress-Archive -Path "dist/$arch/WeeJ.exe", LICENSE -DestinationPath "dist/WeeJ-$env:V-$arch.zip"
+          }
 
       # PowerShell, not bash: Git Bash would rewrite ISCC's /switches as paths.
-      - name: Build the installer
+      - name: Build the installers
         shell: pwsh
-        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=$env:V" "/DSourceExe=..\dist\WeeJ.exe" installer\weej.iss'
+        run: |
+          foreach ($arch in 'x64', 'x86') {
+            & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=$env:V" "/DArch=$arch" "/DSourceExe=..\dist\$arch\WeeJ.exe" installer\weej.iss
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
 
       - name: Fixed-name copies, checksums and latest.json
         run: |
-          cp "dist/WeeJ-$V-x64.zip" dist/WeeJ-x64.zip
-          cp "dist/WeeJ-$V-x64-setup.exe" dist/WeeJ-x64-setup.exe
-          sha256=$(sha256sum "dist/WeeJ-$V-x64.zip" | cut -d ' ' -f1)
-          printf '{"version":"%s","sha256":{"x64":"%s"}}\n' "$V" "$sha256" > dist/latest.json
-          (cd dist && sha256sum "WeeJ-$V-x64.zip" "WeeJ-$V-x64-setup.exe" > SHA256SUMS)
+          for arch in x64 x86; do
+            cp "dist/WeeJ-$V-$arch.zip" "dist/WeeJ-$arch.zip"
+            cp "dist/WeeJ-$V-$arch-setup.exe" "dist/WeeJ-$arch-setup.exe"
+          done
+          x64=$(sha256sum "dist/WeeJ-$V-x64.zip" | cut -d ' ' -f1)
+          x86=$(sha256sum "dist/WeeJ-$V-x86.zip" | cut -d ' ' -f1)
+          printf '{"version":"%s","sha256":{"x64":"%s","x86":"%s"}}\n' "$V" "$x64" "$x86" > dist/latest.json
+          (cd dist && sha256sum "WeeJ-$V-x64.zip" "WeeJ-$V-x64-setup.exe" "WeeJ-$V-x86.zip" "WeeJ-$V-x86-setup.exe" > SHA256SUMS)
 
       - name: Publish the release
         env:
@@ -68,8 +83,12 @@ jobs:
           gh release create "v$V" \
             "dist/WeeJ-$V-x64-setup.exe" \
             "dist/WeeJ-$V-x64.zip" \
+            "dist/WeeJ-$V-x86-setup.exe" \
+            "dist/WeeJ-$V-x86.zip" \
             "dist/WeeJ-x64-setup.exe" \
             "dist/WeeJ-x64.zip" \
+            "dist/WeeJ-x86-setup.exe" \
+            "dist/WeeJ-x86.zip" \
             "dist/latest.json" \
             "dist/SHA256SUMS" \
             --title "WeeJ $V" --generate-notes
