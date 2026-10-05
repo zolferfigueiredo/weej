@@ -41,10 +41,10 @@ Or take the portable [`WeeJ-<version>-x64.zip`](https://github.com/zolferfigueir
 
 You need:
 
-- Windows 10 or 11, 64-bit or 32-bit
+- Windows 10 or 11, 32-bit or 64-bit.
 - Any deej board, over USB. Your Arduino sketch stays as it is.
 - The Microsoft Edge WebView2 Runtime, for the Settings windows. Windows 11 has it, and on Windows 10 it comes with Edge. WeeJ tells you if it's missing.
-- For external screens: monitors with DDC/CI turned on in their own menu
+- For external screens: monitors with DDC/CI turned on in their own menu.
 
 **Quit deej first.** Only one app can open the board's port at a time; while another one has it, WeeJ shows the port as in use by another app. **Quit Twinkle Tray, Monitorian or any similar app** before you give a knob a screen: two apps writing the same screen over DDC/CI fight over the value.
 
