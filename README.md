@@ -30,14 +30,14 @@
 
 ## Install
 
-1. [Download `WeeJ-x64-setup.exe`](https://github.com/zolferfigueiredo/weej/releases/latest), or `WeeJ-x86-setup.exe` on 32-bit Windows 10, and run it. It installs for your user only, so it needs no administrator rights, and it can launch WeeJ at login.
+1. [Download `WeeJ-<version>-x64-setup.exe`](https://github.com/zolferfigueiredo/weej/releases/latest), or `WeeJ-<version>-x86-setup.exe` on 32-bit Windows 10, and run it. It installs for your user only, so it needs no administrator rights, and it can launch WeeJ at login.
 2. The installer isn't code-signed, so SmartScreen may say "Windows protected your PC". Click **More info**, then **Run anyway**.
 3. Open WeeJ. It asks which language to use, starting from Windows' own. Its icon sits in the tray: if you don't see it, open **Show hidden icons** on the taskbar and drag it next to the clock.
 4. Plug in your deej board. Calibrate opens on its own: move each knob from end to end, and Settings opens to choose what each one does.
 
 Coming from deej? **Import from deej…** in Settings turns your `config.yaml` into a profile.
 
-Or take the portable [`WeeJ-x64.zip`](https://github.com/zolferfigueiredo/weej/releases/latest) and unzip it anywhere.
+Or take the portable [`WeeJ-<version>-x64.zip`](https://github.com/zolferfigueiredo/weej/releases/latest) (or `-x86.zip`) and unzip it anywhere.
 
 You need:
 
