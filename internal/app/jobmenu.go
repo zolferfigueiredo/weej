@@ -72,7 +72,7 @@ func (app *App) openJobMenu(data []byte) {
 	if menu == nil {
 		return
 	}
-	// Clicking the knob whose menu is open closes it, as a dropdown's own button does. The
+	// Clicking the knob whose menu is open closes it, as a menu's own button does. The
 	// click usually hid it already, by taking focus from it just before landing here.
 	if shown {
 		menu.Hide()

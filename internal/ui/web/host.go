@@ -58,7 +58,7 @@ type Options struct {
 	OnOpen func(*Window)
 
 	// Owner makes a popup instead: borderless and owned by Owner. It stays hidden until
-	// ShowAt hangs it off a rect in Owner's page the way a dropdown does, and it hides again,
+	// ShowAt opens it beside a rect in Owner's page the way a submenu opens, and it hides again,
 	// rather than closing, as soon as it loses focus, so the next ShowAt is instant.
 	// MaxHeight caps it (DIP); a longer page scrolls.
 	Owner     *Window
@@ -369,8 +369,9 @@ func (w *Window) resizeTo(heightPx int32, center bool) {
 	w.resizeWebView()
 }
 
-// placePopup lines the popup's right edge up with its anchor's and hangs it below the
-// anchor, or above it when only that fits, or else as low as the screen allows.
+// placePopup opens the popup beside its anchor, the way a submenu opens: to the right, or to
+// the left when the right has no room, with its top level with the anchor's and moved up as
+// far as the screen needs.
 func (w *Window) placePopup(heightPx int32) {
 	a, work := w.anchor, w.work
 	if w.maxHeightPx > 0 && heightPx > w.maxHeightPx {
@@ -381,7 +382,10 @@ func (w *Window) placePopup(heightPx int32) {
 	}
 	gap := dipToPx(4, w.scale)
 
-	x := a.Right - w.widthPx
+	x := a.Right + gap
+	if x+w.widthPx > work.Right {
+		x = a.Left - gap - w.widthPx
+	}
 	if x+w.widthPx > work.Right {
 		x = work.Right - w.widthPx
 	}
@@ -389,19 +393,18 @@ func (w *Window) placePopup(heightPx int32) {
 		x = work.Left
 	}
 
-	y := a.Bottom + gap
+	y := a.Top
 	if y+heightPx > work.Bottom {
-		if above := a.Top - gap - heightPx; above >= work.Top {
-			y = above
-		} else {
-			y = work.Bottom - heightPx
-		}
+		y = work.Bottom - heightPx
+	}
+	if y < work.Top {
+		y = work.Top
 	}
 	setWindowPos(w.hwnd, x, y, w.widthPx, heightPx, swpNoZorder|swpNoActivate)
 	w.resizeWebView()
 }
 
-// ShowAt hangs a popup off anchor, a rect in its owner's page, heightPx tall (physical
+// ShowAt opens a popup beside anchor, a rect in its owner's page, heightPx tall (physical
 // pixels, capped by MaxHeight and the screen), and gives it focus. Safe from any goroutine.
 func (w *Window) ShowAt(anchor Rect, heightPx int32) {
 	w.invoke(func() {
