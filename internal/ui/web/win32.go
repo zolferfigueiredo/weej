@@ -41,6 +41,10 @@ var (
 	procLoadImageW             = user32.NewProc("LoadImageW")
 	procGetSystemMetricsForDpi = user32.NewProc("GetSystemMetricsForDpi")
 	procSendMessageW           = user32.NewProc("SendMessageW")
+	procPostMessageW           = user32.NewProc("PostMessageW")
+	procClientToScreen         = user32.NewProc("ClientToScreen")
+	procMonitorFromWindow      = user32.NewProc("MonitorFromWindow")
+	procGetMonitorInfoW        = user32.NewProc("GetMonitorInfoW")
 
 	procCreateSolidBrush = gdi32.NewProc("CreateSolidBrush")
 	procDeleteObject     = gdi32.NewProc("DeleteObject")
@@ -53,6 +57,7 @@ var (
 
 const (
 	wsOverlapped  = 0x00000000
+	wsPopup       = 0x80000000
 	wsCaption     = 0x00C00000
 	wsSysMenu     = 0x00080000
 	wsMinimizeBox = 0x00020000
@@ -61,11 +66,15 @@ const (
 
 	cwUseDefault = 0x80000000 // CW_USEDEFAULT (INT_MIN), written as its unsigned bit pattern so it fits uintptr
 
+	wsExToolWindow = 0x00000080 // keeps a popup off the taskbar and out of Alt+Tab
+
 	swShow    = 5
 	swRestore = 9
 
-	csHRedraw = 0x0002
-	csVRedraw = 0x0001
+	csHRedraw     = 0x0002
+	csVRedraw     = 0x0001
+	csDropShadow  = 0x00020000
+	monitorNearer = 2 // MONITOR_DEFAULTTONEAREST
 
 	idcArrow = 32512
 
@@ -99,6 +108,8 @@ const (
 	swpNoMove     = 0x0002
 
 	dwmwaUseImmersiveDarkMode = 20
+	dwmwaCornerPreference     = 33
+	dwmwcpRound               = 2
 )
 
 type wndClassExW struct {
@@ -139,9 +150,12 @@ func utf16Ptr(s string) *uint16 {
 	return p
 }
 
-var windowClassName = utf16Ptr("WeeJ.Web")
+var (
+	windowClassName = utf16Ptr("WeeJ.Web")
+	popupClassName  = utf16Ptr("WeeJ.WebPopup")
+)
 
-var registerOnce sync.Once
+var registerOnce, registerPopupOnce sync.Once
 
 // wndProcPtr must stay reachable for the lifetime of the process: user32 holds this
 // address in the registered window class and calls back into it indefinitely.
@@ -161,6 +175,41 @@ func registerWindowClass() {
 		wc.size = uint32(unsafe.Sizeof(wc))
 		procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
 	})
+}
+
+// A popup's class adds the drop shadow menus have; Windows 11 rounds it with the corners.
+func registerPopupClass() {
+	registerPopupOnce.Do(func() {
+		moduleHandle, _, _ := procGetModuleHandleW.Call(0)
+		cursor, _, _ := procLoadCursorW.Call(0, uintptr(idcArrow))
+		wc := wndClassExW{
+			style:     csHRedraw | csVRedraw | csDropShadow,
+			wndProc:   wndProcPtr,
+			instance:  moduleHandle,
+			cursor:    cursor,
+			className: popupClassName,
+		}
+		wc.size = uint32(unsafe.Sizeof(wc))
+		procRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc)))
+	})
+}
+
+func createPopupHidden(owner uintptr, x, y int32) uintptr {
+	registerPopupClass()
+	moduleHandle, _, _ := procGetModuleHandleW.Call(0)
+	hwnd, _, _ := procCreateWindowExW.Call(
+		wsExToolWindow,
+		uintptr(unsafe.Pointer(popupClassName)),
+		uintptr(unsafe.Pointer(utf16Ptr("WeeJ"))),
+		uintptr(wsPopup|wsClipChilden),
+		uintptr(x), uintptr(y), 1, 1,
+		owner, 0, moduleHandle, 0,
+	)
+	if hwnd != 0 {
+		v := int32(dwmwcpRound)
+		procDwmSetWindowAttribute.Call(hwnd, uintptr(dwmwaCornerPreference), uintptr(unsafe.Pointer(&v)), unsafe.Sizeof(v))
+	}
+	return hwnd
 }
 
 func createWindowHidden(title string) uintptr {
@@ -211,6 +260,29 @@ func workArea() rect32 {
 		r = rect32{Left: 0, Top: 0, Right: 1920, Bottom: 1080}
 	}
 	return r
+}
+
+func clientOrigin(hwnd uintptr) point32 {
+	var p point32
+	procClientToScreen.Call(hwnd, uintptr(unsafe.Pointer(&p)))
+	return p
+}
+
+// monitorWorkArea is the work area of the monitor hwnd is on, which a popup must fit in;
+// workArea is the primary monitor's.
+func monitorWorkArea(hwnd uintptr) rect32 {
+	var info struct {
+		size    uint32
+		monitor rect32
+		work    rect32
+		flags   uint32
+	}
+	info.size = uint32(unsafe.Sizeof(info))
+	mon, _, _ := procMonitorFromWindow.Call(hwnd, monitorNearer)
+	if r, _, _ := procGetMonitorInfoW.Call(mon, uintptr(unsafe.Pointer(&info))); r == 0 {
+		return workArea()
+	}
+	return info.work
 }
 
 func setWindowPos(hwnd uintptr, x, y, w, h int32, flags uintptr) {
@@ -336,6 +408,11 @@ func wndProcDispatch(hwnd uintptr, message uint32, wparam, lparam uintptr) uintp
 	case wmActivate:
 		if w != nil && wparam&0xFFFF != waInactive {
 			w.focusWebView()
+		}
+		// A popup goes away the moment another window takes focus, as a menu does. Posted,
+		// not destroyed here, so the activation change finishes first.
+		if w != nil && w.popup && w.shown && wparam&0xFFFF == waInactive {
+			procPostMessageW.Call(hwnd, wmClose, 0, 0)
 		}
 	case wmSetFocus:
 		if w != nil {

@@ -56,6 +56,20 @@ type Options struct {
 	OnClose func()
 	// Runs before a Modal window's loop starts, so its onMessage can reach the Window.
 	OnOpen func(*Window)
+
+	// Owner and Anchor make a popup instead: borderless, owned by Owner, hanging off Anchor
+	// the way a dropdown does (right edges lined up, below it or else above it), as tall as
+	// its page up to the screen's height, and closed as soon as it loses focus.
+	Owner  *Window
+	Anchor *Rect
+}
+
+// Rect is a rectangle in a page's own CSS pixels, as getBoundingClientRect reports it.
+type Rect struct {
+	Left   float64 `json:"left"`
+	Top    float64 `json:"top"`
+	Right  float64 `json:"right"`
+	Bottom float64 `json:"bottom"`
 }
 
 type Window struct {
@@ -72,6 +86,9 @@ type Window struct {
 	minHeightPx    int32
 	dark           bool
 	brush          uintptr
+
+	popup  bool
+	anchor rect32 // screen pixels, popups only
 
 	// UI thread only.
 	ready   bool
@@ -106,12 +123,21 @@ func themeRGB(dark bool) (r, g, b uint8) {
 // height (or a short fallback timer fires), so it appears at its final size with content.
 // A Modal window's Open returns only once it has closed.
 func Open(invoke func(func()), page string, opts Options, onMessage func(msg []byte)) (*Window, error) {
-	hwnd := createWindowHidden(opts.Title)
+	popup := opts.Owner != nil && opts.Anchor != nil
+	var hwnd uintptr
+	var anchor rect32
+	if popup {
+		anchor = opts.Owner.screenRect(*opts.Anchor)
+		// Created where it will hang, so it takes that monitor's DPI from the start.
+		hwnd = createPopupHidden(opts.Owner.hwnd, anchor.Right, anchor.Bottom)
+	} else {
+		hwnd = createWindowHidden(opts.Title)
+	}
 	if hwnd == 0 {
 		return nil, fmt.Errorf("web: CreateWindowExW failed for %q", page)
 	}
 
-	w := &Window{hwnd: hwnd, invoke: invoke, opts: opts, onMessage: onMessage}
+	w := &Window{hwnd: hwnd, invoke: invoke, opts: opts, onMessage: onMessage, popup: popup, anchor: anchor}
 	registerLive(hwnd, w)
 
 	w.scale = dpiForWindow(hwnd)
@@ -119,7 +145,11 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 	inner := clientRect(hwnd)
 	w.frameW = (outer.Right - outer.Left) - (inner.Right - inner.Left)
 	w.frameH = (outer.Bottom - outer.Top) - (inner.Bottom - inner.Top)
-	w.work = workArea()
+	if popup {
+		w.work = monitorWorkArea(hwnd)
+	} else {
+		w.work = workArea()
+	}
 	w.widthPx = dipToPx(opts.Width, w.scale)
 	w.minHeightPx = dipToPx(opts.MinHeight, w.scale)
 	w.applyTheme(!sys.AppsLight())
@@ -290,6 +320,10 @@ func (w *Window) onWebMessage(message string, sender *edge.ICoreWebView2, args *
 // resizeTo sets the client height in physical pixels, clamped to the work area. Only the
 // first call centres the window; later ones keep it where the user put it.
 func (w *Window) resizeTo(heightPx int32, center bool) {
+	if w.popup {
+		w.placePopup(heightPx)
+		return
+	}
 	if heightPx < w.minHeightPx {
 		heightPx = w.minHeightPx
 	}
@@ -314,6 +348,47 @@ func (w *Window) resizeTo(heightPx int32, center bool) {
 		setWindowPos(w.hwnd, cur.Left, y, totalW, totalH, swpNoZorder|swpNoActivate)
 	}
 	w.resizeWebView()
+}
+
+// placePopup lines the popup's right edge up with its anchor's and hangs it below the
+// anchor, or above it when only that fits, or else as low as the screen allows.
+func (w *Window) placePopup(heightPx int32) {
+	a, work := w.anchor, w.work
+	if maxH := work.Bottom - work.Top; heightPx > maxH {
+		heightPx = maxH
+	}
+	gap := dipToPx(4, w.scale)
+
+	x := a.Right - w.widthPx
+	if x+w.widthPx > work.Right {
+		x = work.Right - w.widthPx
+	}
+	if x < work.Left {
+		x = work.Left
+	}
+
+	y := a.Bottom + gap
+	if y+heightPx > work.Bottom {
+		if above := a.Top - gap - heightPx; above >= work.Top {
+			y = above
+		} else {
+			y = work.Bottom - heightPx
+		}
+	}
+	setWindowPos(w.hwnd, x, y, w.widthPx, heightPx, swpNoZorder|swpNoActivate)
+	w.resizeWebView()
+}
+
+// screenRect converts a rect in this window's page to screen pixels.
+func (w *Window) screenRect(r Rect) rect32 {
+	origin := clientOrigin(w.hwnd)
+	px := func(v float64) int32 { return int32(math.Round(v * w.scale)) }
+	return rect32{
+		Left:   origin.X + px(r.Left),
+		Top:    origin.Y + px(r.Top),
+		Right:  origin.X + px(r.Right),
+		Bottom: origin.Y + px(r.Bottom),
+	}
 }
 
 func (w *Window) runModalLoop() {
