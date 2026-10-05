@@ -550,24 +550,13 @@ select.select {
   border-top: 1px solid var(--divider);
 }
 
-/* --- Popover (job picker) --- */
+/* --- Job menu (its own popup window: jobs.html) --- */
 
-.popover-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
+body[data-page="jobs"] {
+  background: var(--card-bg);
 }
 
-.popover {
-  position: fixed;
-  z-index: 11;
-  min-width: 240px;
-  max-height: 320px;
-  overflow-y: auto;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-flyout);
+.job-menu {
   padding: 4px;
 }
 
@@ -579,6 +568,15 @@ select.select {
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: var(--fs-body);
+}
+
+button.popover-item {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 
 .popover-item:hover {
