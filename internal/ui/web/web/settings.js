@@ -15,7 +15,7 @@ let draft = null;
 let labels = {};
 let activeTab = "general";
 let recording = null; // { field: "profile:<i>" | "next" | "previous" }
-let popover = null; // { knob, top, left }
+let popover = null; // { knob, place: { top, left, height }, scrollTop }
 let dialog = null; // { kind: "removeProfile" | "removeKnob" }
 let importNote = ""; // last import_skipped / import_failed text, shown under the import button
 let ports = null; // [{ name, product, usb }] once Go has listed them
@@ -132,6 +132,8 @@ function render() {
 
   // Overlays are appended fresh below, not patched in place: drop any previous
   // copy first, or every render while one is open would stack another on top.
+  const shownPopover = document.querySelector(".popover");
+  if (popover && shownPopover) popover.scrollTop = shownPopover.scrollTop;
   document.querySelectorAll(".popover-scrim, .popover, .dialog-scrim").forEach((el) => el.remove());
 
   document.getElementById("page-title").textContent = t("settings");
@@ -459,7 +461,7 @@ function renderPopover() {
   const knobJobs = activeProfile().jobs[popover.knob] || [];
   const bySection = sectionsFromCatalog();
   let html = `<div class="popover-scrim" data-action="close-popover"></div>`;
-  html += `<div class="popover" data-style="top:${popover.top}px;left:${popover.left}px;">`;
+  html += `<div class="popover">`;
   html += `<div class="popover-item" data-action="clear-jobs" data-knob="${popover.knob}"><span>${esc(t("clear"))}</span></div>`;
   html += `<div class="popover-sep"></div>`;
   for (const [section, entries] of bySection) {
@@ -473,6 +475,35 @@ function renderPopover() {
   html += `<div class="popover-item" data-action="pick-app" data-knob="${popover.knob}"><span>${esc(t("other"))}</span></div>`;
   html += `</div>`;
   document.getElementById("root").insertAdjacentHTML("beforeend", html);
+  placePopover();
+  document.querySelector(".popover").scrollTop = popover.scrollTop;
+}
+
+// The window is only as tall as its content, so a menu hanging past the bottom
+// would be cut off: it opens above its knob when there's more room there. It's
+// placed once, so ticking a job, which grows the knob's row, never moves it.
+function placePopover() {
+  const el = document.querySelector(".popover");
+  if (!el) return;
+  const margin = 8;
+  if (!popover.place) {
+    const gap = 4;
+    const rect = document.querySelector(`.knob-row[data-knob="${popover.knob}"]`).getBoundingClientRect();
+    const wanted = el.offsetHeight;
+    const below = window.innerHeight - rect.bottom - gap - margin;
+    const above = rect.top - gap - margin;
+    const up = wanted > below && above > below;
+    const height = Math.min(wanted, up ? above : below);
+    popover.place = {
+      top: up ? rect.top - gap - height : rect.bottom + gap,
+      left: Math.max(margin, Math.min(rect.left, window.innerWidth - margin - el.offsetWidth)),
+      height,
+    };
+  }
+  const { top, left, height } = popover.place;
+  el.style.top = `${top}px`;
+  el.style.left = `${left}px`;
+  el.style.maxHeight = `${Math.min(height, window.innerHeight - margin - top)}px`;
 }
 
 function popoverItem(entry, knobJobs) {
@@ -537,9 +568,8 @@ function removeKnobConfirmed() {
   for (const p of draft.profiles) p.jobs.pop();
 }
 
-function openPopover(knob, anchorEl) {
-  const rect = anchorEl.getBoundingClientRect();
-  popover = { knob, top: Math.round(rect.bottom + 4), left: Math.round(rect.left) };
+function openPopover(knob) {
+  popover = { knob, place: null, scrollTop: 0 };
   render();
 }
 
@@ -667,7 +697,7 @@ function onClick(e) {
       render();
       break;
     case "open-popover":
-      openPopover(parseInt(target.dataset.knob, 10), target);
+      openPopover(parseInt(target.dataset.knob, 10));
       break;
     case "close-popover":
       closePopover();
@@ -851,6 +881,10 @@ document.getElementById("root").addEventListener("input", onInput);
 document.getElementById("root").addEventListener("change", onChange);
 document.getElementById("btn-close").addEventListener("click", () => send({ type: "close" }));
 document.getElementById("btn-save").addEventListener("click", doSave);
+// Ticking a job resizes the window under an open menu.
+window.addEventListener("resize", () => {
+  if (popover) placePopover();
+});
 
 window.addEventListener("keydown", (e) => {
   if (e.key !== "Enter" || recording || popover || dialog) return;
