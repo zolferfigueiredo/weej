@@ -40,6 +40,7 @@
   "downloading": "バージョン {version} をダウンロード中…",
   "experimental": "実験的機能",
   "finish": "完了",
+  "for_mac": "Mac 版:",
   "hide_icon": "通知領域のアイコンを隠す",
   "hide_icon_note": "WeeJ をもう一度開くと、ここに戻れます。",
   "icon": "アイコン",

@@ -122,7 +122,7 @@ Under **Tray icon**, **Hide tray icon** removes the icon (open WeeJ again to get
 
 **Connection** shows the port and whether the board is connected. **Port** is Automatic, which finds the board by itself, or a fixed COM port; **Baud rate** must match `Serial.begin()` in your sketch.
 
-**About** shows the version, with Check for updates…, and links to the website and to zolfer.com.
+**About** shows the version, with Check for updates…, and links to the website, to zolfer.com and to TheeJ, WeeJ's sibling for the Mac.
 
 Save applies at once, makes the profile shown the active one, and leaves the window open. A knob given a new job, by Save or by switching profiles, takes it over the next time you move it.
 
