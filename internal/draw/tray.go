@@ -39,29 +39,23 @@ func TrayIcon(style IconStyle, connected bool, px int, lightTaskbar bool) *image
 	return out
 }
 
-func mixerMask(px int, parked bool) *image.Alpha {
-	s := float32(px) / 24
-	base := mask(px, func(z *vector.Rasterizer) {
-		addRoundedRect(z, 2*s, 2*s, 20*s, 20*s, 4.67*s)
-	})
+var trayLayout = faderLayout{left: 3, gap: 4.5, high: 5, low: 18, mid: 10.1, strokeHW: 1.1,
+	capW: 3.6, capH: 2.6, capR: 0.8}
 
-	xs := [3]float32{6.67, 12, 17.33}
-	ys := [3]float32{8, 14, 10.67}
-	if parked {
-		ys = [3]float32{16.67, 16.67, 16.67}
-	}
-	for i, x := range xs {
-		y := ys[i]
-		groove := mask(px, func(z *vector.Rasterizer) {
-			addCapsule(z, x*s, 6*s, x*s, 18*s, 1.33*s/2)
-		})
-		cutMask(base, groove)
-		knob := mask(px, func(z *vector.Rasterizer) {
-			addRoundedRect(z, (x-2)*s, (y-1.335)*s, 4*s, 2.67*s, 0.8*s)
-		})
-		cutMask(base, knob)
-	}
-	return base
+// Parked flattens the W into a line, so the glyph only spells W while the box is connected.
+func mixerMask(px int, parked bool) *image.Alpha {
+	s := float64(px) / 24
+	l := trayLayout
+	caps := l.capCentres(parked)
+	m := strokeMask(px, wCurve(caps).scaled(s), l.strokeHW*s)
+	body := mask(px, func(z *vector.Rasterizer) {
+		for _, c := range caps {
+			addRoundedRect(z, float32((c.x-l.capW/2)*s), float32((c.y-l.capH/2)*s),
+				float32(l.capW*s), float32(l.capH*s), float32(l.capR*s))
+		}
+	})
+	unionMask(m, body)
+	return m
 }
 
 func dialMask(px int, connected bool) *image.Alpha {

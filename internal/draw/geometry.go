@@ -22,13 +22,6 @@ func grayColor(white, a float64) rgba {
 	return rgba{white * 255, white * 255, white * 255, a}
 }
 
-func lerp(a, b, t float64) float64 { return a + (b-a)*t }
-
-func smoothstep(t float64) float64 {
-	t = clampF(t, 0, 1)
-	return t * t * (3 - 2*t)
-}
-
 func clampF(v, lo, hi float64) float64 {
 	if v < lo {
 		return lo
@@ -47,6 +40,51 @@ func clamp255(v float64) uint8 {
 		return 255
 	}
 	return uint8(v + 0.5)
+}
+
+type pt struct{ x, y float64 }
+
+type polyline []pt
+
+// In design-grid units: fine enough that no flattening kink shows at 1024 px.
+const flattenStep = 3
+
+func (l *polyline) lineTo(x, y float64) { *l = append(*l, pt{x, y}) }
+
+func (l *polyline) cubeTo(c1, c2, end pt) {
+	start := (*l)[len(*l)-1]
+	n := int((dist(start, c1)+dist(c1, c2)+dist(c2, end))/flattenStep) + 1
+	for i := 1; i <= n; i++ {
+		t := float64(i) / float64(n)
+		u := 1 - t
+		a, b, c, d := u*u*u, 3*u*u*t, 3*u*t*t, t*t*t
+		*l = append(*l, pt{a*start.x + b*c1.x + c*c2.x + d*end.x, a*start.y + b*c1.y + c*c2.y + d*end.y})
+	}
+}
+
+func (l *polyline) quadTo(c, end pt) {
+	start := (*l)[len(*l)-1]
+	l.cubeTo(pt{start.x + 2*(c.x-start.x)/3, start.y + 2*(c.y-start.y)/3},
+		pt{end.x + 2*(c.x-end.x)/3, end.y + 2*(c.y-end.y)/3}, end)
+}
+
+func (l polyline) scaled(s float64) polyline {
+	out := make(polyline, len(l))
+	for i, q := range l {
+		out[i] = pt{q.x * s, q.y * s}
+	}
+	return out
+}
+
+func dist(a, b pt) float64 { return math.Hypot(b.x-a.x, b.y-a.y) }
+
+func segmentDistance(x, y float64, a, b pt) float64 {
+	dx, dy := b.x-a.x, b.y-a.y
+	t := 0.0
+	if l2 := dx*dx + dy*dy; l2 > 0 {
+		t = clampF(((x-a.x)*dx+(y-a.y)*dy)/l2, 0, 1)
+	}
+	return math.Hypot(x-a.x-t*dx, y-a.y-t*dy)
 }
 
 func addRoundedRect(z *vector.Rasterizer, x, y, w, h, r float32) {
