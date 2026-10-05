@@ -6,6 +6,8 @@ import (
 	"unsafe"
 
 	"golang.org/x/sys/windows"
+
+	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 )
 
 // DLL handles shared across the package's files; each file declares the procs it needs from
@@ -232,14 +234,8 @@ func releaseDC(hwnd windows.HWND, hdc windows.Handle) {
 	procReleaseDC.Call(uintptr(hwnd), uintptr(hdc))
 }
 
-// packPoint folds a POINT into the single register the x64 calling convention passes an 8-byte
-// struct in, for APIs like MonitorFromPoint that take POINT by value rather than by pointer.
-func packPoint(x, y int32) uintptr {
-	return uintptr(uint32(x)) | uintptr(uint32(y))<<32
-}
-
 func monitorFromPoint(x, y int32, flags uint32) windows.Handle {
-	r, _, _ := procMonitorFromPoint.Call(packPoint(x, y), uintptr(flags))
+	r, _, _ := procMonitorFromPoint.Call(append(sys.PointArgs(x, y), uintptr(flags))...)
 	return windows.Handle(r)
 }
 
