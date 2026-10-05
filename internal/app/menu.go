@@ -159,6 +159,7 @@ func (app *App) switchProfile(i int) {
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "profile", "profile": i})
 	}
+	app.showProfileHUD(s)
 }
 
 func (app *App) requestReconnect() {

@@ -42,6 +42,32 @@ func (app *App) showHUD(job core.Job, s float64) {
 	})
 }
 
+// showProfileHUD names the profile s has just made active, on the same screen and spot as the
+// volume HUD, so it replaces one that is still showing instead of stacking.
+func (app *App) showProfileHUD(s core.Settings) {
+	if s.Active < 0 || s.Active >= len(s.Profiles) {
+		return
+	}
+	app.loop.Invoke(func() {
+		mon := app.monitorFor(core.Job{})
+		scale := float64(mon.DPI) / 96
+		if scale <= 0 {
+			scale = 1
+		}
+		bmp := draw.ProfileHUD(draw.ProfileHUDParams{
+			Scale:  scale,
+			Dark:   !sys.AppsLight(),
+			Icon:   draw.AppIcon(int(math.Round(20 * scale))),
+			Name:   app.displayProfileName(s.Profiles[s.Active], s.Active),
+			Index:  s.Active,
+			Count:  len(s.Profiles),
+			Face:   app.faceAt(scale),
+			Accent: sys.Accent(),
+		})
+		app.hud.Show(monitorKey(mon), mon.Work, scale, bmp)
+	})
+}
+
 func monitorKey(m display.Monitor) string {
 	if m.Handle != 0 {
 		return fmt.Sprintf("h%d", m.Handle)
