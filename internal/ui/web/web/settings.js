@@ -465,7 +465,7 @@ function renderAbout() {
       </div>
       <div class="card">
         ${linkRow(t("website"), init.website, init.website.replace(/^https?:\/\//, ""))}
-        ${linkRow(t("for_mac"), init.theej, "TheeJ")}
+        ${linkRow(t("on_macos"), init.theej, "TheeJ")}
         ${linkRow(t("made_by"), init.madeBy, hostnameOf(init.madeBy))}
         ${linkRow(t("inspired_by"), init.deej, "deej")}
       </div>
