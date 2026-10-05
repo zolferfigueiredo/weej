@@ -173,6 +173,10 @@ func TestNoLeftoverTerms(t *testing.T) {
 	for _, l := range Languages {
 		for k, v := range catalogs[l.Code] {
 			for _, bad := range leftovers {
+				// About names TheeJ's platform on purpose.
+				if k == "on_macos" && bad == "macOS" {
+					continue
+				}
 				if strings.Contains(v, bad) {
 					t.Errorf("%s.%s contains leftover %q: %q", l.Code, k, bad, v)
 				}
