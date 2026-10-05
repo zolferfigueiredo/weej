@@ -57,7 +57,7 @@ You need:
 - **No jumps.** A knob takes up a new job the next time you move it, so switching profiles never jumps the volume or a screen.
 - **Real per-app volume.** Windows keeps a volume for every app, and WeeJ turns that same slider you see in the Volume mixer. Nothing is captured or delayed.
 - **Follows your audio device.** Switch outputs or inputs, Bluetooth headphones included, and the knobs follow.
-- **Any number of knobs.** As many as your sketch sends, up to 26. One switch inverts them all for pots wired the other way round.
+- **Any number of knobs.** As many as your sketch sends: A to Z, then A2, B2 and on, with no limit. One switch inverts them all for pots wired the other way round.
 - **Same firmware.** Speaks the deej serial protocol, unchanged, at 9600 baud or whatever your sketch uses.
 - **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in the menu and in App settings changes it at once, open windows included.
 - **Lives in the tray.** A left click opens Settings and a right click opens the menu. It reconnects on its own, can launch at login, and installs updates in one click.
@@ -71,7 +71,7 @@ You need:
 - **Focused app**: whichever app owns the window in front, as deej's `deej.current` does.
 - **Other apps**: every app that has no knob of its own in the active profile, as deej's `deej.unmapped` does.
 - **Built-in display brightness**: a laptop's panel, through WMI. Desktops have none.
-- **Screen brightness** and **Screen contrast**: each external screen over DDC/CI. Screens count left to right by their position in Display settings.
+- **Screen brightness** and **Screen contrast**: each external screen over DDC/CI, one entry per screen Windows reports. Screens count left to right by their position in Display settings.
 - **Night light warmth** (Experimental): off at the bottom of the knob, then from least to most warm. It is Windows' own Night light, so a schedule still switches it on and off at its set times.
 - **External keyboard backlight**: a QMK keyboard with VIA, such as a Keychron K8 Pro, on its USB cable (not Bluetooth). Nothing is saved to the keyboard, so unplugging it brings back its own level. The knob sets brightness only.
 - **Screen zoom**: 1x at the bottom of the knob, up to 10x at the top, with the pointer kept in view as it moves. It's the Windows full-screen magnifier, driven directly. Quitting WeeJ zooms back out.

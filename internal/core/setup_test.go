@@ -347,3 +347,12 @@ func TestPortAndBaudSurviveSaving(t *testing.T) {
 		t.Errorf("old file = %q at %d, want automatic at %d", old.Port, old.BaudRate(), DefaultBaud)
 	}
 }
+
+func TestLetterGoesPastZ(t *testing.T) {
+	cases := map[int]string{0: "A", 4: "E", 25: "Z", 26: "A2", 27: "B2", 51: "Z2", 52: "A3", 77: "Z3", 78: "A4"}
+	for i, want := range cases {
+		if got := Letter(i); got != want {
+			t.Errorf("Letter(%d) = %q, want %q", i, got, want)
+		}
+	}
+}

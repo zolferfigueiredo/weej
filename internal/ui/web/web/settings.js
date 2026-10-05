@@ -44,8 +44,9 @@ function esc(s) {
 }
 const escAttr = esc;
 
+// A to Z, then A2 to Z2, A3 and so on, as core.Letter names them.
 function letterFor(i) {
-  return String.fromCharCode(65 + i);
+  return String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26) + 1) : "");
 }
 
 function clip(name, limit) {
@@ -239,7 +240,7 @@ function renderGeneral() {
           <h2 class="group-title">${esc(t("knobs"))}</h2>
           <span class="spacer"></span>
           <span class="segmented">
-            <button class="btn btn-icon" type="button" data-action="add-knob" title="${escAttr(t("add_knob"))}" aria-label="${escAttr(t("add_knob"))}"${draft.columns.length >= 26 ? " disabled" : ""}>+</button>
+            <button class="btn btn-icon" type="button" data-action="add-knob" title="${escAttr(t("add_knob"))}" aria-label="${escAttr(t("add_knob"))}">+</button>
             <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${draft.columns.length === 0 ? " disabled" : ""}>&minus;</button>
           </span>
         </div>
@@ -520,7 +521,6 @@ function removeProfileConfirmed() {
 }
 
 function addKnob() {
-  if (draft.columns.length >= 26) return;
   draft.columns.push(-1);
   for (const p of draft.profiles) p.jobs.push([]);
   render();

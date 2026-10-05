@@ -288,9 +288,14 @@ func ParseIconStyle(s string) IconStyle {
 	}
 }
 
-const MaxKnobs = 26
-
-func Letter(i int) string { return string(rune('A' + i)) }
+// Letter names knob i as on the box: A to Z, then A2 to Z2, A3 and so on, with no limit.
+func Letter(i int) string {
+	s := string(rune('A' + i%26))
+	if i >= 26 {
+		s += strconv.Itoa(i/26 + 1)
+	}
+	return s
+}
 
 type Setup struct {
 	Columns      []int
