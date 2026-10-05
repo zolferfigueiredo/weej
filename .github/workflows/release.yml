@@ -1,0 +1,93 @@
+name: Release
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - installer/**
+permissions:
+  contents: write
+defaults:
+  run:
+    shell: bash
+jobs:
+  build:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Determine the version to build
+        run: |
+          v=$(sed -n 's/^const AppVersion = "\(.*\)"$/\1/p' internal/core/version.go)
+          # Only a tag push publishes. A manual run or a pull request that touches the release is
+          # build-only (an .exe and installer to try), so there's no tag to check against AppVersion.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            tag=${GITHUB_REF#refs/tags/}
+            if [ "$tag" != "v$v" ]; then
+              echo "::error::Tag $tag does not match AppVersion $v in internal/core/version.go." >&2
+              exit 1
+            fi
+          fi
+          echo "V=$v" >> "$GITHUB_ENV"
+
+      # The other packages only build for Windows.
+      - run: go test ./internal/core/... ./internal/lang/... ./internal/draw/...
+      - run: go run ./tools/mkicon winres
+      - name: Make resources
+        run: go tool go-winres make --in winres/winres.json --arch amd64 --product-version "$V.0" --file-version "$V.0"
+      - name: Build
+        run: |
+          mkdir -p dist
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/WeeJ.exe .
+
+      - name: Zip
+        run: zip -j "dist/WeeJ-$V-x64.zip" dist/WeeJ.exe LICENSE
+
+      - name: Build the installer
+        # Inno Setup is a Windows program; this image runs it under Wine as a non-root user,
+        # who needs write access to dist.
+        run: |
+          chmod a+w dist
+          docker run --rm -v "$PWD:/work" amake/innosetup:innosetup6 \
+            "/DAppVersion=$V" '/DSourceExe=..\dist\WeeJ.exe' installer/weej.iss
+
+      - name: Fixed-name copies, checksums and latest.json
+        run: |
+          cp "dist/WeeJ-$V-x64.zip" dist/WeeJ-x64.zip
+          cp "dist/WeeJ-$V-x64-setup.exe" dist/WeeJ-x64-setup.exe
+          sha256=$(sha256sum "dist/WeeJ-$V-x64.zip" | cut -d ' ' -f1)
+          printf '{"version":"%s","sha256":{"x64":"%s"}}\n' "$V" "$sha256" > dist/latest.json
+          (cd dist && sha256sum "WeeJ-$V-x64.zip" "WeeJ-$V-x64-setup.exe" > SHA256SUMS)
+
+      - name: Publish the release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$V" \
+            "dist/WeeJ-$V-x64-setup.exe" \
+            "dist/WeeJ-$V-x64.zip" \
+            "dist/WeeJ-x64-setup.exe" \
+            "dist/WeeJ-x64.zip" \
+            "dist/latest.json" \
+            "dist/SHA256SUMS" \
+            --title "WeeJ $V" --generate-notes
+
+      - name: Upload the build
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@v5
+        with:
+          name: WeeJ-${{ env.V }}-build
+          retention-days: 14
+          path: |
+            dist/WeeJ.exe
+            dist/WeeJ-${{ env.V }}-x64-setup.exe
+            dist/WeeJ-${{ env.V }}-x64.zip
