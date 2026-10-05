@@ -330,7 +330,7 @@ const MOCK_EN_STRINGS = {
   not_connected: "Not connected",
   now_using: "You're now using WeeJ {version}, the newest version available.",
   ok: "OK",
-  on_macos: "On macOS",
+  on_macos: "On macOS:",
   other: "Other...",
   port_busy: "{port} is in use by another app",
   press_shortcut: "Press Shortcut",

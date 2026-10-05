@@ -444,31 +444,17 @@ function hostnameOf(url) {
   }
 }
 
-const OPEN_ICON = `<svg class="row-link-icon" viewBox="0 0 12 12" aria-hidden="true"><path d="M7 1.5h3.5V5M10.5 1.5 5.5 6.5M9.5 7v2.5a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1H5" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-
-function linkRow(label, url, target) {
-  return `
-        <a class="row clickable" href="#" data-action="open-url" data-url="${escAttr(url)}">
-          <span class="row-main"><span class="row-title">${esc(label)}</span></span>
-          <span class="row-control"><span class="row-value">${esc(target)}</span>${OPEN_ICON}</span>
-        </a>`;
-}
-
 function renderAbout() {
   document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel">
-      <div class="about-hero">
-        <img src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" data-style="border-radius:14px;" />
-        <h2 data-style="font:600 16px var(--font-display);margin:14px 0 2px;">WeeJ</h2>
-        <p class="row-desc">${esc(t("version", { version: init.version }))}</p>
-        <button class="btn" type="button" data-action="check-updates" data-style="margin-top:14px;">${esc(t("check"))}</button>
-      </div>
-      <div class="card">
-        ${linkRow(t("website"), init.website, init.website.replace(/^https?:\/\//, ""))}
-        ${linkRow(t("on_macos"), init.theej, "TheeJ")}
-        ${linkRow(t("made_by"), init.madeBy, hostnameOf(init.madeBy))}
-        ${linkRow(t("inspired_by"), init.deej, "deej")}
-      </div>
+    <div class="tabpanel" role="tabpanel" data-style="align-items:center;text-align:center;padding-top:4px;gap:0;">
+      <img src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" data-style="border-radius:14px;" />
+      <h2 data-style="font:600 16px var(--font-display);margin:12px 0 0;">WeeJ</h2>
+      <p class="row-desc" data-style="margin-top:2px;">${esc(t("version", { version: init.version }))}</p>
+      <button class="btn" type="button" data-action="check-updates" data-style="margin-top:14px;">${esc(t("check"))}</button>
+      <p data-style="margin-top:20px;"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
+      <p class="row-desc" data-style="margin-top:4px;">${esc(t("on_macos"))} <a href="#" data-action="open-url" data-url="${escAttr(init.theej)}">TheeJ</a></p>
+      <p class="row-desc" data-style="margin-top:16px;">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">${esc(hostnameOf(init.madeBy))}</a></p>
+      <p class="row-desc" data-style="margin-top:4px;">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
     </div>`;
 }
 

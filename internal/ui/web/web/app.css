@@ -337,34 +337,6 @@ p {
   gap: 8px;
 }
 
-a.row,
-a.row:hover,
-a.row:focus-visible {
-  color: inherit;
-  text-decoration: none;
-}
-
-.row-value {
-  color: var(--text-secondary);
-}
-
-.row-link-icon {
-  width: 12px;
-  height: 12px;
-  flex: none;
-  color: var(--text-secondary);
-}
-
-/* --- About --- */
-
-.about-hero {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 4px 0 6px;
-}
-
 /* --- Buttons --- */
 
 .btn {
