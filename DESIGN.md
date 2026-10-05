@@ -140,7 +140,7 @@ Settings uses a persistent two-button footer (`position: sticky; bottom: 0`) so 
 Mostly flat, by the brief's own evidence (Windows 11 Settings is a Mica surface with hairline cards, not a shadow-heavy system). The window's native Mica backdrop is requested by the host at the HWND level (`DWMWA_SYSTEMBACKDROP_TYPE`); the page content itself renders as fully opaque cards in a solid approximation of that Mica tone, so the page looks correct standing alone (including in a plain browser preview) rather than depending on true backdrop blending.
 
 ### Shadow Vocabulary
-- **Flyout** (`0 4px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.08)`): the only shadow in the system, reserved for the per-knob job-picker popover and the confirm dialogs, the two surfaces that visually float above the page rather than belong to it.
+- **Flyout** (`0 4px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.08)`): the only shadow in the system, reserved for the confirm dialogs, which visually float above the page rather than belong to it. The job picker floats too, but as a window of its own, so Windows draws its shadow.
 
 ### Named Rules
 **The Flat-At-Rest Rule.** Every card, row, button and input is flat with a 1px border at rest. A shadow appears only on a surface that is actually layered above the page (a flyout, a dialog), never on a card that merely wants emphasis.
@@ -175,9 +175,9 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 ### Checkbox (job picker)
 - 16x16px, 3px radius, same hairline border as inputs; checked state fills accent and draws a white checkmark via `clip-path`, scaled in over 100ms.
 
-### Flyout (job picker popover)
-- **Style:** Card Surface, 8px radius, the system's one shadow, max-height 320px with internal scroll.
-- **Behavior:** a full-viewport invisible scrim beneath it closes it on any outside click; section headers (Volume, Brightness, ...) group its checklist exactly as Go's catalog orders them, with Clear first and Other... last. It opens below its knob, or above it when there's more room there, and never runs past the window's edge, since the window is only as tall as its content. Once open it stays put, scroll position included, while jobs are ticked.
+### Flyout (job picker)
+- **Style:** Card Surface, a borderless popup window of its own (`jobs.html`) that Windows rounds to 8px and shadows like a menu.
+- **Behavior:** it opens beside the knob's card the way a submenu does: to the right, or to the left when the screen has no room there, its top level with the knob's row and moved up as far as the screen needs. It is up to 490px tall and 280px wide, past the Settings window's own edge; a longer list scrolls. It is made once, hidden, when Settings loads, and only hides between opens, so it opens at once. Section headers (Volume, Brightness, ...) group its checklist exactly as Go's catalog orders them, with Clear first and Other... last. Every tick goes straight back to Settings; Escape, a click anywhere else, or a second click on the same knob closes it.
 
 ### Tabs (Settings' Pivot)
 - Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge.
