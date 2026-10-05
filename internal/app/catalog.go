@@ -54,24 +54,7 @@ func (app *App) screenCount(setup core.Setup) int {
 			externals = m.Screen + 1
 		}
 	}
-	highest := -1
-	for _, p := range setup.Profiles {
-		for _, row := range p.Jobs {
-			for _, j := range row {
-				if (j.Kind == core.JobBrightness || j.Kind == core.JobContrast) && j.Screen > highest {
-					highest = j.Screen
-				}
-			}
-		}
-	}
-	n := 2
-	if externals > n {
-		n = externals
-	}
-	if highest+1 > n {
-		n = highest + 1
-	}
-	return n
+	return core.ScreenCount(externals, setup)
 }
 
 func assignedAnywhere(setup core.Setup, kind core.JobKind) bool {
