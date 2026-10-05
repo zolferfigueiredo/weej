@@ -24,6 +24,10 @@
   <a href="https://github.com/zolferfigueiredo/theej">TheeJ, for the Mac</a>
 </p>
 
+<p align="center">
+  <img src="docs/screenshot.png" width="462" alt="WeeJ Settings: five knobs, each with the jobs it does">
+</p>
+
 ## Install
 
 1. [Download `WeeJ-x64-setup.exe`](https://github.com/zolferfigueiredo/weej/releases/latest) and run it. It installs for your user only, so it needs no administrator rights, and it can launch WeeJ at login.
