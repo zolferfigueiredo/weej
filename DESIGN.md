@@ -100,7 +100,7 @@ The four windows share one visual system (one stylesheet, one component set) but
 Restrained by the brief, not by default: a single accent carries every call to action, every selection state and nothing else.
 
 ### Primary
-- **Windows Accent** (`#0078d4` fallback; the real value arrives live from `sys.Accent()` via the `theme` message): the Save/Continue/Reopen primary buttons, the active tab's underline, a checked toggle or checkbox, and the focus ring on interactive controls. Never used for body text or decoration.
+- **Windows Accent** (`#0078d4` fallback; the real value arrives live from `sys.Accent()` via the `theme` message): the Apply/Continue/Reopen primary buttons, the active tab's underline, a checked toggle or checkbox, and the focus ring on interactive controls. Never used for body text or decoration.
 
 ### Neutral
 - **Mica Ground** (`#f3f3f3` light / `#202020` dark): the window background, standing in for the native Mica backdrop the host applies to the HWND itself (see Elevation & Depth).
@@ -133,7 +133,7 @@ Restrained by the brief, not by default: a single accent carries every call to a
 
 Each window is a single-column flex layout, not a grid: `.app` (Settings) or `.center-page` (the other three) stacks its children top to bottom with a consistent gap, padded 20px top / 24px sides and bottom. There is no responsive breakpoint system, because these are fixed-width native windows, not a webpage; the only layout adaptation is vertical, where the page reports its own rendered height to the host after every change and the host resizes the window's client area to match, capped to the primary monitor's work area (the page then scrolls past that cap).
 
-Settings uses a persistent two-button footer (`position: sticky; bottom: 0`) so Close/Save stay reachable regardless of tab content length. The three single-purpose windows center their content both axes, with a fixed 320px measure for body copy so translated strings with longer average length (German, Russian, Polish) still read comfortably.
+Settings uses a persistent two-button footer (`position: sticky; bottom: 0`) so Close/Apply stay reachable regardless of tab content length. The three single-purpose windows center their content both axes, with a fixed 320px measure for body copy so translated strings with longer average length (German, Russian, Polish) still read comfortably.
 
 ## Elevation & Depth
 
@@ -153,7 +153,8 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 
 ### Buttons
 - **Shape:** 6px radius, 1px border, 7px/14px padding.
-- **Primary** (Save, Continue, Reopen-when-done): accent background, white text; disabled state drops to the neutral control-border color so it reads as inert rather than a dimmed accent.
+- **Order:** Windows' commit order, right-aligned: the action first, then Cancel or Close, with Apply last of all. So Settings reads Close · Apply, Calibration reads Skip/Finish · Cancel, and the confirm dialogs read Remove · Cancel.
+- **Primary** (Apply, Continue, Reopen-when-done): accent background, white text; disabled state drops to the neutral control-border color so it reads as inert rather than a dimmed accent.
 - **Secondary** (Close, Cancel, Skip, Record Shortcut): control-surface background with a hairline border; hover shifts to the card-hover tint.
 - **Icon** (+/- on profiles and knobs): 30x30px square, same radius and border language as a secondary button.
 - **Link** (Calibrate, Website, Made by, Inspired by): accent text, no border, underline on hover/focus only.
@@ -181,7 +182,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 
 ### Knob reorder
 - **Grip:** six dots in secondary text at the left of every knob row, the Windows sign that a row can be dragged; no label. The cursor is a grab hand over it.
-- **Behavior:** dragging the grip lifts the row like a card (the hover tint plus the flyout shadow) and the rows it passes slide out of its way. The knob letters stay in order top to bottom, because the knobs, their inputs and calibration stay put and only the jobs move. A row gives way once the dragged row's leading edge passes its middle. Alt+Up and Alt+Down move the focused row one place. It changes the profile shown, saved with Save like any other edit, and a plain click on the grip opens the job menu as the rest of the row does.
+- **Behavior:** dragging the grip lifts the row like a card (the hover tint plus the flyout shadow) and the rows it passes slide out of its way. The knob letters stay in order top to bottom, because the knobs, their inputs and calibration stay put and only the jobs move. A row gives way once the dragged row's leading edge passes its middle. Alt+Up and Alt+Down move the focused row one place. It changes the profile shown, applied with Apply like any other edit, and a plain click on the grip opens the job menu as the rest of the row does.
 
 ### Tabs (Settings' Pivot)
 - Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge.
