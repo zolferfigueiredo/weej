@@ -62,8 +62,9 @@ set "RELURL=https://github.com/zolferfigueiredo/weej/releases/download/%TAG%/Wee
 
 echo Pushed %TAG%. GitHub Actions builds and publishes the release:
 echo https://github.com/zolferfigueiredo/weej/actions
-echo The installer, once it's published:
+echo The installers, once they're published:
 echo %RELURL%
+echo https://github.com/zolferfigueiredo/weej/releases/download/%TAG%/WeeJ-%VERSION%-x86-setup.exe
 
 if not "%~1"=="--url" exit /b 0
 
