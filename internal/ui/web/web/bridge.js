@@ -372,7 +372,6 @@ const MOCK_EN_STRINGS = {
   shortcut: "Shortcut",
   shortcut_tip: "Use Ctrl or Alt with a key. Delete clears it, Escape cancels.",
   shortcuts: "Shortcuts",
-  show_data: "Show data below",
   skip: "Skip",
   space: "Space",
   speed: "Speed",
