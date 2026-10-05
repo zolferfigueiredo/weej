@@ -8,7 +8,6 @@ type Copy int
 
 const (
 	Installed Copy = iota
-	Scoop
 	Other
 )
 
@@ -16,8 +15,6 @@ func WhichCopy(self string) Copy {
 	switch {
 	case sys.IsInstalledCopy(self):
 		return Installed
-	case sys.IsScoopCopy(self):
-		return Scoop
 	default:
 		return Other
 	}

@@ -141,8 +141,6 @@ func (app *App) manualCheckUpdate() {
 
 func (app *App) startUpdateNow() {
 	switch updater.WhichCopy(app.self) {
-	case updater.Scoop:
-		app.loop.Alert(core.AppName, app.tr("scoop_managed"))
 	case updater.Other:
 		choice := app.loop.Ask(app.tr("update_failed"), app.tr("installed_only"), []string{app.tr("download"), app.tr("cancel")})
 		if choice == 0 {
