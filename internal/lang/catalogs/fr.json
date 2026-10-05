@@ -118,7 +118,6 @@
   "reopen": "Rouvrir",
   "reopen_failed": "Impossible de rouvrir : {error} Quittez l’app et ouvrez-la vous-même.",
   "save": "Enregistrer",
-  "scoop_managed": "Cette copie a été installée avec Scoop. Mettez-la à jour avec : scoop update weej",
   "seconds_left.one": "{n} seconde restante",
   "seconds_left.other": "{n} secondes restantes",
   "section.apps": "Apps",

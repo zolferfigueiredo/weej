@@ -118,7 +118,6 @@
   "reopen": "Volver a abrir",
   "reopen_failed": "No se pudo volver a abrir: {error} Sal de la app y ábrela tú.",
   "save": "Guardar",
-  "scoop_managed": "Esta copia se instaló con Scoop. Actualízala con: scoop update weej",
   "seconds_left.one": "Queda {n} segundo",
   "seconds_left.other": "Quedan {n} segundos",
   "section.apps": "Apps",

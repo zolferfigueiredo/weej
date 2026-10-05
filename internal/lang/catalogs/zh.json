@@ -117,7 +117,6 @@
   "reopen": "重新打开",
   "reopen_failed": "无法重新打开：{error} 请退出应用后自行打开。",
   "save": "保存",
-  "scoop_managed": "此副本是用 Scoop 安装的。请用以下命令更新：scoop update weej",
   "seconds_left.other": "还剩 {n} 秒",
   "section.apps": "应用",
   "section.brightness": "亮度",

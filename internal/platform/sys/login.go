@@ -111,7 +111,3 @@ func InstalledExe() string {
 func IsInstalledCopy(self string) bool {
 	return strings.EqualFold(filepath.Clean(self), filepath.Clean(InstalledExe()))
 }
-
-func IsScoopCopy(self string) bool {
-	return strings.Contains(strings.ToLower(self), `\scoop\apps\`)
-}

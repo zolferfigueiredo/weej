@@ -118,7 +118,6 @@
   "reopen": "Reabrir",
   "reopen_failed": "Não foi possível reabrir: {error} Encerre o app e abra-o você mesmo.",
   "save": "Salvar",
-  "scoop_managed": "Esta cópia foi instalada com o Scoop. Atualize com: scoop update weej",
   "seconds_left.one": "Falta {n} segundo",
   "seconds_left.other": "Faltam {n} segundos",
   "section.apps": "Apps",

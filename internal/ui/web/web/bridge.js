@@ -354,7 +354,6 @@ const MOCK_EN_STRINGS = {
   reopen: "Reopen",
   reopen_failed: "Couldn't reopen: {error} Quit and open it yourself.",
   save: "Save",
-  scoop_managed: "This copy was installed with Scoop. Update it with: scoop update weej",
   "seconds_left.one": "{n} second left",
   "seconds_left.other": "{n} seconds left",
   "section.apps": "Apps",

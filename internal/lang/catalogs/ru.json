@@ -120,7 +120,6 @@
   "reopen": "Открыть снова",
   "reopen_failed": "Не удалось открыть снова: {error} Завершите приложение и откройте его сами.",
   "save": "Сохранить",
-  "scoop_managed": "Эта копия установлена через Scoop. Обновите её командой: scoop update weej",
   "seconds_left.few": "Осталось {n} секунды",
   "seconds_left.many": "Осталось {n} секунд",
   "seconds_left.one": "Осталась {n} секунда",
