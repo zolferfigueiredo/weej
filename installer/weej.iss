@@ -1,6 +1,10 @@
-﻿; Installer for WeeJ. installer.bat and .github/workflows/release.yml compile this with /DAppVersion.
+﻿; Installer for WeeJ. installer.bat and .github/workflows/release.yml compile this with /DAppVersion,
+; and the release once per architecture with /DArch=x64 or /DArch=x86 and that build's /DSourceExe.
 #ifndef AppVersion
   #define AppVersion "0.0.0"
+#endif
+#ifndef Arch
+  #define Arch "x64"
 #endif
 #ifndef SourceExe
   #define SourceExe "..\build\WeeJ.exe"
@@ -19,12 +23,16 @@ DefaultDirName={autopf}\WeeJ
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
+#if Arch == "x64"
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
+#else
+ArchitecturesAllowed=x86compatible
+#endif
 AppMutex=Local\com.zolfer.weej
 CloseApplications=yes
 RestartApplications=no
-OutputBaseFilename=WeeJ-{#AppVersion}-x64-setup
+OutputBaseFilename=WeeJ-{#AppVersion}-{#Arch}-setup
 OutputDir=..\dist
 SetupIconFile=..\winres\weej.ico
 UninstallDisplayIcon={app}\WeeJ.exe
