@@ -15,7 +15,7 @@ func TestCheckParsesFeed(t *testing.T) {
 			http.NotFound(w, r)
 			return
 		}
-		_, _ = w.Write([]byte(`{"version":"1.2.3","sha256":{"x64":"abc123"}}`))
+		_, _ = w.Write([]byte(`{"version":"1.2.3","sha256":{"x64":"abc123","x86":"def456"}}`))
 	}))
 	defer server.Close()
 
@@ -23,7 +23,8 @@ func TestCheckParsesFeed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if rel.Version != "1.2.3" || rel.SHA256 != "abc123" {
+	want := map[string]string{"x64": "abc123", "x86": "def456"}[Arch()]
+	if rel.Version != "1.2.3" || rel.SHA256 != want {
 		t.Errorf("Check() = %+v", rel)
 	}
 }
