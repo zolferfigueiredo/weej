@@ -40,6 +40,7 @@
   "downloading": "正在下载版本 {version}…",
   "experimental": "实验性",
   "finish": "完成",
+  "for_mac": "Mac 版:",
   "hide_icon": "隐藏通知区域图标",
   "hide_icon_note": "再次打开 WeeJ 即可回到这里。",
   "icon": "图标",

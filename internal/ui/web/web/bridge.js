@@ -282,6 +282,7 @@ const MOCK_EN_STRINGS = {
   downloading: "Downloading version {version}...",
   experimental: "Experimental",
   finish: "Finish",
+  for_mac: "For the Mac:",
   hide_icon: "Hide tray icon",
   hide_icon_note: "Open WeeJ again to get back here.",
   icon: "Icon",
@@ -504,6 +505,7 @@ function mockSettingsInit(enStrings) {
     version: "1.0.0",
     website: "https://github.com/zolferfigueiredo/weej",
     madeBy: "https://zolfer.com",
+    theej: "https://theej.zolfer.com",
     deej: "https://github.com/omriharel/deej",
     languages: [
       { code: "en", name: "English" },
