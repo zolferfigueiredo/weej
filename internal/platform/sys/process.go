@@ -23,12 +23,18 @@ const smShuttingDown = 0x2000
 
 func Detach(exe string, args []string) error {
 	cmd := exec.Command(exe, args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
+	cmd.SysProcAttr = detachAttr()
+	return cmd.Start()
+}
+
+// No HideWindow: DETACHED_PROCESS already keeps a console build from getting a console, and
+// SW_HIDE in STARTUPINFO is applied to the new copy's first ShowWindow, which hid the first
+// Settings window it opened.
+func detachAttr() *syscall.SysProcAttr {
+	return &syscall.SysProcAttr{
 		CreationFlags:    windows.DETACHED_PROCESS | windows.CREATE_NEW_PROCESS_GROUP,
-		HideWindow:       true,
 		NoInheritHandles: true,
 	}
-	return cmd.Start()
 }
 
 func KeepAlive(exe string, args []string, log func(string)) int {
