@@ -183,6 +183,8 @@ func (app *App) onSettingsMessage(data []byte) {
 		app.handleSettingsSave(data)
 	case "calibrate":
 		app.loop.Invoke(func() { app.startCalibration(false) })
+	case "openJobMenu":
+		app.loop.Invoke(func() { app.openJobMenu(data) })
 	case "pickApp":
 		app.loop.Invoke(func() { app.handleSettingsPickApp(data) })
 	case "importDeej":

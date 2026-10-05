@@ -80,6 +80,11 @@ type App struct {
 	settingsWin        *web.Window
 	settingsPendingTab string
 
+	jobMenuWin        *web.Window
+	jobMenuKnob       int
+	jobMenuClosedAt   time.Time
+	jobMenuClosedKnob int
+
 	calibWin      *web.Window
 	calibrator    *core.Calibrator
 	calibOnlyNew  bool
