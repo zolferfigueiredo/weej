@@ -4,9 +4,6 @@ package app
 
 import (
 	"encoding/json"
-	"fmt"
-	"image"
-	"image/color"
 	"strconv"
 	"strings"
 
@@ -19,7 +16,7 @@ import (
 )
 
 func (app *App) setupTray(l *winui.Loop) {
-	app.tray = l.NewTray(app.onTrayClick, func() { app.manualCheckUpdate() })
+	app.tray = l.NewTray(func() { app.openSettings("") }, app.showTrayMenu, func() { app.manualCheckUpdate() })
 	app.hud = l.NewHUD()
 	l.OnThemeChange(func() {
 		app.refreshTray()
@@ -28,7 +25,7 @@ func (app *App) setupTray(l *winui.Loop) {
 	app.refreshTray()
 }
 
-func (app *App) onTrayClick() {
+func (app *App) showTrayMenu() {
 	items := app.buildMenu()
 	app.loop.PopupMenu(items, !sys.TaskbarLight())
 }
@@ -77,33 +74,8 @@ func (app *App) refreshTrayNow() {
 func (app *App) buildMenu() []winui.MenuItem {
 	s := app.snapshotSettings()
 	connected, busy, port := app.connectionStatus()
-	ink := color.Color(color.Black)
-	if !sys.TaskbarLight() {
-		ink = color.White
-	}
 
 	var items []winui.MenuItem
-
-	items = append(items, winui.MenuItem{
-		Text: app.tr("show_data"), Checked: s.ShowDataInMenu,
-		OnClick: func() {
-			cur := app.snapshotSettings()
-			cur.ShowDataInMenu = !cur.ShowDataInMenu
-			if err := app.persistSettings(cur); err != nil {
-				app.log("Could not save settings: " + err.Error())
-			}
-		},
-	})
-	if connected && s.ShowDataInMenu {
-		for _, line := range app.engine.Lines() {
-			items = append(items, winui.MenuItem{
-				Text:     fmt.Sprintf("%s %d%%", line.Job.Title(app.trFunc(), app.appDisplayName), line.Percent),
-				Disabled: true,
-				Icon:     app.jobMenuIcon(line.Job, ink),
-			})
-		}
-	}
-	items = append(items, winui.MenuItem{Separator: true})
 
 	if s.ShowProfiles {
 		items = append(items, winui.MenuItem{Text: app.tr("profiles"), Disabled: true})
@@ -269,31 +241,4 @@ func (app *App) autoUpdateMenuItems(every int) []winui.MenuItem {
 func (app *App) quit() {
 	app.shutdown()
 	app.loop.Quit(0)
-}
-
-func (app *App) jobMenuIcon(job core.Job, ink color.Color) *image.NRGBA {
-	const px = 16
-	switch job.Kind {
-	case core.JobMaster, core.JobSystemSounds:
-		return draw.Glyph(draw.GlyphSpeaker, px, ink)
-	case core.JobMicrophone:
-		return draw.Glyph(draw.GlyphMic, px, ink)
-	case core.JobBuiltinBrightness, core.JobBrightness:
-		return draw.Glyph(draw.GlyphSun, px, ink)
-	case core.JobContrast:
-		return draw.Glyph(draw.GlyphContrast, px, ink)
-	case core.JobNightLight:
-		return draw.Glyph(draw.GlyphMoon, px, ink)
-	case core.JobExternalKeyboard:
-		return draw.Glyph(draw.GlyphKeyboard, px, ink)
-	case core.JobZoom:
-		return draw.Glyph(draw.GlyphZoom, px, ink)
-	case core.JobApp:
-		if icon := app.cachedExeIcon(job.Exe, px); icon != nil {
-			return icon
-		}
-		return draw.Glyph(draw.GlyphApp, px, ink)
-	default:
-		return draw.Glyph(draw.GlyphApp, px, ink)
-	}
 }

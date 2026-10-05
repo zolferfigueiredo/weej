@@ -72,31 +72,6 @@ func boxBlurLine(src, dst []float64, r int) {
 	}
 }
 
-// Ports TheeJ's inset() for a bevelled plate: shadow the area outside shapeMask, shift and blur
-// it, then keep only the part that falls inside shapeMask.
-func innerShadow(dst *image.NRGBA, shapeMask *image.Alpha, dyPx, blurPx float64, c rgba) {
-	w, h := shapeMask.Rect.Dx(), shapeMask.Rect.Dy()
-	outside := make([]float64, w*h)
-	for i, v := range shapeMask.Pix {
-		outside[i] = 255 - float64(v)
-	}
-	shifted := shiftVertical(outside, w, h, dyPx)
-	boxBlur3(shifted, w, h, blurPx/2)
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			i := y*w + x
-			clip := float64(shapeMask.Pix[i]) / 255
-			if clip <= 0 {
-				continue
-			}
-			cov := shifted[i] / 255 * clip
-			if cov > 0 {
-				blendPixel(dst, x, y, c, cov)
-			}
-		}
-	}
-}
-
 // Unclipped: callers must paint the shape's own fill afterward to cover the shadow under it, as
 // CoreGraphics does when a shadow is active while filling.
 func dropShadow(dst *image.NRGBA, shapeMask *image.Alpha, dyPx, blurPx float64, c rgba) {
