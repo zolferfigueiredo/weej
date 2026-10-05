@@ -179,6 +179,10 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - **Style:** Card Surface, a borderless popup window of its own (`jobs.html`) that Windows rounds to 8px and shadows like a menu.
 - **Behavior:** it opens beside the knob's card the way a submenu does: to the right, or to the left when the screen has no room there, its top level with the knob's row and moved up as far as the screen needs. It is up to 490px tall and 280px wide, past the Settings window's own edge; a longer list scrolls. It is made once, hidden, when Settings loads, and only hides between opens, so it opens at once. Section headers (Volume, Brightness, ...) group its checklist exactly as Go's catalog orders them, with Clear first and Other... last. Every tick goes straight back to Settings; Escape, a click anywhere else, or a second click on the same knob closes it.
 
+### Knob reorder
+- **Grip:** six dots in secondary text at the left of every knob row, the Windows sign that a row can be dragged; no label. The cursor is a grab hand over it.
+- **Behavior:** dragging the grip lifts the row like a card (the hover tint plus the flyout shadow) and the rows it passes slide out of its way. The knob letters stay in order top to bottom, because the knobs, their inputs and calibration stay put and only the jobs move. A row gives way once the dragged row's leading edge passes its middle. Alt+Up and Alt+Down move the focused row one place. It changes the profile shown, saved with Save like any other edit, and a plain click on the grip opens the job menu as the rest of the row does.
+
 ### Tabs (Settings' Pivot)
 - Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge.
 
