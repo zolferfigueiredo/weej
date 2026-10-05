@@ -16,7 +16,7 @@ defaults:
 jobs:
   build:
     name: Build and publish
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
@@ -38,26 +38,23 @@ jobs:
           fi
           echo "V=$v" >> "$GITHUB_ENV"
 
-      # The other packages only build for Windows.
-      - run: go test ./internal/core/... ./internal/lang/... ./internal/draw/...
+      - run: go test ./...
       - run: go run ./tools/mkicon winres
       - name: Make resources
         run: go tool go-winres make --in winres/winres.json --arch amd64 --product-version "$V.0" --file-version "$V.0"
       - name: Build
         run: |
           mkdir -p dist
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/WeeJ.exe .
+          CGO_ENABLED=0 GOARCH=amd64 go build -trimpath -ldflags "-s -w -H windowsgui" -o dist/WeeJ.exe .
 
       - name: Zip
-        run: zip -j "dist/WeeJ-$V-x64.zip" dist/WeeJ.exe LICENSE
+        shell: pwsh
+        run: Compress-Archive -Path dist/WeeJ.exe, LICENSE -DestinationPath "dist/WeeJ-$env:V-x64.zip"
 
+      # PowerShell, not bash: Git Bash would rewrite ISCC's /switches as paths.
       - name: Build the installer
-        # Inno Setup is a Windows program; this image runs it under Wine as a non-root user,
-        # who needs write access to dist.
-        run: |
-          chmod a+w dist
-          docker run --rm -v "$PWD:/work" amake/innosetup:innosetup6 \
-            "/DAppVersion=$V" '/DSourceExe=..\dist\WeeJ.exe' installer/weej.iss
+        shell: pwsh
+        run: '& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=$env:V" "/DSourceExe=..\dist\WeeJ.exe" installer\weej.iss'
 
       - name: Fixed-name copies, checksums and latest.json
         run: |
