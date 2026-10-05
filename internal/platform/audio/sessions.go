@@ -28,18 +28,16 @@ type sessionInfo struct {
 }
 
 func (a *Audio) registerDeviceChangeNotification() {
-	client := wca.NewIMMNotificationClient(wca.IMMNotificationClientCallback{
-		OnDefaultDeviceChanged: func(flow wca.EDataFlow, role wca.ERole, deviceID string) error {
-			select {
-			case a.deviceChanged <- struct{}{}:
-			default:
-			}
-			return nil
-		},
+	client := newDeviceNotifier(func() {
+		select {
+		case a.deviceChanged <- struct{}{}:
+		default:
+		}
 	})
 
-	// go-wca has no unregister call, so this is a one-time, leak-for-the-process-lifetime setup.
-	if err := a.enumerator.RegisterEndpointNotificationCallback(client); err != nil {
+	// go-wca only passes the pointer on, so the notifier stands in for its own type. It is
+	// never unregistered: a one-time setup for the life of the process.
+	if err := a.enumerator.RegisterEndpointNotificationCallback((*wca.IMMNotificationClient)(unsafe.Pointer(client))); err != nil {
 		a.logOnce("register-device-notify", "Could not watch for default device changes: "+err.Error())
 		return
 	}
