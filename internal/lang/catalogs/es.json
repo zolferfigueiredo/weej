@@ -88,7 +88,7 @@
   "not_connected": "Sin conexión",
   "now_using": "Ahora usas WeeJ {version}, la versión más reciente disponible.",
   "ok": "OK",
-  "on_macos": "En macOS",
+  "on_macos": "En macOS:",
   "other": "Otra…",
   "port": "Puerto",
   "port_auto": "Automático",
