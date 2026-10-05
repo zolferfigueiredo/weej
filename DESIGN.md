@@ -177,7 +177,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 
 ### Flyout (job picker)
 - **Style:** Card Surface, a borderless popup window of its own (`jobs.html`) that Windows rounds to 8px and shadows like a menu.
-- **Behavior:** it opens beside the knob's card the way a submenu does: to the right, or to the left when the screen has no room there, its top level with the knob's row and moved up as far as the screen needs. It is up to 440px tall and 280px wide, past the Settings window's own edge; a longer list scrolls. It is made once, hidden, when Settings loads, and only hides between opens, so it opens at once. Section headers (Volume, Brightness, ...) group its checklist exactly as Go's catalog orders them, with Clear first and Other... last. Every tick goes straight back to Settings; Escape, a click anywhere else, or a second click on the same knob closes it.
+- **Behavior:** it opens beside the knob's card the way a submenu does: to the right, or to the left when the screen has no room there, its top level with the knob's row and moved up as far as the screen needs. It is up to 490px tall and 280px wide, past the Settings window's own edge; a longer list scrolls. It is made once, hidden, when Settings loads, and only hides between opens, so it opens at once. Section headers (Volume, Brightness, ...) group its checklist exactly as Go's catalog orders them, with Clear first and Other... last. Every tick goes straight back to Settings; Escape, a click anywhere else, or a second click on the same knob closes it.
 
 ### Tabs (Settings' Pivot)
 - Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge.
