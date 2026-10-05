@@ -68,6 +68,7 @@ const (
 
 	wsExToolWindow = 0x00000080 // keeps a popup off the taskbar and out of Alt+Tab
 
+	swHide    = 0
 	swShow    = 5
 	swRestore = 9
 
@@ -89,6 +90,7 @@ const (
 	wmSysCommand = 0x0112
 	wmDpiChanged = 0x02E0
 	wmSetIcon    = 0x0080
+	wmAppHide    = 0x8001 // WM_APP+1: hide a popup once its activation change is done
 
 	iconSmall  = 0
 	iconBig    = 1
@@ -410,10 +412,15 @@ func wndProcDispatch(hwnd uintptr, message uint32, wparam, lparam uintptr) uintp
 			w.focusWebView()
 		}
 		// A popup goes away the moment another window takes focus, as a menu does. Posted,
-		// not destroyed here, so the activation change finishes first.
-		if w != nil && w.popup && w.shown && wparam&0xFFFF == waInactive {
-			procPostMessageW.Call(hwnd, wmClose, 0, 0)
+		// not hidden here, so the activation change finishes first.
+		if w != nil && w.popup && w.visible && wparam&0xFFFF == waInactive {
+			procPostMessageW.Call(hwnd, wmAppHide, 0, 0)
 		}
+	case wmAppHide:
+		if w != nil && w.popup {
+			w.hidePopup()
+		}
+		return 0
 	case wmSetFocus:
 		if w != nil {
 			w.focusWebView()

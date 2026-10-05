@@ -57,11 +57,13 @@ type Options struct {
 	// Runs before a Modal window's loop starts, so its onMessage can reach the Window.
 	OnOpen func(*Window)
 
-	// Owner and Anchor make a popup instead: borderless, owned by Owner, hanging off Anchor
-	// the way a dropdown does (right edges lined up, below it or else above it), as tall as
-	// its page up to the screen's height, and closed as soon as it loses focus.
-	Owner  *Window
-	Anchor *Rect
+	// Owner makes a popup instead: borderless and owned by Owner. It stays hidden until
+	// ShowAt hangs it off a rect in Owner's page the way a dropdown does, and it hides again,
+	// rather than closing, as soon as it loses focus, so the next ShowAt is instant.
+	// MaxHeight caps it (DIP); a longer page scrolls.
+	Owner     *Window
+	MaxHeight int
+	OnHide    func()
 }
 
 // Rect is a rectangle in a page's own CSS pixels, as getBoundingClientRect reports it.
@@ -87,8 +89,12 @@ type Window struct {
 	dark           bool
 	brush          uintptr
 
-	popup  bool
-	anchor rect32 // screen pixels, popups only
+	// Popups only.
+	popup        bool
+	visible      bool
+	anchor       rect32 // screen pixels
+	maxHeightPx  int32
+	lastHeightPx int32
 
 	// UI thread only.
 	ready   bool
@@ -123,13 +129,12 @@ func themeRGB(dark bool) (r, g, b uint8) {
 // height (or a short fallback timer fires), so it appears at its final size with content.
 // A Modal window's Open returns only once it has closed.
 func Open(invoke func(func()), page string, opts Options, onMessage func(msg []byte)) (*Window, error) {
-	popup := opts.Owner != nil && opts.Anchor != nil
+	popup := opts.Owner != nil
 	var hwnd uintptr
-	var anchor rect32
 	if popup {
-		anchor = opts.Owner.screenRect(*opts.Anchor)
-		// Created where it will hang, so it takes that monitor's DPI from the start.
-		hwnd = createPopupHidden(opts.Owner.hwnd, anchor.Right, anchor.Bottom)
+		// Created over its owner, so it takes that monitor's DPI from the start.
+		origin := clientOrigin(opts.Owner.hwnd)
+		hwnd = createPopupHidden(opts.Owner.hwnd, origin.X, origin.Y)
 	} else {
 		hwnd = createWindowHidden(opts.Title)
 	}
@@ -137,7 +142,7 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 		return nil, fmt.Errorf("web: CreateWindowExW failed for %q", page)
 	}
 
-	w := &Window{hwnd: hwnd, invoke: invoke, opts: opts, onMessage: onMessage, popup: popup, anchor: anchor}
+	w := &Window{hwnd: hwnd, invoke: invoke, opts: opts, onMessage: onMessage, popup: popup}
 	registerLive(hwnd, w)
 
 	w.scale = dpiForWindow(hwnd)
@@ -152,8 +157,15 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 	}
 	w.widthPx = dipToPx(opts.Width, w.scale)
 	w.minHeightPx = dipToPx(opts.MinHeight, w.scale)
+	w.maxHeightPx = dipToPx(opts.MaxHeight, w.scale)
 	w.applyTheme(!sys.AppsLight())
-	w.resizeTo(dipToPx(opts.Height, w.scale), true)
+	if popup {
+		// Laid out at its final width while hidden; ShowAt places it.
+		r := windowRect(hwnd)
+		setWindowPos(hwnd, r.Left, r.Top, w.widthPx, dipToPx(opts.Height, w.scale), swpNoZorder|swpNoActivate)
+	} else {
+		w.resizeTo(dipToPx(opts.Height, w.scale), true)
+	}
 
 	if opts.NoClose {
 		disableCloseBox(hwnd)
@@ -164,7 +176,9 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 	if opts.OnOpen != nil {
 		opts.OnOpen(w)
 	}
-	setTimer(hwnd, showFallbackTimer, 1500)
+	if !popup {
+		setTimer(hwnd, showFallbackTimer, 1500)
+	}
 
 	if opts.Modal {
 		w.runModalLoop()
@@ -300,7 +314,9 @@ func (w *Window) onWebMessage(message string, sender *edge.ICoreWebView2, args *
 	switch probe.Type {
 	case "height":
 		w.resizeTo(int32(math.Ceil(probe.Value)), false)
-		w.showOnce()
+		if !w.popup {
+			w.showOnce()
+		}
 		return
 	case "pageError":
 		logf("web: page error: %s (%s:%d)", probe.Message, probe.Source, probe.Line)
@@ -321,7 +337,10 @@ func (w *Window) onWebMessage(message string, sender *edge.ICoreWebView2, args *
 // first call centres the window; later ones keep it where the user put it.
 func (w *Window) resizeTo(heightPx int32, center bool) {
 	if w.popup {
-		w.placePopup(heightPx)
+		w.lastHeightPx = heightPx
+		if w.visible {
+			w.placePopup(heightPx)
+		}
 		return
 	}
 	if heightPx < w.minHeightPx {
@@ -354,6 +373,9 @@ func (w *Window) resizeTo(heightPx int32, center bool) {
 // anchor, or above it when only that fits, or else as low as the screen allows.
 func (w *Window) placePopup(heightPx int32) {
 	a, work := w.anchor, w.work
+	if w.maxHeightPx > 0 && heightPx > w.maxHeightPx {
+		heightPx = w.maxHeightPx
+	}
 	if maxH := work.Bottom - work.Top; heightPx > maxH {
 		heightPx = maxH
 	}
@@ -377,6 +399,53 @@ func (w *Window) placePopup(heightPx int32) {
 	}
 	setWindowPos(w.hwnd, x, y, w.widthPx, heightPx, swpNoZorder|swpNoActivate)
 	w.resizeWebView()
+}
+
+// ShowAt hangs a popup off anchor, a rect in its owner's page, heightPx tall (physical
+// pixels, capped by MaxHeight and the screen), and gives it focus. Safe from any goroutine.
+func (w *Window) ShowAt(anchor Rect, heightPx int32) {
+	w.invoke(func() {
+		if w.isClosed() || !w.popup {
+			return
+		}
+		owner := w.opts.Owner
+		w.anchor = owner.screenRect(anchor)
+		w.work = monitorWorkArea(owner.hwnd)
+		if heightPx > 0 {
+			w.lastHeightPx = heightPx
+		}
+		w.placePopup(w.lastHeightPx)
+		w.visible = true
+		showWindow(w.hwnd, swShow)
+		// A WebView created inside a hidden window stays blank until told it is visible.
+		if w.chromium != nil {
+			if c := w.chromium.GetController(); c != nil {
+				_ = c.PutIsVisible(true)
+			}
+		}
+		setForegroundWindow(w.hwnd)
+		w.focusWebView()
+	})
+}
+
+// Hide puts a popup away until the next ShowAt. Safe from any goroutine.
+func (w *Window) Hide() {
+	w.invoke(func() {
+		if !w.isClosed() {
+			w.hidePopup()
+		}
+	})
+}
+
+func (w *Window) hidePopup() {
+	if !w.visible {
+		return
+	}
+	w.visible = false
+	showWindow(w.hwnd, swHide)
+	if w.opts.OnHide != nil {
+		w.opts.OnHide()
+	}
 }
 
 // screenRect converts a rect in this window's page to screen pixels.
