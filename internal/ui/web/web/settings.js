@@ -167,7 +167,7 @@ function renderTabs() {
 
 function renderFooter() {
   document.getElementById("btn-close").textContent = t("close");
-  document.getElementById("btn-save").textContent = t("save");
+  document.getElementById("btn-save").textContent = t("apply");
   updateSaveButton();
 }
 
@@ -516,8 +516,8 @@ function renderDialog() {
         <div class="dialog-title">${esc(title)}</div>
         <div class="dialog-body">${esc(body)}</div>
         <div class="dialog-actions">
-          <button class="btn" type="button" data-action="cancel-dialog">${esc(t("cancel"))}</button>
           <button class="btn btn-primary btn-danger" type="button" data-action="confirm-dialog">${esc(t("remove"))}</button>
+          <button class="btn" type="button" data-action="cancel-dialog">${esc(t("cancel"))}</button>
         </div>
       </div>
     </div>`;
