@@ -36,6 +36,7 @@ const (
 	// NOTIFYICON_VERSION_4 delivers its notification code in the low word of lParam of the
 	// app's chosen callback message; WM_CONTEXTMENU arrives the same way on a right-click.
 	ninSelect           = wmUser + 0
+	ninKeySelect        = wmUser + 1
 	ninBalloonUserClick = wmUser + 5
 )
 
@@ -67,7 +68,8 @@ type Tray struct {
 	loop           *Loop
 	uid            uint32
 	msg            uint32
-	onClick        func()
+	onSelect       func()
+	onMenu         func()
 	onBalloonClick func()
 
 	icon  windows.Handle
@@ -75,7 +77,7 @@ type Tray struct {
 	added bool
 }
 
-func (l *Loop) NewTray(onClick func(), onBalloonClick func()) *Tray {
+func (l *Loop) NewTray(onSelect, onMenu, onBalloonClick func()) *Tray {
 	l.mu.Lock()
 	if l.taskbarCreatedMsg == 0 {
 		l.taskbarCreatedMsg = registerWindowMessageW("TaskbarCreated")
@@ -85,7 +87,8 @@ func (l *Loop) NewTray(onClick func(), onBalloonClick func()) *Tray {
 		loop:           l,
 		uid:            l.nextTrayID,
 		msg:            wmApp + 2 + l.nextTrayID,
-		onClick:        onClick,
+		onSelect:       onSelect,
+		onMenu:         onMenu,
 		onBalloonClick: onBalloonClick,
 	}
 	l.trayListeners = append(l.trayListeners, t)
@@ -98,9 +101,14 @@ func (l *Loop) NewTray(onClick func(), onBalloonClick func()) *Tray {
 func (t *Tray) handleCallback(wparam, lparam uintptr) uintptr {
 	code := uint32(lparam) & 0xFFFF
 	switch code {
-	case ninSelect, wmLButtonUp, wmContextMenu:
-		if t.onClick != nil {
-			t.onClick()
+	// Version 4 also sends the raw WM_LBUTTONUP before NIN_SELECT; handling both acts twice.
+	case ninSelect, ninKeySelect:
+		if t.onSelect != nil {
+			t.onSelect()
+		}
+	case wmContextMenu:
+		if t.onMenu != nil {
+			t.onMenu()
 		}
 	case ninBalloonUserClick:
 		if t.onBalloonClick != nil {

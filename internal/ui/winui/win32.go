@@ -58,7 +58,6 @@ const (
 	wmUser            = 0x0400
 	wmNull            = 0x0000
 	wmContextMenu     = 0x007B
-	wmLButtonUp       = 0x0202
 
 	msgInvoke = wmApp + 1 // the first UI-thread message id this package reserves for itself
 
