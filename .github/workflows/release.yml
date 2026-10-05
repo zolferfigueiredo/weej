@@ -57,6 +57,9 @@ jobs:
           fi
 
       - name: Build the installer
+        # Git Bash rewrites arguments that start with / as paths, which mangles ISCC's /D and /O.
+        env:
+          MSYS_NO_PATHCONV: 1
         run: |
           iscc="/c/Program Files (x86)/Inno Setup 6/ISCC.exe"
           exe_win=$(cygpath -w "$(pwd)/dist/WeeJ.exe")
