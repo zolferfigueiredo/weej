@@ -163,7 +163,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - **Background:** Card Surface, 1px border.
 - **Shadow Strategy:** none (see Elevation & Depth); the border alone separates it from the Mica ground.
 - **Internal rows:** 12px/16px padding, 44px min height, a 1px divider between rows and none after the last.
-- **Link rows** (About: Website, For the Mac, Made by, Inspired by): the whole row is the link. Label on the left in primary text, the target's name on the right in secondary text, then an open-in-new glyph; hover tints the row like any clickable row, with no accent and no underline.
+- **Link rows** (About: Website, On macOS, Made by, Inspired by): the whole row is the link. Label on the left in primary text, the target's name on the right in secondary text, then an open-in-new glyph; hover tints the row like any clickable row, with no accent and no underline.
 
 ### Inputs / Fields
 - **Style:** Control Surface background, 1px border, 6px radius, 7px/10px padding.
