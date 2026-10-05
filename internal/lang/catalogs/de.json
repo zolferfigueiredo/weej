@@ -118,7 +118,6 @@
   "reopen": "Neu öffnen",
   "reopen_failed": "Neu öffnen fehlgeschlagen: {error} Beende die App und öffne sie selbst.",
   "save": "Sichern",
-  "scoop_managed": "Diese Kopie wurde mit Scoop installiert. Aktualisiere sie mit: scoop update weej",
   "seconds_left.one": "Noch {n} Sekunde",
   "seconds_left.other": "Noch {n} Sekunden",
   "section.apps": "Apps",

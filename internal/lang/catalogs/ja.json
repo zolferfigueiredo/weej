@@ -117,7 +117,6 @@
   "reopen": "開き直す",
   "reopen_failed": "開き直せませんでした: {error} アプリを終了して、自分で開いてください。",
   "save": "保存",
-  "scoop_managed": "このコピーは Scoop でインストールされています。次のコマンドで更新してください: scoop update weej",
   "seconds_left.other": "残り {n} 秒",
   "section.apps": "アプリ",
   "section.brightness": "輝度",
