@@ -18,9 +18,10 @@ import (
 )
 
 const (
-	websiteURL = "https://github.com/zolferfigueiredo/weej"
+	websiteURL = "https://weej.zolfer.com"
 	madeByURL  = "https://zolfer.com"
 	deejURL    = "https://github.com/omriharel/deej"
+	theejURL   = "https://theej.zolfer.com"
 )
 
 type setupJSON struct {
@@ -230,6 +231,7 @@ func (app *App) sendSettingsInit() {
 	payload["website"] = websiteURL
 	payload["madeBy"] = madeByURL
 	payload["deej"] = deejURL
+	payload["theej"] = theejURL
 	payload["icon"] = appIconDataURL(64)
 	payload["languages"] = languagesPayload()
 	payload["language"] = s.Language
@@ -535,7 +537,7 @@ func (app *App) handleSettingsOpenURL(data []byte) {
 		URL string `json:"url"`
 	}
 	_ = json.Unmarshal(data, &msg)
-	for _, allowed := range []string{websiteURL, madeByURL, deejURL} {
+	for _, allowed := range []string{websiteURL, madeByURL, deejURL, theejURL} {
 		if msg.URL == allowed {
 			openURL(msg.URL)
 			return

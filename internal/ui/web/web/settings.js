@@ -442,14 +442,15 @@ function hostnameOf(url) {
 
 function renderAbout() {
   document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel" data-style="align-items:center;text-align:center;padding-top:4px;">
+    <div class="tabpanel" role="tabpanel" data-style="align-items:center;text-align:center;padding-top:4px;gap:0;">
       <img src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" data-style="border-radius:14px;" />
-      <h2 data-style="font:600 16px var(--font-display);margin:14px 0 2px;">WeeJ</h2>
-      <p class="row-desc">${esc(t("version", { version: init.version }))}</p>
+      <h2 data-style="font:600 16px var(--font-display);margin:12px 0 0;">WeeJ</h2>
+      <p class="row-desc" data-style="margin-top:2px;">${esc(t("version", { version: init.version }))}</p>
       <button class="btn" type="button" data-action="check-updates" data-style="margin-top:14px;">${esc(t("check"))}</button>
-      <p data-style="margin-top:18px;"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
-      <p class="row-desc">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">${esc(hostnameOf(init.madeBy))}</a></p>
-      <p class="row-desc">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
+      <p data-style="margin-top:20px;"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
+      <p class="row-desc" data-style="margin-top:6px;">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">${esc(hostnameOf(init.madeBy))}</a></p>
+      <p class="row-desc" data-style="margin-top:6px;">${esc(t("on_macos"))} <a href="#" data-action="open-url" data-url="${escAttr(init.theej)}">TheeJ</a></p>
+      <p class="row-desc" data-style="margin-top:6px;">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
     </div>`;
 }
 
