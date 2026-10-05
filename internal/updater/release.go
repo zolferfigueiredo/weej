@@ -16,7 +16,7 @@ const DefaultSite = "https://github.com/zolferfigueiredo/weej/releases/latest/do
 
 type Release struct {
 	Version string
-	SHA256  string // x64
+	SHA256  string // of this build's zip, see Arch
 }
 
 func Check(ctx context.Context, site string) (Release, error) {
@@ -48,5 +48,5 @@ func Check(ctx context.Context, site string) (Release, error) {
 	if err != nil {
 		return Release{}, err
 	}
-	return Release{Version: feed.Version, SHA256: feed.SHA256["x64"]}, nil
+	return Release{Version: feed.Version, SHA256: feed.SHA256[Arch()]}, nil
 }
