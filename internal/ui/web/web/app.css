@@ -889,6 +889,44 @@ button.popover-item {
   max-width: 200px;
 }
 
+/* Knob reorder: the grip on each knob row, and the row lifted while it is dragged. */
+.knob-grip {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  margin: -6px -4px -6px -6px;
+  padding: 0 6px;
+  color: var(--text-secondary);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.knob-grip svg {
+  width: 8px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.card.reordering .knob-row {
+  transition: transform var(--motion) var(--ease);
+  user-select: none;
+}
+
+.card.reordering .knob-row.dragging {
+  position: relative;
+  z-index: 1;
+  transition: none;
+  background: var(--card-bg-hover);
+  box-shadow: var(--shadow-flyout);
+}
+
+.card.reordering,
+.card.reordering * {
+  cursor: grabbing;
+}
+
 .job-list {
   display: flex;
   flex-direction: column;
