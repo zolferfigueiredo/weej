@@ -119,7 +119,7 @@ Under **Tray icon**, **Hide tray icon** removes the icon (open WeeJ again to get
 
 **About** shows the version, with Check for updates…, and links to the website, to zolfer.com and to TheeJ, WeeJ's sibling on macOS.
 
-Save applies at once, makes the profile shown the active one, and leaves the window open. A knob given a new job, by Save or by switching profiles, takes it over the next time you move it.
+Save applies at once, makes the profile shown the active one, and leaves the window open. It stays greyed out until something differs from what's saved, and goes grey again once saved or when a change is undone. A knob given a new job, by Save or by switching profiles, takes it over the next time you move it.
 
 **Calibration** finds your knobs by itself. **Calibrate** in the menu runs it any time the board is connected, as does the Calibrate button under the knobs in Settings, and asks for knob A, then B, and so on. It also opens on its own when a knob needs it, such as the first time the board connects. For each knob it asks you to:
 

@@ -16,6 +16,7 @@ let labels = {};
 let activeTab = "general";
 let recording = null; // { field: "profile:<i>" | "next" | "previous" }
 let dialog = null; // { kind: "removeProfile" | "removeKnob" }
+let saved = null; // the setup as last saved, so Save is enabled only when the draft differs
 let importNote = ""; // last import_skipped / import_failed text, shown under the import button
 let ports = null; // [{ name, product, usb }] once Go has listed them
 let connection = { connected: false, busy: false, port: "" };
@@ -167,6 +168,22 @@ function renderTabs() {
 function renderFooter() {
   document.getElementById("btn-close").textContent = t("close");
   document.getElementById("btn-save").textContent = t("save");
+  updateSaveButton();
+}
+
+// Language applies, and is saved, the moment it is picked, so it never waits for Save.
+function comparable(setup) {
+  return JSON.stringify({ ...setup, language: undefined });
+}
+
+function hasChanges() {
+  return !!draft && !!saved && comparable(draft) !== comparable(saved);
+}
+
+// Comparing with the saved setup, rather than noting that something was edited, also turns
+// Save off again when an edit is undone by hand.
+function updateSaveButton() {
+  document.getElementById("btn-save").disabled = !hasChanges();
 }
 
 function shortcutControl(field, shortcut) {
@@ -711,7 +728,7 @@ function stopRecording(notifyGo) {
 // --- Events -----------------------------------------------------------------
 
 function doSave() {
-  if (!draft) return;
+  if (!hasChanges()) return;
   send({ type: "save", setup: draft });
 }
 
@@ -800,6 +817,7 @@ function onInput(e) {
     // time something else forces a redraw.
     activeProfile().name = e.target.value;
   }
+  updateSaveButton();
 }
 
 function onChange(e) {
@@ -838,6 +856,7 @@ function onChange(e) {
       draft.baudRate = parseInt(el.value, 10);
       break;
   }
+  updateSaveButton();
 }
 
 function onMessage(msg) {
@@ -850,6 +869,7 @@ function onMessage(msg) {
       connection = msg.connection || connection;
       if (activeTab === "connection") send({ type: "listPorts" });
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
+      saved = clone(draft);
       render();
       break;
     case "strings":
@@ -858,6 +878,7 @@ function onMessage(msg) {
     case "saved":
       draft = clone(msg.setup);
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
+      saved = clone(draft);
       render();
       break;
     case "imported":
@@ -913,12 +934,14 @@ function onMessage(msg) {
     // tray profile click moved the active profile while Settings was open.
     case "profile":
       draft.profile = clampIndex(msg.profile, draft.profiles.length);
+      if (saved) saved.profile = draft.profile; // Go has already saved the switch
       render();
       break;
     // Go-initiated: Calibration finished with a different column mapping
     // while this window was already open, so the draft's columns are stale.
     case "columns":
       draft.columns = msg.columns;
+      if (saved) saved.columns = clone(msg.columns); // Calibration saved them already
       render();
       break;
     // Go-initiated: the window was already open and got asked to switch tab
