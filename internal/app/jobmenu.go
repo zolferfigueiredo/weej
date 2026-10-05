@@ -28,7 +28,7 @@ func (app *App) prepareJobMenu() {
 
 	var w *web.Window
 	w, err := web.Open(app.loop.Invoke, "jobs", web.Options{
-		Title: "WeeJ", Width: 280, Height: 440, MaxHeight: 440,
+		Title: "WeeJ", Width: 280, Height: 490, MaxHeight: 490,
 		Owner: owner,
 		OnHide: func() {
 			app.mu.Lock()
