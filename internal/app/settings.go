@@ -179,6 +179,7 @@ func (app *App) onSettingsMessage(data []byte) {
 	switch probe.Type {
 	case "ready":
 		app.sendSettingsInit()
+		app.loop.Invoke(app.prepareJobMenu)
 	case "save":
 		app.handleSettingsSave(data)
 	case "calibrate":
@@ -405,7 +406,7 @@ func (app *App) openWebWindows() []*web.Window {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 	var out []*web.Window
-	for _, w := range []*web.Window{app.settingsWin, app.calibWin, app.updateWin} {
+	for _, w := range []*web.Window{app.settingsWin, app.jobMenuWin, app.calibWin, app.updateWin} {
 		if w != nil {
 			out = append(out, w)
 		}

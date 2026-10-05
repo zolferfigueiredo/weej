@@ -59,10 +59,16 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") send({ type: "close" });
 });
 
+// Go shows the popup only once it hears back how tall this knob's list is.
 function onMessage(msg) {
-  if (msg.type === "init") {
+  if (msg.type === "menu") {
     knob = msg.knob;
     sections = (msg.model && msg.model.sections) || [];
+    render();
+    window.scrollTo(0, 0);
+    const height = root.getBoundingClientRect().height * (window.devicePixelRatio || 1);
+    send({ type: "menuReady", height: Math.ceil(height) });
+  } else if (msg.type === "strings") {
     render();
   }
 }

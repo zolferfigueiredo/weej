@@ -713,11 +713,9 @@ function startJobsMock(post, enStrings) {
       if (!sections.has(entry.section)) sections.set(entry.section, []);
       sections.get(entry.section).push({ job: entry.job, title: entry.title, icon: entry.icon, badge: false, checked: false });
     }
+    post({ type: "init", lang: "en", strings: enStrings, theme: init.theme });
     post({
-      type: "init",
-      lang: "en",
-      strings: enStrings,
-      theme: init.theme,
+      type: "menu",
       knob: 0,
       model: {
         sections: [...sections].map(([name, items]) => ({ title: name, items, other: name === "apps" })),
