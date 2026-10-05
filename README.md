@@ -21,7 +21,7 @@
 <p align="center">
   <a href="https://github.com/zolferfigueiredo/weej/releases/latest"><b>Download for Windows</b></a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/zolferfigueiredo/theej">TheeJ, for the Mac</a>
+  <a href="https://github.com/zolferfigueiredo/theej">TheeJ, on macOS</a>
 </p>
 
 <p align="center">
@@ -37,12 +37,7 @@
 
 Coming from deej? **Import from deej…** in Settings turns your `config.yaml` into a profile.
 
-Or take the portable [`WeeJ-x64.zip`](https://github.com/zolferfigueiredo/weej/releases/latest) and unzip it anywhere, or install it with [Scoop](https://scoop.sh/):
-
-```bash
-scoop bucket add weej https://github.com/zolferfigueiredo/weej
-scoop install weej/weej
-```
+Or take the portable [`WeeJ-x64.zip`](https://github.com/zolferfigueiredo/weej/releases/latest) and unzip it anywhere.
 
 You need:
 
@@ -93,7 +88,7 @@ Upstream deej already runs on Windows; WeeJ is a different take on the same idea
 - **Night light** is stored by Windows in an undocumented setting, so a future Windows update could break it. That's why it's marked Experimental.
 - **Screen zoom** uses the Magnification API, and a **VIA keyboard's backlight** goes over USB HID.
 - The tray icon, its menu and the indicator are native Win32. The Settings, Calibration, Language and Update windows are pages in WebView2, laid out like Windows 11's own Settings and following its light or dark theme and accent color.
-- **Check for updates…** asks GitHub for the newest release and sends nothing about you. An update downloads that release's zip, checks it against the release's SHA-256, and installs only into the installed copy (`%LOCALAPPDATA%\Programs\WeeJ`). A copy installed with Scoop updates through Scoop.
+- **Check for updates…** asks GitHub for the newest release and sends nothing about you. An update downloads that release's zip, checks it against the release's SHA-256, and installs only into the installed copy (`%LOCALAPPDATA%\Programs\WeeJ`).
 - Only one copy runs at a time. Opening WeeJ again while it runs brings up Settings, which is the way back with the tray icon hidden.
 
 <details>
@@ -122,7 +117,7 @@ Under **Tray icon**, **Hide tray icon** removes the icon (open WeeJ again to get
 
 **Connection** shows the port and whether the board is connected. **Port** is Automatic, which finds the board by itself, or a fixed COM port; **Baud rate** must match `Serial.begin()` in your sketch.
 
-**About** shows the version, with Check for updates…, and links to the website and to zolfer.com.
+**About** shows the version, with Check for updates…, and links to the website, to zolfer.com and to TheeJ, WeeJ's sibling on macOS.
 
 Save applies at once, makes the profile shown the active one, and leaves the window open. A knob given a new job, by Save or by switching profiles, takes it over the next time you move it.
 
