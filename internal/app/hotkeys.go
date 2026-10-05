@@ -47,4 +47,5 @@ func (app *App) onHotkey(id int) {
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "profile", "profile": s.Active})
 	}
+	app.showProfileHUD(s)
 }
