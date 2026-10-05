@@ -2,6 +2,7 @@ package draw
 
 import (
 	"image"
+	"math"
 
 	"golang.org/x/image/vector"
 )
@@ -100,48 +101,25 @@ func fillMask(dst *image.NRGBA, m *image.Alpha, c rgba) {
 	}
 }
 
-func fillMaskClipped(dst *image.NRGBA, m, clip *image.Alpha, c rgba) {
-	w, h := m.Rect.Dx(), m.Rect.Dy()
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			i := m.PixOffset(x, y)
-			cov := float64(m.Pix[i]) / 255 * float64(clip.Pix[i]) / 255
-			if cov > 0 {
-				blendPixel(dst, x, y, c, cov)
+// vector.Rasterizer only fills, and capsules overlapping in one rasterizer add up their edge
+// coverage, which hardens the anti-aliasing; a per-pixel distance gives clean round joins.
+func strokeMask(px int, line polyline, hw float64) *image.Alpha {
+	m := image.NewAlpha(image.Rect(0, 0, px, px))
+	for i := 1; i < len(line); i++ {
+		a, b := line[i-1], line[i]
+		x0 := max(0, int(math.Floor(min(a.x, b.x)-hw-1)))
+		x1 := min(px, int(math.Ceil(max(a.x, b.x)+hw+1)))
+		y0 := max(0, int(math.Floor(min(a.y, b.y)-hw-1)))
+		y1 := min(px, int(math.Ceil(max(a.y, b.y)+hw+1)))
+		for y := y0; y < y1; y++ {
+			for x := x0; x < x1; x++ {
+				d := segmentDistance(float64(x)+0.5, float64(y)+0.5, a, b)
+				v := clamp255(clampF(hw+0.5-d, 0, 1) * 255)
+				if j := m.PixOffset(x, y); v > m.Pix[j] {
+					m.Pix[j] = v
+				}
 			}
 		}
 	}
-}
-
-// Stops are evenly spaced, matching CGGradient's default when TheeJ passes no explicit locations.
-func paintGradient(dst *image.NRGBA, m *image.Alpha, minY, maxY float64, stops []rgba) {
-	w, h := m.Rect.Dx(), m.Rect.Dy()
-	for y := 0; y < h; y++ {
-		t := 0.0
-		if maxY > minY {
-			t = (float64(y) - minY) / (maxY - minY)
-		}
-		c := gradientColor(stops, clampF(t, 0, 1))
-		for x := 0; x < w; x++ {
-			cov := float64(m.Pix[m.PixOffset(x, y)]) / 255
-			if cov > 0 {
-				blendPixel(dst, x, y, c, cov)
-			}
-		}
-	}
-}
-
-func gradientColor(stops []rgba, t float64) rgba {
-	n := len(stops)
-	if n == 1 {
-		return stops[0]
-	}
-	seg := t * float64(n-1)
-	i := int(seg)
-	if i >= n-1 {
-		i = n - 2
-	}
-	f := seg - float64(i)
-	a, b := stops[i], stops[i+1]
-	return rgba{lerp(a.r, b.r, f), lerp(a.g, b.g, f), lerp(a.b, b.b, f), lerp(a.a, b.a, f)}
+	return m
 }

@@ -15,14 +15,23 @@ func TestAppIconCorners(t *testing.T) {
 	}
 }
 
-func TestAppIconPlateColor(t *testing.T) {
+func TestAppIconColors(t *testing.T) {
 	img := AppIcon(1024)
-	c := img.NRGBAAt(512, 200)
-	want := [3]int{0xf1, 0xec, 0xe2}
-	got := [3]int{int(c.R), int(c.G), int(c.B)}
-	for i, w := range want {
-		if d := got[i] - w; d < -6 || d > 6 {
-			t.Errorf("plate colour channel %d = %d, want %d +/-6", i, got[i], w)
+	for _, tc := range []struct {
+		name string
+		x, y int
+		want [3]int
+	}{
+		{"plate", 200, 130, [3]int{0xf1, 0xec, 0xe2}},
+		{"W", 329, 532, [3]int{0xff, 0x5a, 0x1f}},
+		{"J cable", 901, 700, [3]int{0xff, 0x5a, 0x1f}},
+	} {
+		c := img.NRGBAAt(tc.x, tc.y)
+		got := [3]int{int(c.R), int(c.G), int(c.B)}
+		for i, w := range tc.want {
+			if d := got[i] - w; d < -6 || d > 6 {
+				t.Errorf("%s colour channel %d = %d, want %d +/-6", tc.name, i, got[i], w)
+			}
 		}
 	}
 }
