@@ -559,7 +559,7 @@ select.select {
 }
 
 .popover {
-  position: absolute;
+  position: fixed;
   z-index: 11;
   min-width: 240px;
   max-height: 320px;
