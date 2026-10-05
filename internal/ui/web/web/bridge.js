@@ -502,7 +502,7 @@ function mockSettingsInit(enStrings) {
     icon: MOCK_APP_ICON,
     tab: "general",
     version: "1.0.0",
-    website: "https://github.com/zolferfigueiredo/weej",
+    website: "https://weej.zolfer.com",
     madeBy: "https://zolfer.com",
     theej: "https://theej.zolfer.com",
     deej: "https://github.com/omriharel/deej",

@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	websiteURL = "https://github.com/zolferfigueiredo/weej"
+	websiteURL = "https://weej.zolfer.com"
 	madeByURL  = "https://zolfer.com"
 	deejURL    = "https://github.com/omriharel/deej"
 	theejURL   = "https://theej.zolfer.com"
