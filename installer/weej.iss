@@ -1,4 +1,4 @@
-﻿; Installer for WeeJ. .github/workflows/release.yml compiles this with /DAppVersion and /DSourceExe.
+﻿; Installer for WeeJ. installer.bat compiles this with /DAppVersion.
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
