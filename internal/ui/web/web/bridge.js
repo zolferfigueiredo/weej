@@ -705,6 +705,26 @@ function startLanguageMock(post, enStrings) {
   };
 }
 
+function startJobsMock(post, enStrings) {
+  return (msg) => {
+    if (msg.type !== "ready") return;
+    const init = mockSettingsInit(enStrings);
+    const sections = new Map();
+    for (const entry of init.catalog) {
+      if (!sections.has(entry.section)) sections.set(entry.section, []);
+      sections.get(entry.section).push({ job: entry.job, title: entry.title, icon: entry.icon, badge: false, checked: false });
+    }
+    post({ type: "init", lang: "en", strings: enStrings, theme: init.theme });
+    post({
+      type: "menu",
+      knob: 0,
+      model: {
+        sections: [...sections].map(([name, items]) => ({ title: name, items, other: name === "apps" })),
+      },
+    });
+  };
+}
+
 function startUpdateMock(post, enStrings) {
   const T = (key, vars) => applyVars(enStrings[key] || key, vars);
   return (msg) => {
@@ -738,6 +758,9 @@ function connectMock(page) {
       break;
     case "update":
       dispatcher = startUpdateMock(post, enStrings);
+      break;
+    case "jobs":
+      dispatcher = startJobsMock(post, enStrings);
       break;
     default:
       dispatcher = startSettingsMock(post, enStrings);

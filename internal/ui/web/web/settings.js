@@ -15,7 +15,6 @@ let draft = null;
 let labels = {};
 let activeTab = "general";
 let recording = null; // { field: "profile:<i>" | "next" | "previous" }
-let popover = null; // { knob, place: { top, left, height }, scrollTop }
 let dialog = null; // { kind: "removeProfile" | "removeKnob" }
 let importNote = ""; // last import_skipped / import_failed text, shown under the import button
 let ports = null; // [{ name, product, usb }] once Go has listed them
@@ -130,11 +129,9 @@ function activeProfile() {
 function render() {
   const focusedId = document.activeElement && document.activeElement.id;
 
-  // Overlays are appended fresh below, not patched in place: drop any previous
+  // The dialog is appended fresh below, not patched in place: drop any previous
   // copy first, or every render while one is open would stack another on top.
-  const shownPopover = document.querySelector(".popover");
-  if (popover && shownPopover) popover.scrollTop = shownPopover.scrollTop;
-  document.querySelectorAll(".popover-scrim, .popover, .dialog-scrim").forEach((el) => el.remove());
+  document.querySelectorAll(".dialog-scrim").forEach((el) => el.remove());
 
   document.getElementById("page-title").textContent = t("settings");
   renderTabs();
@@ -144,7 +141,6 @@ function render() {
   else if (activeTab === "about") renderAbout();
   else renderGeneral();
 
-  if (popover) renderPopover();
   if (dialog) renderDialog();
 
   if (focusedId) {
@@ -198,7 +194,7 @@ function renderGeneral() {
           const jobs = profile.jobs[i] || [];
           const needsCal = col === null || col === undefined || col === -1;
           return `
-            <div class="row clickable knob-row" role="button" tabindex="0" data-action="open-popover" data-knob="${i}">
+            <div class="row clickable knob-row" role="button" tabindex="0" data-action="open-job-menu" data-knob="${i}">
               <div class="row-main">
                 <span class="row-title">${esc(t("knob", { letter: letterFor(i) }))}</span>
                 ${needsCal ? `<span class="row-desc warning">${esc(t("needs_calibration"))}</span>` : ""}
@@ -458,66 +454,32 @@ function renderAbout() {
     </div>`;
 }
 
-function renderPopover() {
-  const knobJobs = activeProfile().jobs[popover.knob] || [];
+// The job menu is a popup window of its own (jobs.html), so it can hang past this window's
+// edge. This page owns the list, the catalog and the knob's unsaved jobs, so it sends the
+// whole menu, and Go hands every tick back as jobMenuToggle or jobMenuClear.
+function openJobMenu(knob, row) {
+  const r = row.getBoundingClientRect();
+  const knobJobs = activeProfile().jobs[knob] || [];
+  const item = (entry) => ({
+    job: entry.job,
+    title: entry.title,
+    icon: entry.icon,
+    badge: entry.job.kind === "nightLight" && !!init.nightLightExperimental,
+    checked: hasJob(knobJobs, entry.job),
+  });
   const bySection = sectionsFromCatalog();
-  let html = `<div class="popover-scrim" data-action="close-popover"></div>`;
-  html += `<div class="popover">`;
-  html += `<div class="popover-item" data-action="clear-jobs" data-knob="${popover.knob}"><span>${esc(t("clear"))}</span></div>`;
-  html += `<div class="popover-sep"></div>`;
+  const sections = [];
   for (const [section, entries] of bySection) {
     if (section === "apps") continue;
-    html += `<div class="popover-header">${esc(t(SECTION_LABEL_KEY[section] || ""))}</div>`;
-    for (const entry of entries) html += popoverItem(entry, knobJobs);
+    sections.push({ title: t(SECTION_LABEL_KEY[section] || ""), items: entries.map(item) });
   }
-  const apps = bySection.get("apps") || [];
-  html += `<div class="popover-header">${esc(t("section.apps"))}</div>`;
-  for (const entry of apps) html += popoverItem(entry, knobJobs);
-  html += `<div class="popover-item" data-action="pick-app" data-knob="${popover.knob}"><span>${esc(t("other"))}</span></div>`;
-  html += `</div>`;
-  document.getElementById("root").insertAdjacentHTML("beforeend", html);
-  placePopover();
-  document.querySelector(".popover").scrollTop = popover.scrollTop;
-}
-
-// The window is only as tall as its content, so a menu hanging past the bottom
-// would be cut off: it opens above its knob when there's more room there. It's
-// placed once, so ticking a job, which grows the knob's row, never moves it.
-function placePopover() {
-  const el = document.querySelector(".popover");
-  if (!el) return;
-  const margin = 8;
-  if (!popover.place) {
-    const gap = 4;
-    const rect = document.querySelector(`.knob-row[data-knob="${popover.knob}"]`).getBoundingClientRect();
-    const wanted = el.offsetHeight;
-    const below = window.innerHeight - rect.bottom - gap - margin;
-    const above = rect.top - gap - margin;
-    const up = wanted > below && above > below;
-    const height = Math.min(wanted, up ? above : below);
-    popover.place = {
-      top: up ? rect.top - gap - height : rect.bottom + gap,
-      left: Math.max(margin, Math.min(rect.left, window.innerWidth - margin - el.offsetWidth)),
-      height,
-    };
-  }
-  const { top, left, height } = popover.place;
-  el.style.top = `${top}px`;
-  el.style.left = `${left}px`;
-  el.style.maxHeight = `${Math.min(height, window.innerHeight - margin - top)}px`;
-}
-
-function popoverItem(entry, knobJobs) {
-  const checked = hasJob(knobJobs, entry.job);
-  const id = "chk-" + jobKey(entry.job).replace(/[^a-zA-Z0-9_-]/g, "_");
-  const badge =
-    entry.job.kind === "nightLight" && init.nightLightExperimental ? `<span class="badge">${esc(t("experimental"))}</span>` : "";
-  return `<label class="popover-item" for="${id}">
-    <input class="chk" type="checkbox" id="${id}" data-action="toggle-job" data-knob="${popover.knob}" data-job='${escAttr(JSON.stringify(entry.job))}'${checked ? " checked" : ""} />
-    <img src="${entry.icon}" alt="" />
-    <span data-style="flex:1 1 auto;">${esc(entry.title)}</span>
-    ${badge}
-  </label>`;
+  sections.push({ title: t("section.apps"), items: (bySection.get("apps") || []).map(item), other: true });
+  send({
+    type: "openJobMenu",
+    knob,
+    anchor: { left: r.left, top: r.top, right: r.right, bottom: r.bottom },
+    model: { sections },
+  });
 }
 
 function renderDialog() {
@@ -567,16 +529,6 @@ function addKnob() {
 function removeKnobConfirmed() {
   draft.columns.pop();
   for (const p of draft.profiles) p.jobs.pop();
-}
-
-function openPopover(knob) {
-  popover = { knob, place: null, scrollTop: 0 };
-  render();
-}
-
-function closePopover() {
-  popover = null;
-  render();
 }
 
 function applyRecorded(field, shortcut) {
@@ -697,18 +649,8 @@ function onClick(e) {
       dialog = null;
       render();
       break;
-    case "open-popover":
-      openPopover(parseInt(target.dataset.knob, 10));
-      break;
-    case "close-popover":
-      closePopover();
-      break;
-    case "clear-jobs":
-      activeProfile().jobs[parseInt(target.dataset.knob, 10)] = [];
-      render();
-      break;
-    case "pick-app":
-      send({ type: "pickApp", knob: parseInt(target.dataset.knob, 10) });
+    case "open-job-menu":
+      openJobMenu(parseInt(target.dataset.knob, 10), target);
       break;
     case "record": {
       const field = target.dataset.field;
@@ -753,17 +695,6 @@ function onInput(e) {
 
 function onChange(e) {
   const el = e.target;
-  if (el.dataset && el.dataset.action === "toggle-job") {
-    const knob = parseInt(el.dataset.knob, 10);
-    const job = JSON.parse(el.dataset.job);
-    const jobs = activeProfile().jobs[knob] || (activeProfile().jobs[knob] = []);
-    const k = jobKey(job);
-    const idx = jobs.findIndex((j) => jobKey(j) === k);
-    if (el.checked && idx < 0) jobs.push(job);
-    if (!el.checked && idx >= 0) jobs.splice(idx, 1);
-    render();
-    return;
-  }
   switch (el.id) {
     case "profile-select":
       draft.profile = parseInt(el.value, 10);
@@ -842,6 +773,19 @@ function onMessage(msg) {
       importNote = t("import_failed");
       render();
       break;
+    case "jobMenuToggle": {
+      const jobs = activeProfile().jobs[msg.knob] || (activeProfile().jobs[msg.knob] = []);
+      const k = jobKey(msg.job);
+      const idx = jobs.findIndex((j) => jobKey(j) === k);
+      if (msg.checked && idx < 0) jobs.push(msg.job);
+      if (!msg.checked && idx >= 0) jobs.splice(idx, 1);
+      render();
+      break;
+    }
+    case "jobMenuClear":
+      activeProfile().jobs[msg.knob] = [];
+      render();
+      break;
     case "appPicked": {
       const jobs = activeProfile().jobs[msg.knob] || (activeProfile().jobs[msg.knob] = []);
       if (!hasJob(jobs, msg.entry.job)) jobs.push(msg.entry.job);
@@ -882,13 +826,9 @@ document.getElementById("root").addEventListener("input", onInput);
 document.getElementById("root").addEventListener("change", onChange);
 document.getElementById("btn-close").addEventListener("click", () => send({ type: "close" }));
 document.getElementById("btn-save").addEventListener("click", doSave);
-// Ticking a job resizes the window under an open menu.
-window.addEventListener("resize", () => {
-  if (popover) placePopover();
-});
 
 window.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" || recording || popover || dialog) return;
+  if (e.key !== "Enter" || recording || dialog) return;
   if ((e.target.tagName || "").toLowerCase() === "textarea") return;
   e.preventDefault();
   doSave();
