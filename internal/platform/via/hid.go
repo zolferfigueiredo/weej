@@ -148,9 +148,14 @@ func deviceInterfacePath(set windows.DevInfo, data *spDeviceInterfaceData) (stri
 	}
 
 	buf := make([]byte, required)
-	// SP_DEVICE_INTERFACE_DETAIL_DATA_W.cbSize is always sizeof(DWORD)+sizeof(WCHAR),
-	// regardless of the actual buffer length; that is just how this API works.
-	*(*uint32)(unsafe.Pointer(&buf[0])) = 4 + 2
+	// SP_DEVICE_INTERFACE_DETAIL_DATA_W.cbSize is the struct's fixed size, whatever the
+	// buffer's length: a DWORD and one WCHAR, packed to 6 bytes on 32-bit but aligned to
+	// 8 on 64-bit. The API rejects any other value with ERROR_INVALID_USER_BUFFER.
+	detailSize := uint32(6)
+	if unsafe.Sizeof(uintptr(0)) == 8 {
+		detailSize = 8
+	}
+	*(*uint32)(unsafe.Pointer(&buf[0])) = detailSize
 
 	r, _, _ := procSetupDiGetDeviceInterfaceDetailW.Call(
 		uintptr(set),
