@@ -29,9 +29,9 @@ func TestDeviceNotifier(t *testing.T) {
 		t.Errorf("QueryInterface(IMMDeviceEnumerator) = %#x, %#x; want E_NOINTERFACE", hr, got)
 	}
 
-	syscall.SyscallN(n.vtbl.onDefaultDeviceChanged, this, wca.ERender, wca.EConsole, 0)
-	if !changed {
-		t.Error("OnDefaultDeviceChanged did not reach the callback")
+	hr, _, _ = syscall.SyscallN(n.vtbl.onDefaultDeviceChanged, this, wca.ERender, wca.EConsole, 0)
+	if hr != sOK || !changed {
+		t.Errorf("OnDefaultDeviceChanged = %#x, reached the callback: %v; want S_OK and true", hr, changed)
 	}
 
 	runtime.LockOSThread()
@@ -48,5 +48,8 @@ func TestDeviceNotifier(t *testing.T) {
 	if err := enumerator.RegisterEndpointNotificationCallback((*wca.IMMNotificationClient)(unsafe.Pointer(n))); err != nil {
 		t.Fatal(err)
 	}
-	syscall.SyscallN(enumerator.VTable().UnregisterEndpointNotificationCallback, uintptr(unsafe.Pointer(enumerator)), this)
+	hr, _, _ = syscall.SyscallN(enumerator.VTable().UnregisterEndpointNotificationCallback, uintptr(unsafe.Pointer(enumerator)), this)
+	if hr != sOK {
+		t.Errorf("UnregisterEndpointNotificationCallback = %#x, want S_OK", hr)
+	}
 }
