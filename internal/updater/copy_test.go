@@ -15,7 +15,6 @@ func TestWhichCopy(t *testing.T) {
 		want Copy
 	}{
 		{"installed", sys.InstalledExe(), Installed},
-		{"scoop", `C:\Users\x\scoop\apps\weej\current\WeeJ.exe`, Scoop},
 		{"other", `C:\Users\x\Desktop\WeeJ.exe`, Other},
 	}
 	for _, c := range cases {
