@@ -282,7 +282,7 @@ const MOCK_EN_STRINGS = {
   downloading: "Downloading version {version}...",
   experimental: "Experimental",
   finish: "Finish",
-  for_mac: "For the Mac:",
+  for_mac: "For the Mac",
   hide_icon: "Hide tray icon",
   hide_icon_note: "Open WeeJ again to get back here.",
   icon: "Icon",
