@@ -173,7 +173,7 @@ installer.bat                 # build dist\WeeJ-<version>-x64-setup.exe on this 
 
 **Run at login.** The installed copy turns this on with **Launch at login** in the menu. For a build run from this folder, `install.bat` starts it at login and restarts it if it crashes, logging to `%TEMP%\weej.log`; `install.bat --uninstall` removes it. Quit from the menu really does quit.
 
-**Release.** Raise `AppVersion` in [version.go](internal/core/version.go), merge to `main`, then run `release.bat` on `main`. It tags the commit `v<version>` and pushes the tag, and the [release workflow](.github/workflows/release.yml) builds and publishes the installer, the zip, `latest.json` and checksums as a GitHub release. It runs on a Windows runner, so it also runs the tests of the Windows-only packages.
+**Release.** Raise `AppVersion` in [version.go](internal/core/version.go), merge to `main`, then run `release.bat` on `main`. It tags the commit `v<version>`, pushes the tag and prints the installer's download link, and the [release workflow](.github/workflows/release.yml) builds and publishes the installer, the zip, `latest.json` and checksums as a GitHub release. It runs on a Windows runner, so it also runs the tests of the Windows-only packages.
 
 **CI** runs on Linux for every pull request: the tests, golangci-lint and a build for Windows. It also checks the git hook with shellcheck, keeps em and en dashes out of the translations, and fails a pull request that changes the app without raising `AppVersion`. A pull request that touches the release workflow or the installer also gets a build-only release run.
 

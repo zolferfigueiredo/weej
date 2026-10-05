@@ -58,12 +58,15 @@ if errorlevel 1 exit /b 1
 git push origin "%TAG%"
 if errorlevel 1 exit /b 1
 
+set "RELURL=https://github.com/zolferfigueiredo/weej/releases/download/%TAG%/WeeJ-%VERSION%-x64-setup.exe"
+
 echo Pushed %TAG%. GitHub Actions builds and publishes the release:
 echo https://github.com/zolferfigueiredo/weej/actions
+echo The installer, once it's published:
+echo %RELURL%
 
 if not "%~1"=="--url" exit /b 0
 
-set "RELURL=https://github.com/zolferfigueiredo/weej/releases/download/%TAG%/WeeJ-%VERSION%-x64-setup.exe"
 set "TMPFILE=%TEMP%\weej_release_loc.txt"
 curl.exe -fsS -o nul -w "%%{redirect_url}" --data-urlencode "url=%RELURL%" https://url.zolfer.com/dmg > "%TMPFILE%"
 if errorlevel 1 exit /b 1
