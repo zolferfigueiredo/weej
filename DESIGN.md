@@ -177,7 +177,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 
 ### Flyout (job picker popover)
 - **Style:** Card Surface, 8px radius, the system's one shadow, max-height 320px with internal scroll.
-- **Behavior:** a full-viewport invisible scrim beneath it closes it on any outside click; section headers (Volume, Brightness, ...) group its checklist exactly as Go's catalog orders them, with Clear first and Other... last.
+- **Behavior:** a full-viewport invisible scrim beneath it closes it on any outside click; section headers (Volume, Brightness, ...) group its checklist exactly as Go's catalog orders them, with Clear first and Other... last. It opens below its knob, or above it when there's more room there, and never runs past the window's edge, since the window is only as tall as its content. Once open it stays put, scroll position included, while jobs are ticked.
 
 ### Tabs (Settings' Pivot)
 - Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge.
