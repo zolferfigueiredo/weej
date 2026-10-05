@@ -65,12 +65,8 @@ jobs:
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }
 
-      - name: Fixed-name copies, checksums and latest.json
+      - name: Checksums and latest.json
         run: |
-          for arch in x64 x86; do
-            cp "dist/WeeJ-$V-$arch.zip" "dist/WeeJ-$arch.zip"
-            cp "dist/WeeJ-$V-$arch-setup.exe" "dist/WeeJ-$arch-setup.exe"
-          done
           x64=$(sha256sum "dist/WeeJ-$V-x64.zip" | cut -d ' ' -f1)
           x86=$(sha256sum "dist/WeeJ-$V-x86.zip" | cut -d ' ' -f1)
           printf '{"version":"%s","sha256":{"x64":"%s","x86":"%s"}}\n' "$V" "$x64" "$x86" > dist/latest.json
@@ -85,10 +81,6 @@ jobs:
             "dist/WeeJ-$V-x64.zip" \
             "dist/WeeJ-$V-x86-setup.exe" \
             "dist/WeeJ-$V-x86.zip" \
-            "dist/WeeJ-x64-setup.exe" \
-            "dist/WeeJ-x64.zip" \
-            "dist/WeeJ-x86-setup.exe" \
-            "dist/WeeJ-x86.zip" \
             "dist/latest.json" \
             "dist/SHA256SUMS" \
             --title "WeeJ $V" --generate-notes
