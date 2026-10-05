@@ -46,7 +46,6 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 Name: "ukrainian"; MessagesFile: "compiler:Languages\Ukrainian.isl"
 Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
 Name: "korean"; MessagesFile: "compiler:Languages\Korean.isl"
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [CustomMessages]
 english.LaunchAtLogin=Launch WeeJ at login
@@ -60,7 +59,6 @@ russian.LaunchAtLogin=Запускать WeeJ при входе в систем�
 ukrainian.LaunchAtLogin=Запускати WeeJ під час входу в систему
 japanese.LaunchAtLogin=ログイン時に WeeJ を起動する
 korean.LaunchAtLogin=로그인할 때 WeeJ 실행
-chinesesimplified.LaunchAtLogin=登录时启动 WeeJ
 
 [Tasks]
 Name: "login"; Description: "{cm:LaunchAtLogin}"; Flags: unchecked
