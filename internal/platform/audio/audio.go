@@ -64,7 +64,7 @@ type Audio struct {
 	selfExe string
 
 	enumerator    *wca.IMMDeviceEnumerator
-	notifyClient  *wca.IMMNotificationClient
+	notifyClient  *deviceNotifier
 	exeCache      map[uint32]string
 	knownSessions map[string]struct{}
 	loggedOnce    map[string]bool
