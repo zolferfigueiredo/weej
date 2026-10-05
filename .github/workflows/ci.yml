@@ -44,6 +44,18 @@ jobs:
           GOARCH: amd64
           CGO_ENABLED: 0
         run: go build ./...
+      - name: Lint (32-bit)
+        env:
+          GOOS: windows
+          GOARCH: "386"
+          CGO_ENABLED: 0
+        run: golangci-lint run ./...
+      - name: Build (32-bit)
+        env:
+          GOOS: windows
+          GOARCH: "386"
+          CGO_ENABLED: 0
+        run: go build ./...
 
   scripts:
     name: Scripts
