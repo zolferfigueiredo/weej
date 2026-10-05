@@ -16,6 +16,7 @@ let labels = {};
 let activeTab = "general";
 let recording = null; // { field: "profile:<i>" | "next" | "previous" }
 let dialog = null; // { kind: "removeProfile" | "removeKnob" }
+let saved = null; // the setup as last saved, so Save is enabled only when the draft differs
 let importNote = ""; // last import_skipped / import_failed text, shown under the import button
 let ports = null; // [{ name, product, usb }] once Go has listed them
 let connection = { connected: false, busy: false, port: "" };
@@ -166,7 +167,23 @@ function renderTabs() {
 
 function renderFooter() {
   document.getElementById("btn-close").textContent = t("close");
-  document.getElementById("btn-save").textContent = t("save");
+  document.getElementById("btn-save").textContent = t("apply");
+  updateSaveButton();
+}
+
+// Language applies, and is saved, the moment it is picked, so it never waits for Save.
+function comparable(setup) {
+  return JSON.stringify({ ...setup, language: undefined });
+}
+
+function hasChanges() {
+  return !!draft && !!saved && comparable(draft) !== comparable(saved);
+}
+
+// Comparing with the saved setup, rather than noting that something was edited, also turns
+// Save off again when an edit is undone by hand.
+function updateSaveButton() {
+  document.getElementById("btn-save").disabled = !hasChanges();
 }
 
 function shortcutControl(field, shortcut) {
@@ -194,7 +211,8 @@ function renderGeneral() {
           const jobs = profile.jobs[i] || [];
           const needsCal = col === null || col === undefined || col === -1;
           return `
-            <div class="row clickable knob-row" role="button" tabindex="0" data-action="open-job-menu" data-knob="${i}">
+            <div class="row clickable knob-row" id="knob-row-${i}" role="button" tabindex="0" data-action="open-job-menu" data-knob="${i}">
+              <span class="knob-grip" aria-hidden="true">${GRIP_ICON}</span>
               <div class="row-main">
                 <span class="row-title">${esc(t("knob", { letter: letterFor(i) }))}</span>
                 ${needsCal ? `<span class="row-desc warning">${esc(t("needs_calibration"))}</span>` : ""}
@@ -498,8 +516,8 @@ function renderDialog() {
         <div class="dialog-title">${esc(title)}</div>
         <div class="dialog-body">${esc(body)}</div>
         <div class="dialog-actions">
-          <button class="btn" type="button" data-action="cancel-dialog">${esc(t("cancel"))}</button>
           <button class="btn btn-primary btn-danger" type="button" data-action="confirm-dialog">${esc(t("remove"))}</button>
+          <button class="btn" type="button" data-action="cancel-dialog">${esc(t("cancel"))}</button>
         </div>
       </div>
     </div>`;
@@ -517,6 +535,114 @@ function addProfile() {
 function removeProfileConfirmed() {
   draft.profiles.splice(draft.profile, 1);
   draft.profile = clampIndex(draft.profile, draft.profiles.length);
+}
+
+// --- Knob reorder -----------------------------------------------------------
+
+// Six dots, Windows' sign that a row can be dragged to a new place.
+const GRIP_ICON = `<svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.25"/><circle cx="6" cy="2" r="1.25"/><circle cx="2" cy="7" r="1.25"/><circle cx="6" cy="7" r="1.25"/><circle cx="2" cy="12" r="1.25"/><circle cx="6" cy="12" r="1.25"/></svg>`;
+
+const DRAG_THRESHOLD = 4;
+let drag = null; // { from, to, startY, pointerId, row, active, rows: [{ el, top, height }] }
+let swallowClick = false;
+
+// Moves a knob's jobs to another knob in the profile shown, the knobs in between shifting by
+// one, as cards in a list do. Knobs keep their letters, inputs and calibration.
+function moveKnobJobs(from, to) {
+  const jobs = activeProfile().jobs;
+  while (jobs.length < draft.columns.length) jobs.push([]);
+  const [moved] = jobs.splice(from, 1);
+  jobs.splice(to, 0, moved);
+}
+
+function onGripPointerDown(e) {
+  const grip = e.target.closest(".knob-grip");
+  if (!grip || e.button !== 0) return;
+  e.preventDefault();
+  const row = grip.closest(".knob-row");
+  const knob = Number(row.dataset.knob);
+  drag = { from: knob, to: knob, startY: e.clientY, pointerId: e.pointerId, row, active: false, rows: [] };
+  row.setPointerCapture(e.pointerId);
+}
+
+function onDragMove(e) {
+  if (!drag || e.pointerId !== drag.pointerId) return;
+  const dy = e.clientY - drag.startY;
+  if (!drag.active) {
+    if (Math.abs(dy) < DRAG_THRESHOLD) return;
+    drag.active = true;
+    drag.rows = [...document.querySelectorAll(".knob-row")].map((el) => {
+      const r = el.getBoundingClientRect();
+      return { el, top: r.top, height: r.height };
+    });
+    drag.row.classList.add("dragging");
+    drag.row.closest(".card").classList.add("reordering");
+  }
+  updateDrag(dy);
+}
+
+function updateDrag(dy) {
+  const { rows, from } = drag;
+  const self = rows[from];
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  const offset = Math.min(Math.max(dy, first.top - self.top), last.top + last.height - self.top - self.height);
+  // A row gives way once the dragged row's leading edge passes its middle, so a tall row can
+  // still reach the first and last places.
+  const top = self.top + offset;
+  const bottom = top + self.height;
+  let to = from;
+  rows.forEach((r, i) => {
+    const middle = r.top + r.height / 2;
+    if (i < from && top < middle) to--;
+    if (i > from && bottom > middle) to++;
+  });
+  drag.to = to;
+
+  // The rows slide, but the letters stay in order top to bottom: the jobs move, the knobs don't.
+  rows.forEach((r, i) => {
+    let shift = 0;
+    let slot = i;
+    if (i === from) {
+      shift = offset;
+      slot = to;
+    } else if (from < to && i > from && i <= to) {
+      shift = -self.height;
+      slot = i - 1;
+    } else if (from > to && i >= to && i < from) {
+      shift = self.height;
+      slot = i + 1;
+    }
+    r.el.style.transform = shift ? `translateY(${shift}px)` : "";
+    r.el.querySelector(".row-title").textContent = t("knob", { letter: letterFor(slot) });
+  });
+}
+
+function onDragEnd(e) {
+  if (!drag || e.pointerId !== drag.pointerId) return;
+  if (drag.active && e.type === "pointerup") updateDrag(e.clientY - drag.startY);
+  const { active, from, to } = drag;
+  drag = null;
+  if (!active) return; // a plain click on the grip opens the job menu like the rest of the row
+  // The click that ends a drag must not open the job menu. If none comes, the next one counts.
+  swallowClick = true;
+  setTimeout(() => (swallowClick = false), 0);
+  if (e.type === "pointerup" && to !== from) moveKnobJobs(from, to);
+  render();
+}
+
+function onKnobKeydown(e) {
+  if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+  const row = e.target.closest && e.target.closest(".knob-row");
+  if (!row) return;
+  const from = Number(row.dataset.knob);
+  const to = from + (e.key === "ArrowUp" ? -1 : 1);
+  if (to < 0 || to >= draft.columns.length) return;
+  e.preventDefault();
+  moveKnobJobs(from, to);
+  render();
+  const moved = document.getElementById(`knob-row-${to}`);
+  if (moved) moved.focus();
 }
 
 function addKnob() {
@@ -602,7 +728,7 @@ function stopRecording(notifyGo) {
 // --- Events -----------------------------------------------------------------
 
 function doSave() {
-  if (!draft) return;
+  if (!hasChanges()) return;
   send({ type: "save", setup: draft });
 }
 
@@ -691,6 +817,7 @@ function onInput(e) {
     // time something else forces a redraw.
     activeProfile().name = e.target.value;
   }
+  updateSaveButton();
 }
 
 function onChange(e) {
@@ -729,6 +856,7 @@ function onChange(e) {
       draft.baudRate = parseInt(el.value, 10);
       break;
   }
+  updateSaveButton();
 }
 
 function onMessage(msg) {
@@ -741,6 +869,7 @@ function onMessage(msg) {
       connection = msg.connection || connection;
       if (activeTab === "connection") send({ type: "listPorts" });
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
+      saved = clone(draft);
       render();
       break;
     case "strings":
@@ -749,6 +878,7 @@ function onMessage(msg) {
     case "saved":
       draft = clone(msg.setup);
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
+      saved = clone(draft);
       render();
       break;
     case "imported":
@@ -804,12 +934,14 @@ function onMessage(msg) {
     // tray profile click moved the active profile while Settings was open.
     case "profile":
       draft.profile = clampIndex(msg.profile, draft.profiles.length);
+      if (saved) saved.profile = draft.profile; // Go has already saved the switch
       render();
       break;
     // Go-initiated: Calibration finished with a different column mapping
     // while this window was already open, so the draft's columns are stale.
     case "columns":
       draft.columns = msg.columns;
+      if (saved) saved.columns = clone(msg.columns); // Calibration saved them already
       render();
       break;
     // Go-initiated: the window was already open and got asked to switch tab
@@ -821,9 +953,24 @@ function onMessage(msg) {
   }
 }
 
+document.getElementById("root").addEventListener(
+  "click",
+  (e) => {
+    if (!swallowClick) return;
+    swallowClick = false;
+    e.stopPropagation();
+    e.preventDefault();
+  },
+  true
+);
 document.getElementById("root").addEventListener("click", onClick);
 document.getElementById("root").addEventListener("input", onInput);
 document.getElementById("root").addEventListener("change", onChange);
+document.getElementById("root").addEventListener("pointerdown", onGripPointerDown);
+document.getElementById("root").addEventListener("pointermove", onDragMove);
+document.getElementById("root").addEventListener("pointerup", onDragEnd);
+document.getElementById("root").addEventListener("pointercancel", onDragEnd);
+document.getElementById("root").addEventListener("keydown", onKnobKeydown);
 document.getElementById("btn-close").addEventListener("click", () => send({ type: "close" }));
 document.getElementById("btn-save").addEventListener("click", doSave);
 
