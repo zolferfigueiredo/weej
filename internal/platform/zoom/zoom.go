@@ -163,7 +163,8 @@ func metric(index uintptr) int {
 }
 
 // The float travels as its bit pattern in an integer slot; on amd64 Go's syscall stub also
-// copies it into XMM0, where the Windows x64 ABI expects a float argument.
+// copies it into XMM0, where the Windows x64 ABI expects a float argument. On 386 a float
+// argument is a 4-byte stack slot like any other, so the bit pattern is the argument itself.
 func setTransform(f float64, x, y int) {
 	_, _, _ = procMagSetFullscreenTransform.Call(
 		uintptr(math.Float32bits(float32(f))),

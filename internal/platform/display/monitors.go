@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sys/windows"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
+	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 )
 
 type Monitor struct {
@@ -213,11 +214,7 @@ func Monitors() []Monitor {
 func AtPointer() Monitor {
 	var pt point
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
-
-	// MonitorFromPoint takes the POINT by value. On the amd64 calling convention an 8-byte
-	// struct is passed packed into a single register, so X and Y go into one uintptr.
-	packed := uintptr(uint64(uint32(pt.X)) | uint64(uint32(pt.Y))<<32)
-	h, _, _ := procMonitorFromPoint.Call(packed, monitorDefaultToNearest)
+	h, _, _ := procMonitorFromPoint.Call(append(sys.PointArgs(pt.X, pt.Y), monitorDefaultToNearest)...)
 
 	for _, m := range Monitors() {
 		if m.Handle == h {
