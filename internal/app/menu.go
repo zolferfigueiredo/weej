@@ -19,7 +19,7 @@ import (
 )
 
 func (app *App) setupTray(l *winui.Loop) {
-	app.tray = l.NewTray(app.onTrayClick, func() { app.manualCheckUpdate() })
+	app.tray = l.NewTray(func() { app.openSettings("") }, app.showTrayMenu, func() { app.manualCheckUpdate() })
 	app.hud = l.NewHUD()
 	l.OnThemeChange(func() {
 		app.refreshTray()
@@ -28,7 +28,7 @@ func (app *App) setupTray(l *winui.Loop) {
 	app.refreshTray()
 }
 
-func (app *App) onTrayClick() {
+func (app *App) showTrayMenu() {
 	items := app.buildMenu()
 	app.loop.PopupMenu(items, !sys.TaskbarLight())
 }
