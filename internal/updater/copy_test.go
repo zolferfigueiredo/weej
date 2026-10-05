@@ -32,8 +32,8 @@ func TestDownloadURL(t *testing.T) {
 		site string
 		want string
 	}{
-		{"default site", DefaultSite, "https://github.com/zolferfigueiredo/weej/releases/download/v1.2.3/WeeJ-1.2.3-x64.zip"},
-		{"test feed", "https://example.com/feeds/", "https://example.com/feeds/WeeJ-1.2.3-x64.zip"},
+		{"default site", DefaultSite, "https://github.com/zolferfigueiredo/weej/releases/download/v1.2.3/WeeJ-1.2.3-" + Arch() + ".zip"},
+		{"test feed", "https://example.com/feeds/", "https://example.com/feeds/WeeJ-1.2.3-" + Arch() + ".zip"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
