@@ -117,25 +117,48 @@ func TestMidiPorts(t *testing.T) {
 
 func TestMixerButtonsSurviveSaving(t *testing.T) {
 	fresh, _ := DecodeSettings([]byte(`{"profiles":[{"name":"Default","jobs":[]}]}`), "Default")
-	if !reflect.DeepEqual(fresh.Buttons, DefaultMixerButtons()) {
-		t.Errorf("old file buttons = %v, want the defaults", fresh.Buttons)
+	if !reflect.DeepEqual(fresh.ActiveButtons(), DefaultMixerButtons()) {
+		t.Errorf("old file buttons = %v, want the defaults", fresh.ActiveButtons())
 	}
 
 	s := DefaultSettings("Default")
-	s.Buttons = map[int]ButtonAction{20: ActionNone, 52: ActionPlayPause, 21: MuteAction(9), MixerNoteButton(24): ActionStop}
+	s.Profiles = []Profile{
+		{Name: "One", Buttons: ButtonMap{20: ActionNone, 52: ActionPlayPause, MixerNoteButton(24): ActionStop}},
+		{Name: "Two", Buttons: ButtonMap{}},
+	}
 	data, err := EncodeSettings(s)
 	if err != nil {
 		t.Fatal(err)
 	}
 	back, _ := DecodeSettings(data, "Default")
-	want := map[int]ButtonAction{52: ActionPlayPause, 21: MuteAction(9), MixerNoteButton(24): ActionStop}
-	if !reflect.DeepEqual(back.Buttons, want) {
-		t.Errorf("round trip = %v, want %v (CC 20 set to nothing stays nothing)", back.Buttons, want)
+	want := ButtonMap{52: ActionPlayPause, MixerNoteButton(24): ActionStop}
+	if !reflect.DeepEqual(back.Profiles[0].Buttons, want) {
+		t.Errorf("profile one = %v, want %v (CC 20 set to nothing stays nothing)", back.Profiles[0].Buttons, want)
+	}
+	if b := back.Profiles[1].Buttons; b == nil || len(b) != 0 {
+		t.Errorf("profile two = %v, want still cleared, not the defaults", b)
 	}
 
-	bad, _ := DecodeSettings([]byte(`{"mixerButtons":{"52":"bogus","x":"settings","61":"settings"}}`), "Default")
-	if !reflect.DeepEqual(bad.Buttons, map[int]ButtonAction{61: ActionOpenSettings}) {
-		t.Errorf("bad entries = %v, want only CC 61", bad.Buttons)
+	bad, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[],"buttons":{"52":"bogus","x":"settings","61":"settings"}}]}`), "Default")
+	if !reflect.DeepEqual(bad.ActiveButtons(), ButtonMap{61: ActionOpenSettings}) {
+		t.Errorf("bad entries = %v, want only CC 61", bad.ActiveButtons())
+	}
+}
+
+func TestSharedButtonsMoveIntoEveryProfile(t *testing.T) {
+	old, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[]},{"name":"B","jobs":[]}],"profile":1,`+
+		`"mixerButtons":{"20":"media.stop"}}`), "Default")
+	for i, p := range old.Profiles {
+		if !reflect.DeepEqual(p.Buttons, ButtonMap{20: ActionStop}) {
+			t.Errorf("profile %d = %v, want the shared set", i, p.Buttons)
+		}
+	}
+	old.Profiles[0].Buttons[21] = ActionNextTrack
+	if _, ok := old.Profiles[1].Buttons[21]; ok {
+		t.Error("profiles share one map, want a copy each")
+	}
+	if !reflect.DeepEqual(old.ActiveButtons(), ButtonMap{20: ActionStop}) {
+		t.Errorf("active buttons = %v, want profile B's", old.ActiveButtons())
 	}
 }
 

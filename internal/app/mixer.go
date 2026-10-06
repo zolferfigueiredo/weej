@@ -57,7 +57,7 @@ func (app *App) unmuteAll() {
 	if app.engine.UnmuteAll(setup.ForMixer()) == 0 || !app.usesMixer() {
 		return
 	}
-	for id, a := range setup.Buttons {
+	for id, a := range setup.ActiveButtons() {
 		if _, ok := a.MuteKnob(); ok {
 			midiport.SetLED(id, false)
 		}
@@ -87,7 +87,7 @@ func (app *App) onMixerButton(cc int) {
 		return
 	}
 	setup := app.snapshotSettings().Setup
-	action := setup.Buttons[cc]
+	action := setup.ActiveButtons()[cc]
 	if action == core.ActionNone {
 		app.log(fmt.Sprintf("Mixer button %s pressed: nothing set", mixerButtonName(cc)))
 	} else {

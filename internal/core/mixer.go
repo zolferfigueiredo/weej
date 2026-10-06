@@ -92,8 +92,8 @@ func (a ButtonAction) Valid() bool {
 	return ok
 }
 
-func DefaultMixerButtons() map[int]ButtonAction {
-	m := map[int]ButtonAction{59: ActionPreviousProfile, 60: ActionNextProfile}
+func DefaultMixerButtons() ButtonMap {
+	m := ButtonMap{59: ActionPreviousProfile, 60: ActionNextProfile}
 	for i := 0; i < 8; i++ {
 		m[20+i] = MuteAction(i)
 	}

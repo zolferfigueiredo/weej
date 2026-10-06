@@ -22,11 +22,10 @@ type Settings struct {
 func DefaultSettings(defaultProfileName string) Settings {
 	return Settings{
 		Setup: Setup{
-			Profiles:     []Profile{{Name: defaultProfileName}},
+			Profiles:     []Profile{{Name: defaultProfileName, Buttons: DefaultMixerButtons()}},
 			ShowProfiles: true,
 			Icon:         IconMixer,
 			Speed:        SpeedSlow,
-			Buttons:      DefaultMixerButtons(),
 		},
 		ShowDataInMenu: true,
 		UpdateEvery:    604800,
@@ -35,29 +34,28 @@ func DefaultSettings(defaultProfileName string) Settings {
 
 // The on-disk shape, key order matching the spec exactly so EncodeSettings is deterministic.
 type settingsJSON struct {
-	Columns          []*int            `json:"columns"`
-	Profiles         []Profile         `json:"profiles"`
-	Profile          int               `json:"profile"`
-	NextProfile      *Shortcut         `json:"nextProfile"`
-	PreviousProfile  *Shortcut         `json:"previousProfile"`
-	InvertKnobs      bool              `json:"invertKnobs"`
-	HideTrayIcon     bool              `json:"hideTrayIcon"`
-	ShowProfileList  bool              `json:"showProfileList"`
-	TrayIcon         string            `json:"trayIcon"`
-	Speed            string            `json:"speed"`
-	Port             string            `json:"port"`
-	BaudRate         int               `json:"baudRate"`
-	MixerColumns     []*int            `json:"mixerColumns"`
-	MixerButtonOrder []int             `json:"mixerButtonOrder"`
-	MixerButtons     map[string]string `json:"mixerButtons"`
-	Language         string            `json:"language"`
-	ShowDataInMenu   bool              `json:"showDataInMenu"`
-	UpdateEvery      int               `json:"updateEvery"`
-	LastUpdateCheck  *time.Time        `json:"lastUpdateCheck,omitempty"`
-	AvailableVersion string            `json:"availableVersion"`
-	NotifiedVersion  string            `json:"notifiedVersion"`
-	UpdatedTo        string            `json:"updatedTo"`
-	TrayTipShown     bool              `json:"trayTipShown"`
+	Columns          []*int     `json:"columns"`
+	Profiles         []Profile  `json:"profiles"`
+	Profile          int        `json:"profile"`
+	NextProfile      *Shortcut  `json:"nextProfile"`
+	PreviousProfile  *Shortcut  `json:"previousProfile"`
+	InvertKnobs      bool       `json:"invertKnobs"`
+	HideTrayIcon     bool       `json:"hideTrayIcon"`
+	ShowProfileList  bool       `json:"showProfileList"`
+	TrayIcon         string     `json:"trayIcon"`
+	Speed            string     `json:"speed"`
+	Port             string     `json:"port"`
+	BaudRate         int        `json:"baudRate"`
+	MixerColumns     []*int     `json:"mixerColumns"`
+	MixerButtonOrder []int      `json:"mixerButtonOrder"`
+	Language         string     `json:"language"`
+	ShowDataInMenu   bool       `json:"showDataInMenu"`
+	UpdateEvery      int        `json:"updateEvery"`
+	LastUpdateCheck  *time.Time `json:"lastUpdateCheck,omitempty"`
+	AvailableVersion string     `json:"availableVersion"`
+	NotifiedVersion  string     `json:"notifiedVersion"`
+	UpdatedTo        string     `json:"updatedTo"`
+	TrayTipShown     bool       `json:"trayTipShown"`
 }
 
 func columnsToJSON(cols []int) []*int {
@@ -90,6 +88,25 @@ func EncodeMixerColumns(cols []int) []*int {
 		return nil
 	}
 	return columnsToJSON(cols)
+}
+
+// ButtonMap is a profile's button functions by button id. A bad entry in a saved file is dropped
+// on its own instead of failing the whole profile list.
+type ButtonMap map[int]ButtonAction
+
+func (m ButtonMap) MarshalJSON() ([]byte, error) { return json.Marshal(EncodeButtons(m)) }
+
+func (m *ButtonMap) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		return nil
+	}
+	var raw map[string]string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		*m = ButtonMap{}
+		return nil
+	}
+	*m = DecodeButtons(raw)
+	return nil
 }
 
 func EncodeButtons(buttons map[int]ButtonAction) map[string]string {
@@ -155,7 +172,6 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		BaudRate:         s.BaudRate(),
 		MixerColumns:     EncodeMixerColumns(s.MixerColumns),
 		MixerButtonOrder: s.ButtonOrder,
-		MixerButtons:     EncodeButtons(s.Buttons),
 		Language:         s.Language,
 		ShowDataInMenu:   s.ShowDataInMenu,
 		UpdateEvery:      s.UpdateEvery,
@@ -243,8 +259,16 @@ func DecodeSettings(data []byte, defaultProfileName string) (Settings, error) {
 	if v, ok := take[[]int](raw, "mixerButtonOrder"); ok && v != nil {
 		s.ButtonOrder = v
 	}
-	if v, ok := take[map[string]string](raw, "mixerButtons"); ok {
-		s.Buttons = DecodeButtons(v)
+	// Button functions were one set for every profile before they moved into the profile.
+	legacy, hasLegacy := take[map[string]string](raw, "mixerButtons")
+	for i := range s.Profiles {
+		switch {
+		case s.Profiles[i].Buttons != nil:
+		case hasLegacy:
+			s.Profiles[i].Buttons = DecodeButtons(legacy)
+		default:
+			s.Profiles[i].Buttons = DefaultMixerButtons()
+		}
 	}
 	if v, ok := take[string](raw, "language"); ok {
 		s.Language = v

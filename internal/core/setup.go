@@ -229,6 +229,9 @@ type Profile struct {
 	Name     string    `json:"name"`
 	Jobs     [][]Job   `json:"jobs"`
 	Shortcut *Shortcut `json:"shortcut,omitempty"`
+	// Buttons is what each mixer button does in this profile. Nil means a profile saved before
+	// buttons were per profile; DecodeSettings fills it in.
+	Buttons ButtonMap `json:"buttons"`
 }
 
 func (p Profile) JobsOf(knob int) []Job {
@@ -318,7 +321,6 @@ type Setup struct {
 	MixerColumns []int
 	// ButtonOrder is the mixer buttons Calibrate found, as CCs: Button 1 first. Nil means never.
 	ButtonOrder []int
-	Buttons     map[int]ButtonAction
 }
 
 func (s Setup) activeJobs() [][]Job {
@@ -348,6 +350,16 @@ func mapping(columns []int, jobs [][]Job) map[int][]Job {
 }
 
 func (s Setup) Mapping() map[int][]Job { return mapping(s.Columns, s.activeJobs()) }
+
+func (s Setup) ActiveButtons() ButtonMap {
+	switch {
+	case s.Active >= 0 && s.Active < len(s.Profiles):
+		return s.Profiles[s.Active].Buttons
+	case len(s.Profiles) > 0:
+		return s.Profiles[0].Buttons
+	}
+	return nil
+}
 
 func lastIndexOf(columns []int, col int) int {
 	for i := len(columns) - 1; i >= 0; i-- {

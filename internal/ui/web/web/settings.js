@@ -479,7 +479,7 @@ function editableButtonOrder() {
 // A row added with + reads -1 until a mixer button is pressed to fill it in.
 function renderMixerButtons() {
   const order = buttonOrder();
-  const actions = draft.mixerButtons || {};
+  const actions = activeProfile().buttons || {};
   const rows = order.length
     ? order
         .map((cc, i) => {
@@ -517,7 +517,7 @@ function addButton() {
 
 function removeButton() {
   const cc = editableButtonOrder().pop();
-  if (cc >= 0 && draft.mixerButtons) delete draft.mixerButtons[cc];
+  if (cc >= 0) for (const p of draft.profiles) if (p.buttons) delete p.buttons[cc];
   render();
 }
 
@@ -704,7 +704,7 @@ function renderDialog() {
 // --- Mutations --------------------------------------------------------------
 
 function addProfile() {
-  draft.profiles.push({ name: "", jobs: [], shortcut: null });
+  draft.profiles.push({ name: "", jobs: [], shortcut: null, buttons: {} });
   padJobRows(draft);
   draft.profile = draft.profiles.length - 1;
   render();
@@ -1052,9 +1052,10 @@ function onChange(e) {
       break;
   }
   if (el.dataset.mixerCc) {
-    draft.mixerButtons = draft.mixerButtons || {};
-    if (el.value) draft.mixerButtons[el.dataset.mixerCc] = el.value;
-    else delete draft.mixerButtons[el.dataset.mixerCc];
+    const profile = activeProfile();
+    profile.buttons = profile.buttons || {};
+    if (el.value) profile.buttons[el.dataset.mixerCc] = el.value;
+    else delete profile.buttons[el.dataset.mixerCc];
   }
   updateSaveButton();
 }
@@ -1159,16 +1160,12 @@ function onMessage(msg) {
     // while this window was already open, so the draft's columns are stale.
     case "columns": {
       const changes = { [msg.mixer ? "mixerColumns" : "columns"]: msg.columns };
-      if (msg.mixer) {
-        changes.mixerButtonOrder = msg.buttonOrder;
-        changes.mixerButtons = msg.buttons;
-      }
+      if (msg.mixer) changes.mixerButtonOrder = msg.buttonOrder;
       // Calibration saved these already.
-      Object.assign(draft, clone(changes));
-      padJobRows(draft);
-      if (saved) {
-        Object.assign(saved, clone(changes));
-        padJobRows(saved);
+      for (const setup of saved ? [draft, saved] : [draft]) {
+        Object.assign(setup, clone(changes));
+        if (msg.mixer) (msg.profileButtons || []).forEach((b, i) => setup.profiles[i] && (setup.profiles[i].buttons = clone(b)));
+        padJobRows(setup);
       }
       render();
       break;

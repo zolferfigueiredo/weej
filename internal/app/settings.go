@@ -26,22 +26,21 @@ const (
 )
 
 type setupJSON struct {
-	Columns          []*int            `json:"columns"`
-	Profiles         []core.Profile    `json:"profiles"`
-	Profile          int               `json:"profile"`
-	NextProfile      *core.Shortcut    `json:"nextProfile"`
-	PreviousProfile  *core.Shortcut    `json:"previousProfile"`
-	InvertKnobs      bool              `json:"invertKnobs"`
-	HideTrayIcon     bool              `json:"hideTrayIcon"`
-	ShowProfileList  bool              `json:"showProfileList"`
-	TrayIcon         string            `json:"trayIcon"`
-	Speed            string            `json:"speed"`
-	Port             string            `json:"port"`
-	BaudRate         int               `json:"baudRate"`
-	MixerColumns     []*int            `json:"mixerColumns"`
-	MixerButtonOrder []int             `json:"mixerButtonOrder"`
-	MixerButtons     map[string]string `json:"mixerButtons"`
-	Language         string            `json:"language"`
+	Columns          []*int         `json:"columns"`
+	Profiles         []core.Profile `json:"profiles"`
+	Profile          int            `json:"profile"`
+	NextProfile      *core.Shortcut `json:"nextProfile"`
+	PreviousProfile  *core.Shortcut `json:"previousProfile"`
+	InvertKnobs      bool           `json:"invertKnobs"`
+	HideTrayIcon     bool           `json:"hideTrayIcon"`
+	ShowProfileList  bool           `json:"showProfileList"`
+	TrayIcon         string         `json:"trayIcon"`
+	Speed            string         `json:"speed"`
+	Port             string         `json:"port"`
+	BaudRate         int            `json:"baudRate"`
+	MixerColumns     []*int         `json:"mixerColumns"`
+	MixerButtonOrder []int          `json:"mixerButtonOrder"`
+	Language         string         `json:"language"`
 }
 
 func columnsToJSON(cols []int) []*int {
@@ -111,7 +110,6 @@ func setupToJSON(s core.Setup) setupJSON {
 		BaudRate:         s.BaudRate(),
 		MixerColumns:     core.EncodeMixerColumns(s.MixerColumns),
 		MixerButtonOrder: s.ButtonOrder,
-		MixerButtons:     core.EncodeButtons(s.Buttons),
 	}
 }
 
@@ -137,7 +135,6 @@ func setupFromJSON(j setupJSON) core.Setup {
 		Baud:         j.BaudRate,
 		MixerColumns: mixerColumnsFromJSON(j.MixerColumns),
 		ButtonOrder:  j.MixerButtonOrder,
-		Buttons:      core.DecodeButtons(j.MixerButtons),
 	}
 }
 

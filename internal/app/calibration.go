@@ -127,13 +127,18 @@ func (app *App) finishCalibration() {
 	changed := !intSliceEqual(result, saved)
 	if buttons := cal.Buttons(); mixer && len(buttons) > 0 && !intSliceEqual(buttons, cur.ButtonOrder) {
 		cur.ButtonOrder = buttons
-		kept := map[int]core.ButtonAction{}
-		for _, cc := range buttons {
-			if a, ok := cur.Buttons[cc]; ok {
-				kept[cc] = a
+		profiles := make([]core.Profile, len(cur.Profiles))
+		for i, p := range cur.Profiles {
+			kept := core.ButtonMap{}
+			for _, cc := range buttons {
+				if a, ok := p.Buttons[cc]; ok {
+					kept[cc] = a
+				}
 			}
+			p.Buttons = kept
+			profiles[i] = p
 		}
-		cur.Buttons = kept
+		cur.Profiles = profiles
 		changed = true
 	}
 	if changed {
@@ -162,10 +167,13 @@ func (app *App) finishCalibration() {
 		app.openSettings("general")
 		if wasOpen {
 			if win := app.settingsWin; win != nil {
-				j := setupToJSON(cur.Setup)
+				buttons := make([]core.ButtonMap, len(cur.Profiles))
+				for i, p := range cur.Profiles {
+					buttons[i] = p.Buttons
+				}
 				win.Send(map[string]any{
 					"type": "columns", "mixer": mixer, "columns": columnsToJSON(result),
-					"buttonOrder": j.MixerButtonOrder, "buttons": j.MixerButtons,
+					"buttonOrder": cur.ButtonOrder, "profileButtons": buttons,
 				})
 			}
 		}
