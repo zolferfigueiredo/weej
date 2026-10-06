@@ -144,7 +144,6 @@ function render() {
   else if (activeTab === "connection") renderConnection();
   else if (activeTab === "about") renderAbout();
   else renderGeneral();
-  document.body.classList.toggle("lists-scroll", activeTab === "general" && !!draft && usesMixer());
 
   if (dialog) renderDialog();
 
@@ -1049,6 +1048,9 @@ function onChange(e) {
 function onMessage(msg) {
   switch (msg.type) {
     case "init":
+      // The window grows to fit the page (bridge.js reportHeight), so the mixer's lists get a cap
+      // of about 8 rows, less on a short screen, and scroll inside it; about 520px is the rest.
+      document.documentElement.style.setProperty("--list-max", `${Math.max(200, Math.min(360, screen.availHeight - 520))}px`);
       init = msg;
       draft = clone(msg.setup);
       labels = Object.assign({}, msg.labels || {});
