@@ -20,7 +20,6 @@ import (
 const calibrationTurnSeconds = "20"
 
 func (app *App) startCalibration(onlyNew bool) {
-	// Read before taking app.mu: snapshotSettings locks it too.
 	saved := app.activeColumns(app.snapshotSettings().Setup)
 	app.mu.Lock()
 	if app.calibWin != nil {
