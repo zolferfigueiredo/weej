@@ -207,10 +207,13 @@ function renderGeneral() {
     )
     .join("");
 
+  const mixer = isMidiPort(init.forcedPort || draft.port);
   const knobsHtml = draft.columns.length
     ? draft.columns
-        .map((col, i) => {
+        .map((boardCol, i) => {
           const jobs = profile.jobs[i] || [];
+          // A mixer never calibrated reads knob i from its column i, as core.Setup.ForMixer does.
+          const col = !mixer ? boardCol : draft.mixerColumns ? draft.mixerColumns[i] : i;
           const needsCal = col === null || col === undefined || col === -1;
           return `
             <div class="row clickable knob-row" id="knob-row-${i}" role="button" tabindex="0" data-action="open-job-menu" data-knob="${i}">
@@ -266,9 +269,10 @@ function renderGeneral() {
         <div class="card">${knobsHtml}</div>
         <div class="group-foot">
           <span class="group-note">${esc(t("jobs_note"))}</span>
-          <button class="btn" type="button" data-action="calibrate"${isMidiPort(init.forcedPort || draft.port) ? " disabled" : ""}>${esc(t("calibrate"))}</button>
+          <button class="btn" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
         </div>
       </div>
+      ${mixer ? renderMixerButtons() : ""}
 
       <div class="group">
         <div class="card">
@@ -453,7 +457,7 @@ function renderMixerButtons() {
 }
 
 function flashMixerButton(cc) {
-  if (activeTab !== "connection") return;
+  if (activeTab !== "general") return;
   const row = document.querySelector(`.row[data-cc="${cc}"]`);
   if (!row) return;
   row.classList.remove("flash");
@@ -538,7 +542,6 @@ function renderConnection() {
           }
         </div>
       </div>
-      ${midi ? renderMixerButtons() : ""}
     </div>`;
 }
 
@@ -739,12 +742,14 @@ function onKnobKeydown(e) {
 
 function addKnob() {
   draft.columns.push(-1);
+  if (draft.mixerColumns) draft.mixerColumns.push(-1);
   for (const p of draft.profiles) p.jobs.push([]);
   render();
 }
 
 function removeKnobConfirmed() {
   draft.columns.pop();
+  if (draft.mixerColumns && draft.mixerColumns.length > draft.columns.length) draft.mixerColumns.pop();
   for (const p of draft.profiles) p.jobs.pop();
 }
 
@@ -1040,11 +1045,13 @@ function onMessage(msg) {
       break;
     // Go-initiated: Calibration finished with a different column mapping
     // while this window was already open, so the draft's columns are stale.
-    case "columns":
-      draft.columns = msg.columns;
-      if (saved) saved.columns = clone(msg.columns); // Calibration saved them already
+    case "columns": {
+      const key = msg.mixer ? "mixerColumns" : "columns";
+      draft[key] = msg.columns;
+      if (saved) saved[key] = clone(msg.columns); // Calibration saved them already
       render();
       break;
+    }
     // Go-initiated: the window was already open and got asked to switch tab
     // (e.g. the tray's About item) instead of opening a new one.
     case "tab":

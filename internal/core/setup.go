@@ -312,8 +312,11 @@ type Setup struct {
 	// means automatic, which only ever looks for serial boards.
 	Port string
 	// Baud is the serial speed; 0 means DefaultBaud.
-	Baud    int
-	Buttons map[int]ButtonAction
+	Baud int
+	// MixerColumns is the mixer's own calibration, so the board's Columns survive a switch to
+	// the mixer and back. Nil means never calibrated: knob i reads mixer column i.
+	MixerColumns []int
+	Buttons      map[int]ButtonAction
 }
 
 func (s Setup) activeJobs() [][]Job {

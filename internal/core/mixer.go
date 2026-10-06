@@ -91,12 +91,19 @@ func DefaultMixerButtons() map[int]ButtonAction {
 	return m
 }
 
-// ForMixer is the setup a mixer frame is handled with: knob i reads column i, and a fader's top is
-// already its highest value, so nothing is flipped.
+// ForMixer is the setup a mixer frame is handled with: Columns come from MixerColumns, and a
+// fader's top is already its highest value, so nothing is flipped.
 func (s Setup) ForMixer() Setup {
 	cols := make([]int, len(s.Columns))
 	for i := range cols {
-		cols[i] = i
+		switch {
+		case s.MixerColumns == nil:
+			cols[i] = i
+		case i < len(s.MixerColumns):
+			cols[i] = s.MixerColumns[i]
+		default:
+			cols[i] = -1
+		}
 	}
 	s.Columns = cols
 	s.Invert = true

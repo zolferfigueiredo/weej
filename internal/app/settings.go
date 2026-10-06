@@ -38,6 +38,7 @@ type setupJSON struct {
 	Speed           string            `json:"speed"`
 	Port            string            `json:"port"`
 	BaudRate        int               `json:"baudRate"`
+	MixerColumns    []*int            `json:"mixerColumns"`
 	MixerButtons    map[string]string `json:"mixerButtons"`
 	Language        string            `json:"language"`
 }
@@ -64,6 +65,13 @@ func columnsFromJSON(ptrs []*int) []int {
 		}
 	}
 	return out
+}
+
+func mixerColumnsFromJSON(ptrs []*int) []int {
+	if ptrs == nil {
+		return nil
+	}
+	return columnsFromJSON(ptrs)
 }
 
 func setupToJSON(s core.Setup) setupJSON {
@@ -101,6 +109,7 @@ func setupToJSON(s core.Setup) setupJSON {
 		Speed:           string(s.Speed),
 		Port:            s.Port,
 		BaudRate:        s.BaudRate(),
+		MixerColumns:    core.EncodeMixerColumns(s.MixerColumns),
 		MixerButtons:    core.EncodeButtons(s.Buttons),
 	}
 }
@@ -125,6 +134,7 @@ func setupFromJSON(j setupJSON) core.Setup {
 		Speed:        core.ParseSpeed(j.Speed),
 		Port:         j.Port,
 		Baud:         j.BaudRate,
+		MixerColumns: mixerColumnsFromJSON(j.MixerColumns),
 		Buttons:      core.DecodeButtons(j.MixerButtons),
 	}
 }
@@ -290,7 +300,7 @@ func (app *App) handleSettingsSave(data []byte) {
 		win.Send(map[string]any{"type": "saved", "setup": setupToJSONWithLanguage(cur)})
 	}
 
-	if hasUncalibratedColumn(cur.Columns) && !app.usesMixer() {
+	if hasUncalibratedColumn(app.activeColumns(cur.Setup)) {
 		app.loop.Invoke(func() { app.startCalibration(true) })
 	}
 }

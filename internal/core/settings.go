@@ -47,6 +47,7 @@ type settingsJSON struct {
 	Speed            string            `json:"speed"`
 	Port             string            `json:"port"`
 	BaudRate         int               `json:"baudRate"`
+	MixerColumns     []*int            `json:"mixerColumns"`
 	MixerButtons     map[string]string `json:"mixerButtons"`
 	Language         string            `json:"language"`
 	ShowDataInMenu   bool              `json:"showDataInMenu"`
@@ -80,6 +81,14 @@ func columnsFromJSON(ptrs []*int) []int {
 		}
 	}
 	return out
+}
+
+// EncodeMixerColumns keeps a never-calibrated mixer as null, apart from an empty calibration.
+func EncodeMixerColumns(cols []int) []*int {
+	if cols == nil {
+		return nil
+	}
+	return columnsToJSON(cols)
 }
 
 func EncodeButtons(buttons map[int]ButtonAction) map[string]string {
@@ -143,6 +152,7 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		Speed:            string(s.Speed),
 		Port:             s.Port,
 		BaudRate:         s.BaudRate(),
+		MixerColumns:     EncodeMixerColumns(s.MixerColumns),
 		MixerButtons:     EncodeButtons(s.Buttons),
 		Language:         s.Language,
 		ShowDataInMenu:   s.ShowDataInMenu,
@@ -224,6 +234,9 @@ func DecodeSettings(data []byte, defaultProfileName string) (Settings, error) {
 	}
 	if v, ok := take[int](raw, "baudRate"); ok && v > 0 {
 		s.Baud = v
+	}
+	if v, ok := take[[]*int](raw, "mixerColumns"); ok && v != nil {
+		s.MixerColumns = columnsFromJSON(v)
 	}
 	if v, ok := take[map[string]string](raw, "mixerButtons"); ok {
 		s.Buttons = DecodeButtons(v)

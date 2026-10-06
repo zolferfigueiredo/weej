@@ -17,10 +17,16 @@ func (app *App) sourcePort() string {
 
 func (app *App) usesMixer() bool { return core.IsMidiPort(app.sourcePort()) }
 
+// activeColumns is the calibration of whatever is connected: the board's or the mixer's.
+func (app *App) activeColumns(s core.Setup) []int {
+	if app.usesMixer() {
+		return s.ForMixer().Columns
+	}
+	return s.Columns
+}
+
 func (app *App) onMixerValues(values []int) {
-	setup := app.snapshotSettings().Setup.ForMixer()
-	app.engine.Handle(values, setup, false)
-	app.updateTerminalLine(values, setup, false)
+	app.handleValues(values, app.snapshotSettings().Setup.ForMixer())
 }
 
 func (app *App) onMixerButton(cc int) {
@@ -28,8 +34,11 @@ func (app *App) onMixerButton(cc int) {
 	action := setup.Buttons[cc]
 
 	if knob, ok := action.MuteKnob(); ok {
-		muted := app.engine.ToggleMute(knob, setup.ForMixer())
-		midiport.SetLED(cc, muted)
+		mixer := setup.ForMixer()
+		if knob < len(mixer.Columns) && mixer.Columns[knob] >= 0 {
+			muted := app.engine.ToggleMute(mixer.Columns[knob], mixer)
+			midiport.SetLED(cc, muted)
+		}
 	}
 	switch action {
 	case core.ActionPlayPause:

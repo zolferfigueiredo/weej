@@ -20,9 +20,8 @@ import (
 const calibrationTurnSeconds = "20"
 
 func (app *App) startCalibration(onlyNew bool) {
-	if app.usesMixer() {
-		return
-	}
+	// Read before taking app.mu: snapshotSettings locks it too.
+	saved := app.activeColumns(app.snapshotSettings().Setup)
 	app.mu.Lock()
 	if app.calibWin != nil {
 		win := app.calibWin
@@ -30,7 +29,6 @@ func (app *App) startCalibration(onlyNew bool) {
 		win.Focus()
 		return
 	}
-	saved := app.snapshotSettings().Columns
 	app.calibrator = core.NewCalibrator(saved, onlyNew)
 	app.calibOnlyNew = onlyNew
 	app.mu.Unlock()
@@ -107,11 +105,16 @@ func (app *App) finishCalibration() {
 		return
 	}
 	result := cal.Result()
-	saved := app.snapshotSettings().Columns
+	mixer := app.usesMixer()
+	saved := app.activeColumns(app.snapshotSettings().Setup)
 	changed := !intSliceEqual(result, saved)
 	if changed {
 		cur := app.snapshotSettings()
-		cur.Columns = result
+		if mixer {
+			cur.MixerColumns = result
+		} else {
+			cur.Columns = result
+		}
 		if err := app.persistSettings(cur); err != nil {
 			app.log("Could not save settings: " + err.Error())
 		}
@@ -132,7 +135,7 @@ func (app *App) finishCalibration() {
 		app.openSettings("general")
 		if wasOpen {
 			if win := app.settingsWin; win != nil {
-				win.Send(map[string]any{"type": "columns", "columns": columnsToJSON(result)})
+				win.Send(map[string]any{"type": "columns", "columns": columnsToJSON(result), "mixer": mixer})
 			}
 		}
 	})

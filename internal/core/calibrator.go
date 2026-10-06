@@ -158,6 +158,13 @@ func (c *Calibrator) feedSearch(values []int) {
 		c.high = append([]int{}, values...)
 	}
 	for i, v := range values {
+		// A mixer control that has not moved yet reads -1; its first real value is a start, not a swing.
+		if v < 0 {
+			continue
+		}
+		if c.low[i] < 0 {
+			c.low[i], c.high[i] = v, v
+		}
 		if v < c.low[i] {
 			c.low[i] = v
 		}

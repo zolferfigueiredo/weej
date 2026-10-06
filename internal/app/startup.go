@@ -180,11 +180,14 @@ func (app *App) startSerial() {
 }
 
 func (app *App) onSerialLine(values []int) {
+	app.handleValues(values, app.snapshotSettings().Setup)
+}
+
+func (app *App) handleValues(values []int, setup core.Setup) {
 	calibrating := app.isCalibrating()
 	if calibrating {
 		app.feedCalibrator(values, time.Since(app.startTime).Seconds())
 	}
-	setup := app.snapshotSettings().Setup
 	app.engine.Handle(values, setup, calibrating)
 	app.updateTerminalLine(values, setup, calibrating)
 }
@@ -209,10 +212,7 @@ func (app *App) onSerialStatus(status serialport.Status) {
 }
 
 func (app *App) calibrateIfNeeded() {
-	if app.usesMixer() {
-		return
-	}
-	cols := app.snapshotSettings().Columns
+	cols := app.activeColumns(app.snapshotSettings().Setup)
 	if len(cols) == 0 || hasUncalibratedColumn(cols) {
 		app.startCalibration(true)
 	}

@@ -201,3 +201,40 @@ func TestEngineResetUnmutes(t *testing.T) {
 		t.Error("after Reset the next toggle should mute again")
 	}
 }
+
+func TestForMixerUsesTheMixersOwnCalibration(t *testing.T) {
+	s := Setup{Columns: []int{0, 3, 2}, MixerColumns: []int{9, -1}}
+	if got := s.ForMixer().Columns; !reflect.DeepEqual(got, []int{9, -1, -1}) {
+		t.Errorf("ForMixer = %v, want [9 -1 -1]: the mixer's columns, uncalibrated past them", got)
+	}
+}
+
+func TestMixerColumnsSurviveSaving(t *testing.T) {
+	s := DefaultSettings("Default")
+	s.Columns = []int{0, 3}
+	data, _ := EncodeSettings(s)
+	back, _ := DecodeSettings(data, "Default")
+	if back.MixerColumns != nil {
+		t.Errorf("never calibrated = %v, want nil", back.MixerColumns)
+	}
+
+	s.MixerColumns = []int{8, -1}
+	data, _ = EncodeSettings(s)
+	back, _ = DecodeSettings(data, "Default")
+	if !reflect.DeepEqual(back.MixerColumns, []int{8, -1}) || !reflect.DeepEqual(back.Columns, []int{0, 3}) {
+		t.Errorf("round trip = mixer %v board %v, want [8 -1] and [0 3]", back.MixerColumns, back.Columns)
+	}
+}
+
+func TestCalibratorWaitsForAnUnknownControlToSwing(t *testing.T) {
+	c := NewCalibrator(nil, false)
+	c.Feed([]int{-1, -1}, 0)
+	c.Feed([]int{-1, 900}, 0.1)
+	if len(c.Found()) != 0 {
+		t.Fatalf("found %v after a first touch, want nothing yet", c.Found())
+	}
+	c.Feed([]int{-1, 100}, 0.2)
+	if !reflect.DeepEqual(c.Found(), []int{1}) {
+		t.Errorf("found %v, want column 1 once it swung", c.Found())
+	}
+}
