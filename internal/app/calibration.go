@@ -287,7 +287,7 @@ func composeCalibrationBody(cal *core.Calibrator, code string, onlyNew bool, let
 	var parts []string
 
 	if cal.Phase() == 0 {
-		if cal.Knob() == cal.First() && !cal.Mixer() {
+		if cal.Knob() == cal.First() {
 			parts = append(parts, tr("cal.move_first", map[string]string{"letter": letter, "n": calibrationTurnSeconds}))
 		} else {
 			parts = append(parts, tr("cal.move", map[string]string{"letter": letter}))

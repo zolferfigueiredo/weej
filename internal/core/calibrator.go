@@ -24,7 +24,7 @@ type Calibrator struct {
 	lastTime  float64
 	stepStart float64
 
-	// A mixer's controls are digital, so there is no cleaning turn, and buttons follow the knobs.
+	// A mixer finds its controls after a few steps, and its buttons follow the knobs.
 	mixer       bool
 	buttonStage bool
 	buttons     []int
@@ -272,7 +272,7 @@ func (c *Calibrator) Skip() {
 }
 
 func (c *Calibrator) next() {
-	if c.phase == 1 || c.mixer {
+	if c.phase == 1 {
 		c.reset(0)
 	} else {
 		c.reset(1)

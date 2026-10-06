@@ -242,13 +242,17 @@ func TestCalibratorWaitsForAnUnknownControlToSwing(t *testing.T) {
 	}
 }
 
-func TestMixerCalibrationSkipsCleaningThenFindsButtons(t *testing.T) {
+func TestMixerCalibrationCleansThenFindsButtons(t *testing.T) {
 	c := NewMixerCalibrator(nil, false)
 	c.Feed([]int{-1, -1}, 0)
 	c.Feed([]int{-1, 0}, 0.1)
 	c.Feed([]int{-1, 1023}, 0.2)
+	if c.Phase() != 1 || c.Knob() != 0 {
+		t.Fatalf("after finding knob A: phase %d knob %d, want knob A's cleaning turn", c.Phase(), c.Knob())
+	}
+	c.Skip()
 	if c.Phase() != 0 || c.Knob() != 1 {
-		t.Fatalf("after knob A: phase %d knob %d, want straight on to knob B", c.Phase(), c.Knob())
+		t.Fatalf("after the cleaning turn: phase %d knob %d, want knob B", c.Phase(), c.Knob())
 	}
 
 	c.PressButton(20)
@@ -334,6 +338,7 @@ func TestMixerCalibrationNeverRunsOutOfKnobs(t *testing.T) {
 		c.Feed(frame, float64(i))
 		frame[cc] = 1023
 		c.Feed(frame, float64(i)+0.5)
+		c.Skip()
 	}
 	if len(c.Found()) != 19 || c.Full() {
 		t.Errorf("found %d knobs, full %v, want 19 and still asking for more", len(c.Found()), c.Full())
