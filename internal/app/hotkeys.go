@@ -40,6 +40,7 @@ func (app *App) onHotkey(id int) {
 		}
 		s.Active = id
 	}
+	app.unmuteAll()
 	if err := app.persistSettings(s); err != nil {
 		app.log("Could not save settings: " + err.Error())
 	}

@@ -50,6 +50,20 @@ func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
 	}
 }
 
+// unmuteAll runs before the profile changes: the next profile gives the knobs other jobs, so a
+// muted one could no longer be unmuted from its button.
+func (app *App) unmuteAll() {
+	setup := app.snapshotSettings().Setup
+	if app.engine.UnmuteAll(setup.ForMixer()) == 0 || !app.usesMixer() {
+		return
+	}
+	for id, a := range setup.Buttons {
+		if _, ok := a.MuteKnob(); ok {
+			midiport.SetLED(id, false)
+		}
+	}
+}
+
 func mixerButtonName(id int) string {
 	if note, ok := core.MixerButtonNote(id); ok {
 		return fmt.Sprintf("note %d", note)

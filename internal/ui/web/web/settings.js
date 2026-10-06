@@ -144,6 +144,7 @@ function render() {
   else if (activeTab === "connection") renderConnection();
   else if (activeTab === "about") renderAbout();
   else renderGeneral();
+  document.body.classList.toggle("lists-scroll", activeTab === "general" && !!draft && usesMixer());
 
   if (dialog) renderDialog();
 
@@ -290,10 +291,16 @@ function renderGeneral() {
         </div>
       </div>`;
 
-  // With the mixer, its knobs and its buttons are two lists side by side.
+  // With the mixer, its knobs and its buttons are two lists side by side, each scrolling on its
+  // own; a redraw keeps where each list was scrolled to.
+  const listCards = () => document.querySelectorAll(".split > .group > .card");
+  const scrolled = Array.from(listCards(), (card) => card.scrollTop);
   const lists = mixer ? `<div class="split">${knobsGroup}${renderMixerButtons()}</div>` : knobsGroup;
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel" role="tabpanel">${profileGroup}${lists}${optionsGroup}</div>`;
+  listCards().forEach((card, i) => {
+    card.scrollTop = scrolled[i] || 0;
+  });
 }
 
 function renderApp() {

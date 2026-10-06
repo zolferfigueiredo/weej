@@ -307,6 +307,42 @@ p {
   }
 }
 
+/* The mixer's two lists scroll on their own and the page stays put. */
+body.lists-scroll {
+  overflow: hidden;
+}
+
+body.lists-scroll .app {
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+body.lists-scroll #panel,
+body.lists-scroll .tabpanel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+body.lists-scroll .split {
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+body.lists-scroll .split > .group {
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+body.lists-scroll .split > .group > .card {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .row.lit,
 .row.lit:hover {
   background: var(--selection);

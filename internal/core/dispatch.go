@@ -179,6 +179,25 @@ func (e *Engine) apply(job Job, u float64, settle time.Duration) {
 	}
 }
 
+// UnmuteAll puts every muted column's jobs back to its position, with no HUD, and reports how
+// many were muted.
+func (e *Engine) UnmuteAll(setup Setup) int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	n := len(e.muted)
+	mapping := setup.Mapping()
+	settle := setup.Speed.Settle()
+	for col := range e.muted {
+		if last, ok := e.lastApplied[col]; ok {
+			for _, job := range mapping[col] {
+				e.apply(job, last, settle)
+			}
+		}
+	}
+	e.muted = map[int]bool{}
+	return n
+}
+
 func (e *Engine) ToggleMute(col int, setup Setup) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()

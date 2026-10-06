@@ -390,3 +390,28 @@ func TestMixerDAWButtonsAreNotes(t *testing.T) {
 		t.Error("CC 20 read as a note")
 	}
 }
+
+func TestEngineUnmuteAllRestoresWithoutAHUD(t *testing.T) {
+	a := &recordingApplier{}
+	e := NewEngine(a)
+	setup := Setup{
+		Columns:      []int{0},
+		MixerColumns: []int{0},
+		Profiles:     []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}},
+		Speed:        SpeedSuperFast,
+	}.ForMixer()
+	e.Handle([]int{1023}, setup, false)
+	e.ToggleMute(0, setup)
+	huds := len(a.huds)
+	if n := e.UnmuteAll(setup); n != 1 {
+		t.Errorf("UnmuteAll = %d, want 1", n)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if last := a.values[len(a.values)-1]; last != 1 || len(a.huds) != huds {
+		t.Errorf("last applied %v, HUDs %d -> %d, want the master back at 1 with no HUD", last, huds, len(a.huds))
+	}
+	if e.UnmuteAll(setup) != 0 {
+		t.Error("a second UnmuteAll found mutes left")
+	}
+}

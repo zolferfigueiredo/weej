@@ -159,13 +159,14 @@ func (app *App) openSettings(tab string) {
 	app.settingsPendingTab = tab
 	app.mu.Unlock()
 
-	// The mixer's buttons sit beside the knobs, so Settings opens wide enough for both.
-	width := 460
+	// The mixer's buttons sit beside the knobs, so Settings opens wide enough for both and tall
+	// enough for each list to show several rows.
+	width, height := 460, 560
 	if app.usesMixer() {
-		width = 900
+		width, height = 900, 760
 	}
 	w, err := web.Open(app.loop.Invoke, "settings", web.Options{
-		Title: app.tr("settings"), Width: width, Height: 560,
+		Title: app.tr("settings"), Width: width, Height: height,
 		OnClose: func() {
 			app.mu.Lock()
 			app.settingsWin = nil
@@ -293,6 +294,9 @@ func (app *App) handleSettingsSave(data []byte) {
 
 	cur := app.snapshotSettings()
 	old := cur.Setup
+	if old.Active != newSetup.Active {
+		app.unmuteAll()
+	}
 	cur.Setup = newSetup
 	if err := app.persistSettings(cur); err != nil {
 		app.log("Could not save settings: " + err.Error())

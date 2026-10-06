@@ -152,6 +152,7 @@ func (app *App) switchProfile(i int) {
 		return
 	}
 	s.Active = i
+	app.unmuteAll()
 	if err := app.persistSettings(s); err != nil {
 		app.log("Could not save settings: " + err.Error())
 	}
