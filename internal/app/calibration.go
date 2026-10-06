@@ -20,6 +20,7 @@ import (
 const calibrationTurnSeconds = "20"
 
 func (app *App) startCalibration(onlyNew bool) {
+	saved := app.snapshotSettings().Columns
 	app.mu.Lock()
 	if app.calibWin != nil {
 		win := app.calibWin
@@ -27,7 +28,6 @@ func (app *App) startCalibration(onlyNew bool) {
 		win.Focus()
 		return
 	}
-	saved := app.snapshotSettings().Columns
 	app.calibrator = core.NewCalibrator(saved, onlyNew)
 	app.calibOnlyNew = onlyNew
 	app.mu.Unlock()
