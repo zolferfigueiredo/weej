@@ -303,14 +303,14 @@ function renderGeneral() {
       </div>`;
 
   // Two columns whose rows line up: connection and profile, invert and calibrate, then the knobs
-  // and (with the mixer) the buttons. A redraw keeps where each list was scrolled to.
+  // and the buttons. A redraw keeps where each list was scrolled to.
   const listCards = () => document.querySelectorAll(".list-group > .card");
   const scrolled = Array.from(listCards(), (card) => card.scrollTop);
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel general-grid" role="tabpanel">
       ${connectionGroup()}${profileGroup}
       ${invertGroup}${calibrateGroup}
-      ${knobsGroup}${mixer ? renderMixerButtons() : "<div></div>"}
+      ${knobsGroup}${renderMixerButtons()}
       ${importFoot}
     </div>`;
   listCards().forEach((card, i) => {
