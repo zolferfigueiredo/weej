@@ -292,6 +292,26 @@ p {
   cursor: pointer;
 }
 
+.tabpanel.split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+}
+
+.split-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+@media (max-width: 760px) {
+  .tabpanel.split {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
 .row.flash {
   animation: row-flash 1200ms var(--ease);
 }

@@ -189,6 +189,9 @@ func (app *App) handleValues(values []int, setup core.Setup) {
 		app.feedCalibrator(values, time.Since(app.startTime).Seconds())
 	}
 	app.engine.Handle(values, setup, calibrating)
+	if !calibrating {
+		app.pointOutMovedKnobs(values, setup)
+	}
 	app.updateTerminalLine(values, setup, calibrating)
 }
 

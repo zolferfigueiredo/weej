@@ -26,21 +26,22 @@ const (
 )
 
 type setupJSON struct {
-	Columns         []*int            `json:"columns"`
-	Profiles        []core.Profile    `json:"profiles"`
-	Profile         int               `json:"profile"`
-	NextProfile     *core.Shortcut    `json:"nextProfile"`
-	PreviousProfile *core.Shortcut    `json:"previousProfile"`
-	InvertKnobs     bool              `json:"invertKnobs"`
-	HideTrayIcon    bool              `json:"hideTrayIcon"`
-	ShowProfileList bool              `json:"showProfileList"`
-	TrayIcon        string            `json:"trayIcon"`
-	Speed           string            `json:"speed"`
-	Port            string            `json:"port"`
-	BaudRate        int               `json:"baudRate"`
-	MixerColumns    []*int            `json:"mixerColumns"`
-	MixerButtons    map[string]string `json:"mixerButtons"`
-	Language        string            `json:"language"`
+	Columns          []*int            `json:"columns"`
+	Profiles         []core.Profile    `json:"profiles"`
+	Profile          int               `json:"profile"`
+	NextProfile      *core.Shortcut    `json:"nextProfile"`
+	PreviousProfile  *core.Shortcut    `json:"previousProfile"`
+	InvertKnobs      bool              `json:"invertKnobs"`
+	HideTrayIcon     bool              `json:"hideTrayIcon"`
+	ShowProfileList  bool              `json:"showProfileList"`
+	TrayIcon         string            `json:"trayIcon"`
+	Speed            string            `json:"speed"`
+	Port             string            `json:"port"`
+	BaudRate         int               `json:"baudRate"`
+	MixerColumns     []*int            `json:"mixerColumns"`
+	MixerButtonOrder []int             `json:"mixerButtonOrder"`
+	MixerButtons     map[string]string `json:"mixerButtons"`
+	Language         string            `json:"language"`
 }
 
 func columnsToJSON(cols []int) []*int {
@@ -79,13 +80,12 @@ func setupToJSON(s core.Setup) setupJSON {
 	if columns == nil {
 		columns = []int{}
 	}
-	// One jobs row per knob: the page adds and removes knobs by index.
+	// One jobs row per knob, for the board's knobs and the mixer's: the page adds and removes
+	// knobs by index.
+	knobs := max(len(columns), len(s.ForMixer().Columns))
 	profiles := make([]core.Profile, len(s.Profiles))
 	for i, p := range s.Profiles {
-		rows := len(p.Jobs)
-		if rows < len(columns) {
-			rows = len(columns)
-		}
+		rows := max(len(p.Jobs), knobs)
 		jobs := make([][]core.Job, rows)
 		for j := range jobs {
 			jobs[j] = []core.Job{}
@@ -97,20 +97,21 @@ func setupToJSON(s core.Setup) setupJSON {
 		profiles[i] = p
 	}
 	return setupJSON{
-		Columns:         columnsToJSON(columns),
-		Profiles:        profiles,
-		Profile:         s.Active,
-		NextProfile:     s.Next,
-		PreviousProfile: s.Previous,
-		InvertKnobs:     s.Invert,
-		HideTrayIcon:    s.HideIcon,
-		ShowProfileList: s.ShowProfiles,
-		TrayIcon:        string(s.Icon),
-		Speed:           string(s.Speed),
-		Port:            s.Port,
-		BaudRate:        s.BaudRate(),
-		MixerColumns:    core.EncodeMixerColumns(s.MixerColumns),
-		MixerButtons:    core.EncodeButtons(s.Buttons),
+		Columns:          columnsToJSON(columns),
+		Profiles:         profiles,
+		Profile:          s.Active,
+		NextProfile:      s.Next,
+		PreviousProfile:  s.Previous,
+		InvertKnobs:      s.Invert,
+		HideTrayIcon:     s.HideIcon,
+		ShowProfileList:  s.ShowProfiles,
+		TrayIcon:         string(s.Icon),
+		Speed:            string(s.Speed),
+		Port:             s.Port,
+		BaudRate:         s.BaudRate(),
+		MixerColumns:     core.EncodeMixerColumns(s.MixerColumns),
+		MixerButtonOrder: s.ButtonOrder,
+		MixerButtons:     core.EncodeButtons(s.Buttons),
 	}
 }
 
@@ -135,6 +136,7 @@ func setupFromJSON(j setupJSON) core.Setup {
 		Port:         j.Port,
 		Baud:         j.BaudRate,
 		MixerColumns: mixerColumnsFromJSON(j.MixerColumns),
+		ButtonOrder:  j.MixerButtonOrder,
 		Buttons:      core.DecodeButtons(j.MixerButtons),
 	}
 }
@@ -157,8 +159,13 @@ func (app *App) openSettings(tab string) {
 	app.settingsPendingTab = tab
 	app.mu.Unlock()
 
+	// The mixer's buttons sit beside the knobs, so Settings opens wide enough for both.
+	width := 460
+	if app.usesMixer() {
+		width = 900
+	}
 	w, err := web.Open(app.loop.Invoke, "settings", web.Options{
-		Title: app.tr("settings"), Width: 460, Height: 560,
+		Title: app.tr("settings"), Width: width, Height: 560,
 		OnClose: func() {
 			app.mu.Lock()
 			app.settingsWin = nil
@@ -257,7 +264,7 @@ func (app *App) sendSettingsInit() {
 	payload["connection"] = app.connectionPayload()
 	payload["forcedPort"] = app.forcedPort
 	payload["baudRates"] = core.BaudRates
-	payload["mixerButtons"] = core.MixerButtons
+	payload["mixerButtonDefaults"] = core.DefaultMixerButtonOrder
 	win.Send(payload)
 }
 

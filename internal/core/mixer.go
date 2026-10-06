@@ -22,26 +22,12 @@ var (
 
 var MixerColumns = len(mixerFaderCCs) + len(mixerKnobCCs)
 
-type MixerButton struct {
-	CC int `json:"cc"`
-	// settings.js names a button from Kind ("channel", "button", "up", "down") and N.
-	Kind string `json:"kind"`
-	N    int    `json:"n,omitempty"`
+// DefaultMixerButtonOrder is every button CC the SMC-Mixer sends in CC mode, in the order
+// Settings lists them until Calibrate sets an order. CC 50 never fired on a real unit.
+var DefaultMixerButtonOrder = []int{
+	20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 38, 39, 48, 49,
+	51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
 }
-
-// MixerButtons lists every button the SMC-Mixer sends in CC mode. CC 50 never fired on a real unit.
-var MixerButtons = func() []MixerButton {
-	var out []MixerButton
-	for i := 0; i < 8; i++ {
-		out = append(out, MixerButton{CC: 20 + i, Kind: "channel", N: i + 1})
-	}
-	n := 0
-	for _, cc := range []int{28, 29, 38, 39, 48, 49, 51, 52, 53, 54, 55, 56, 57, 58, 61, 62} {
-		n++
-		out = append(out, MixerButton{CC: cc, Kind: "button", N: n})
-	}
-	return append(out, MixerButton{CC: 59, Kind: "up"}, MixerButton{CC: 60, Kind: "down"})
-}()
 
 type ButtonAction string
 
@@ -91,23 +77,29 @@ func DefaultMixerButtons() map[int]ButtonAction {
 	return m
 }
 
-// ForMixer is the setup a mixer frame is handled with: Columns come from MixerColumns, and a
-// fader's top is already its highest value, so nothing is flipped.
+// ForMixer is the setup a mixer frame is handled with: Columns come from MixerColumns, so the
+// mixer has its own knob count, and a fader's top is already its highest value, so nothing is
+// flipped.
 func (s Setup) ForMixer() Setup {
-	cols := make([]int, len(s.Columns))
-	for i := range cols {
-		switch {
-		case s.MixerColumns == nil:
+	if s.MixerColumns == nil {
+		cols := make([]int, len(s.Columns))
+		for i := range cols {
 			cols[i] = i
-		case i < len(s.MixerColumns):
-			cols[i] = s.MixerColumns[i]
-		default:
-			cols[i] = -1
 		}
+		s.Columns = cols
+	} else {
+		s.Columns = append([]int{}, s.MixerColumns...)
 	}
-	s.Columns = cols
 	s.Invert = true
 	return s
+}
+
+// MixerButtonOrder is the order Settings lists the mixer's buttons in: Calibrate's, or the default.
+func (s Setup) MixerButtonOrder() []int {
+	if s.ButtonOrder != nil {
+		return s.ButtonOrder
+	}
+	return DefaultMixerButtonOrder
 }
 
 // MixerState turns MIDI short messages into a frame of 0..1023 values. A control that has not
@@ -160,3 +152,29 @@ func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 }
 
 func (m *MixerState) Values() []int { return append([]int(nil), m.values...) }
+
+// MoveWatcher tells which columns moved far enough to be a hand on a control rather than a pot's
+// jitter. A column that reads -1 (a mixer control not heard from yet) counts as moved once it
+// reports.
+type MoveWatcher struct {
+	anchor []int
+}
+
+const moveThreshold = 12
+
+func (w *MoveWatcher) Moved(values []int) []int {
+	if len(w.anchor) != len(values) {
+		w.anchor = append([]int{}, values...)
+		return nil
+	}
+	var moved []int
+	for col, v := range values {
+		a := w.anchor[col]
+		if v < 0 || (a >= 0 && absInt(v-a) < moveThreshold) {
+			continue
+		}
+		w.anchor[col] = v
+		moved = append(moved, col)
+	}
+	return moved
+}

@@ -316,7 +316,9 @@ type Setup struct {
 	// MixerColumns is the mixer's own calibration, so the board's Columns survive a switch to
 	// the mixer and back. Nil means never calibrated: knob i reads mixer column i.
 	MixerColumns []int
-	Buttons      map[int]ButtonAction
+	// ButtonOrder is the mixer buttons Calibrate found, as CCs: Button 1 first. Nil means never.
+	ButtonOrder []int
+	Buttons     map[int]ButtonAction
 }
 
 func (s Setup) activeJobs() [][]Job {

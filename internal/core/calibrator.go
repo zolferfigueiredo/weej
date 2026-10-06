@@ -23,6 +23,12 @@ type Calibrator struct {
 	lastMove  float64
 	lastTime  float64
 	stepStart float64
+
+	// A mixer's controls are digital, so there is no cleaning turn, and buttons follow the knobs.
+	mixer       bool
+	buttonStage bool
+	buttons     []int
+	repeated    int
 }
 
 func containsInt(xs []int, v int) bool {
@@ -54,6 +60,39 @@ func NewCalibrator(saved []int, onlyNew bool) *Calibrator {
 	c.skipKept()
 	c.first = c.Knob()
 	return c
+}
+
+func NewMixerCalibrator(saved []int, onlyNew bool) *Calibrator {
+	c := NewCalibrator(saved, onlyNew)
+	c.mixer = true
+	c.repeated = -1
+	return c
+}
+
+func (c *Calibrator) Mixer() bool       { return c.mixer }
+func (c *Calibrator) ButtonStage() bool { return c.buttonStage }
+func (c *Calibrator) Buttons() []int    { return append([]int{}, c.buttons...) }
+
+// RepeatedButton is the index of a button pressed again after it was found, or -1.
+func (c *Calibrator) RepeatedButton() int { return c.repeated }
+
+func (c *Calibrator) StartButtons() {
+	c.buttonStage = true
+	c.repeated = -1
+}
+
+func (c *Calibrator) PressButton(cc int) {
+	if !c.buttonStage {
+		return
+	}
+	for i, b := range c.buttons {
+		if b == cc {
+			c.repeated = i
+			return
+		}
+	}
+	c.buttons = append(c.buttons, cc)
+	c.repeated = -1
 }
 
 func (c *Calibrator) Knob() int {
@@ -111,15 +150,22 @@ func (c *Calibrator) Result() []int {
 }
 
 type StepKey struct {
-	Knob  int
-	Phase int
-	Full  bool
+	Knob    int
+	Phase   int
+	Full    bool
+	Buttons int
 }
 
-func (c *Calibrator) StepKey() StepKey { return StepKey{c.Knob(), c.phase, c.full} }
+func (c *Calibrator) StepKey() StepKey {
+	buttons := -1
+	if c.buttonStage {
+		buttons = len(c.buttons)
+	}
+	return StepKey{c.Knob(), c.phase, c.full, buttons}
+}
 
 func (c *Calibrator) Feed(values []int, now float64) {
-	if c.full {
+	if c.full || c.buttonStage {
 		return
 	}
 	if c.phase == 0 {
@@ -215,7 +261,7 @@ func (c *Calibrator) Skip() {
 }
 
 func (c *Calibrator) next() {
-	if c.phase == 1 {
+	if c.phase == 1 || c.mixer {
 		c.reset(0)
 	} else {
 		c.reset(1)

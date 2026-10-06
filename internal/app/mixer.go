@@ -29,7 +29,39 @@ func (app *App) onMixerValues(values []int) {
 	app.handleValues(values, app.snapshotSettings().Setup.ForMixer())
 }
 
+// pointOutMovedKnobs lights up a knob's row in Settings while its control moves, so it is easy
+// to tell which knob is which.
+func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
+	win := app.settingsWin
+	app.movesMu.Lock()
+	moved := app.moves.Moved(values)
+	app.movesMu.Unlock()
+	if win == nil {
+		return
+	}
+	for _, col := range moved {
+		for knob, c := range setup.Columns {
+			if c == col {
+				win.Send(map[string]any{"type": "knobMoved", "knob": knob})
+			}
+		}
+	}
+}
+
 func (app *App) onMixerButton(cc int) {
+	if app.isCalibrating() {
+		app.loop.Invoke(func() {
+			cal := app.currentCalibrator()
+			if cal == nil {
+				return
+			}
+			before := cal.StepKey()
+			cal.PressButton(cc)
+			app.soundIfStepChanged(before, cal.StepKey())
+			app.refreshCalibration()
+		})
+		return
+	}
 	setup := app.snapshotSettings().Setup
 	action := setup.Buttons[cc]
 

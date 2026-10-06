@@ -60,14 +60,14 @@ func TestMixerButtonsPressOnlyOnTheWayDown(t *testing.T) {
 
 func TestEveryMixerButtonIsListedOnce(t *testing.T) {
 	seen := map[int]bool{}
-	for _, b := range MixerButtons {
-		if seen[b.CC] {
-			t.Errorf("CC %d listed twice", b.CC)
+	for _, b := range DefaultMixerButtonOrder {
+		if seen[b] {
+			t.Errorf("CC %d listed twice", b)
 		}
-		seen[b.CC] = true
+		seen[b] = true
 		for _, c := range append(append([]int{}, mixerFaderCCs...), mixerKnobCCs...) {
-			if b.CC == c {
-				t.Errorf("button CC %d is also a fader or knob", b.CC)
+			if b == c {
+				t.Errorf("button CC %d is also a fader or knob", b)
 			}
 		}
 	}
@@ -204,8 +204,8 @@ func TestEngineResetUnmutes(t *testing.T) {
 
 func TestForMixerUsesTheMixersOwnCalibration(t *testing.T) {
 	s := Setup{Columns: []int{0, 3, 2}, MixerColumns: []int{9, -1}}
-	if got := s.ForMixer().Columns; !reflect.DeepEqual(got, []int{9, -1, -1}) {
-		t.Errorf("ForMixer = %v, want [9 -1 -1]: the mixer's columns, uncalibrated past them", got)
+	if got := s.ForMixer().Columns; !reflect.DeepEqual(got, []int{9, -1}) {
+		t.Errorf("ForMixer = %v, want the mixer's own [9 -1]", got)
 	}
 }
 
@@ -236,5 +236,72 @@ func TestCalibratorWaitsForAnUnknownControlToSwing(t *testing.T) {
 	c.Feed([]int{-1, 100}, 0.2)
 	if !reflect.DeepEqual(c.Found(), []int{1}) {
 		t.Errorf("found %v, want column 1 once it swung", c.Found())
+	}
+}
+
+func TestMixerCalibrationSkipsCleaningThenFindsButtons(t *testing.T) {
+	c := NewMixerCalibrator(nil, false)
+	c.Feed([]int{-1, -1}, 0)
+	c.Feed([]int{-1, 0}, 0.1)
+	c.Feed([]int{-1, 1023}, 0.2)
+	if c.Phase() != 0 || c.Knob() != 1 {
+		t.Fatalf("after knob A: phase %d knob %d, want straight on to knob B", c.Phase(), c.Knob())
+	}
+
+	c.PressButton(20)
+	if len(c.Buttons()) != 0 {
+		t.Fatal("a button counted before the button stage")
+	}
+	c.StartButtons()
+	c.Feed([]int{0, 0}, 0.3)
+	c.Feed([]int{1023, 0}, 0.4)
+	if len(c.Found()) != 1 {
+		t.Errorf("found %v, want knobs left alone during the button stage", c.Found())
+	}
+	before := c.StepKey()
+	c.PressButton(52)
+	c.PressButton(20)
+	c.PressButton(52)
+	if !reflect.DeepEqual(c.Buttons(), []int{52, 20}) || c.RepeatedButton() != 0 {
+		t.Errorf("buttons %v repeated %d, want [52 20] and button 1 pressed again", c.Buttons(), c.RepeatedButton())
+	}
+	if c.StepKey() == before {
+		t.Error("finding buttons did not change the step")
+	}
+}
+
+func TestForMixerHasItsOwnKnobCount(t *testing.T) {
+	s := Setup{Columns: []int{0, 1}, MixerColumns: []int{8, 9, 10}}
+	if got := len(s.ForMixer().Columns); got != 3 {
+		t.Errorf("mixer knobs = %d, want 3 from its own calibration", got)
+	}
+}
+
+func TestButtonOrderSurvivesSaving(t *testing.T) {
+	s := DefaultSettings("Default")
+	if !reflect.DeepEqual(s.MixerButtonOrder(), DefaultMixerButtonOrder) {
+		t.Errorf("fresh order = %v, want the default", s.MixerButtonOrder())
+	}
+	s.ButtonOrder = []int{52, 20}
+	data, _ := EncodeSettings(s)
+	back, _ := DecodeSettings(data, "Default")
+	if !reflect.DeepEqual(back.ButtonOrder, []int{52, 20}) {
+		t.Errorf("round trip = %v, want [52 20]", back.ButtonOrder)
+	}
+}
+
+func TestMoveWatcherIgnoresJitter(t *testing.T) {
+	var w MoveWatcher
+	if got := w.Moved([]int{500, -1}); got != nil {
+		t.Errorf("first frame moved %v, want nothing", got)
+	}
+	if got := w.Moved([]int{505, -1}); got != nil {
+		t.Errorf("jitter moved %v, want nothing", got)
+	}
+	if got := w.Moved([]int{520, 300}); !reflect.DeepEqual(got, []int{0, 1}) {
+		t.Errorf("moved %v, want [0 1]: a real turn and a mixer control's first report", got)
+	}
+	if got := w.Moved([]int{528, 300}); got != nil {
+		t.Errorf("moved %v, want nothing within the threshold of the new spot", got)
 	}
 }

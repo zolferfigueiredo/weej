@@ -28,7 +28,11 @@ func (app *App) startCalibration(onlyNew bool) {
 		win.Focus()
 		return
 	}
-	app.calibrator = core.NewCalibrator(saved, onlyNew)
+	if app.usesMixer() {
+		app.calibrator = core.NewMixerCalibrator(saved, onlyNew)
+	} else {
+		app.calibrator = core.NewCalibrator(saved, onlyNew)
+	}
 	app.calibOnlyNew = onlyNew
 	app.mu.Unlock()
 	app.setCalibrating(true)
@@ -103,12 +107,30 @@ func (app *App) finishCalibration() {
 	if cal == nil {
 		return
 	}
+	if cal.Mixer() && !cal.ButtonStage() {
+		before := cal.StepKey()
+		cal.StartButtons()
+		app.soundIfStepChanged(before, cal.StepKey())
+		app.refreshCalibration()
+		return
+	}
 	result := cal.Result()
-	mixer := app.usesMixer()
-	saved := app.activeColumns(app.snapshotSettings().Setup)
+	mixer := cal.Mixer()
+	cur := app.snapshotSettings()
+	saved := app.activeColumns(cur.Setup)
 	changed := !intSliceEqual(result, saved)
+	if buttons := cal.Buttons(); mixer && len(buttons) > 0 && !intSliceEqual(buttons, cur.ButtonOrder) {
+		cur.ButtonOrder = buttons
+		kept := map[int]core.ButtonAction{}
+		for _, cc := range buttons {
+			if a, ok := cur.Buttons[cc]; ok {
+				kept[cc] = a
+			}
+		}
+		cur.Buttons = kept
+		changed = true
+	}
 	if changed {
-		cur := app.snapshotSettings()
 		if mixer {
 			cur.MixerColumns = result
 		} else {
@@ -134,7 +156,11 @@ func (app *App) finishCalibration() {
 		app.openSettings("general")
 		if wasOpen {
 			if win := app.settingsWin; win != nil {
-				win.Send(map[string]any{"type": "columns", "columns": columnsToJSON(result), "mixer": mixer})
+				j := setupToJSON(cur.Setup)
+				win.Send(map[string]any{
+					"type": "columns", "mixer": mixer, "columns": columnsToJSON(result),
+					"buttonOrder": j.MixerButtonOrder, "buttons": j.MixerButtons,
+				})
 			}
 		}
 	})
@@ -193,6 +219,10 @@ func (app *App) refreshCalibration() {
 func composeCalibrationTexts(cal *core.Calibrator, code string, onlyNew, connected bool) (title, body, progress string, warning bool, button string) {
 	tr := func(key string, vars map[string]string) string { return lang.T(code, key, vars) }
 
+	if cal.ButtonStage() {
+		return composeButtonTexts(cal, code)
+	}
+
 	if cal.Full() {
 		button = "finish"
 	} else if cal.CanSkip() {
@@ -200,10 +230,16 @@ func composeCalibrationTexts(cal *core.Calibrator, code string, onlyNew, connect
 	} else {
 		button = "finish"
 	}
+	if cal.Mixer() && button == "finish" {
+		button = "continue"
+	}
 
 	letter := core.Letter(cal.Knob())
 
 	switch {
+	case cal.Full() && cal.Mixer():
+		title = tr("cal.all_found", nil)
+		body = tr("cal.all_found_mixer", map[string]string{"n": strconv.Itoa(len(cal.Found()))})
 	case cal.Full():
 		title = tr("cal.all_found", nil)
 		body = tr("cal.all_found_text", map[string]string{"n": strconv.Itoa(len(cal.Found()))})
@@ -245,12 +281,14 @@ func composeCalibrationBody(cal *core.Calibrator, code string, onlyNew bool, let
 	var parts []string
 
 	if cal.Phase() == 0 {
-		if cal.Knob() == cal.First() {
+		if cal.Knob() == cal.First() && !cal.Mixer() {
 			parts = append(parts, tr("cal.move_first", map[string]string{"letter": letter, "n": calibrationTurnSeconds}))
 		} else {
 			parts = append(parts, tr("cal.move", map[string]string{"letter": letter}))
 		}
 		switch {
+		case !cal.CanSkip() && cal.Mixer():
+			parts = append(parts, tr("cal.no_knob_mixer", map[string]string{"letter": letter}))
 		case !cal.CanSkip():
 			parts = append(parts, tr("cal.no_knob", map[string]string{"letter": letter}))
 		case onlyNew:
@@ -265,4 +303,23 @@ func composeCalibrationBody(cal *core.Calibrator, code string, onlyNew bool, let
 		parts = append(parts, tr("cal.turn", map[string]string{"n": calibrationTurnSeconds}))
 	}
 	return lang.Join(code, parts...)
+}
+
+func composeButtonTexts(cal *core.Calibrator, code string) (title, body, progress string, warning bool, button string) {
+	tr := func(key string, vars map[string]string) string { return lang.T(code, key, vars) }
+	buttons := cal.Buttons()
+	n := map[string]string{"n": strconv.Itoa(len(buttons) + 1)}
+
+	title = tr("mixer.button", n)
+	body = tr("cal.press_button", n)
+	switch {
+	case cal.RepeatedButton() >= 0:
+		warning = true
+		progress = tr("cal.button_again", map[string]string{"n": strconv.Itoa(cal.RepeatedButton() + 1)})
+	case len(buttons) == 0:
+		progress = tr("cal.waiting_button", nil)
+	default:
+		progress = tr("cal.buttons_so_far", map[string]string{"n": strconv.Itoa(len(buttons))})
+	}
+	return title, body, progress, warning, "finish"
 }

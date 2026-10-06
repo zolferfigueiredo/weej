@@ -99,7 +99,10 @@ type App struct {
 
 	firstConnectDone bool
 	lastTerminalLine time.Time
-	shutdownOnce     sync.Once
+
+	movesMu      sync.Mutex
+	moves        core.MoveWatcher
+	shutdownOnce sync.Once
 }
 
 func Main(args []string) int {

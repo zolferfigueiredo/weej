@@ -207,13 +207,12 @@ function renderGeneral() {
     )
     .join("");
 
-  const mixer = isMidiPort(init.forcedPort || draft.port);
-  const knobsHtml = draft.columns.length
-    ? draft.columns
-        .map((boardCol, i) => {
+  const mixer = usesMixer();
+  const cols = knobColumns();
+  const knobsHtml = cols.length
+    ? cols
+        .map((col, i) => {
           const jobs = profile.jobs[i] || [];
-          // A mixer never calibrated reads knob i from its column i, as core.Setup.ForMixer does.
-          const col = !mixer ? boardCol : draft.mixerColumns ? draft.mixerColumns[i] : i;
           const needsCal = col === null || col === undefined || col === -1;
           return `
             <div class="row clickable knob-row" id="knob-row-${i}" role="button" tabindex="0" data-action="open-job-menu" data-knob="${i}">
@@ -232,7 +231,8 @@ function renderGeneral() {
     : `<div class="row"><span class="row-desc">${esc(t("no_knobs"))}</span></div>`;
 
   document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel">
+    <div class="tabpanel${mixer ? " split" : ""}" role="tabpanel">
+      <div class="split-col">
       <div class="group">
         <div class="group-head">
           <h2 class="group-title">${esc(t("profile"))}</h2>
@@ -263,7 +263,7 @@ function renderGeneral() {
           <span class="spacer"></span>
           <span class="segmented">
             <button class="btn btn-icon" type="button" data-action="add-knob" title="${escAttr(t("add_knob"))}" aria-label="${escAttr(t("add_knob"))}">+</button>
-            <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${draft.columns.length === 0 ? " disabled" : ""}>&minus;</button>
+            <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${cols.length === 0 ? " disabled" : ""}>&minus;</button>
           </span>
         </div>
         <div class="card">${knobsHtml}</div>
@@ -272,7 +272,6 @@ function renderGeneral() {
           <button class="btn" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
         </div>
       </div>
-      ${mixer ? renderMixerButtons() : ""}
 
       <div class="group">
         <div class="card">
@@ -289,6 +288,8 @@ function renderGeneral() {
           <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
         </div>
       </div>
+      </div>
+      ${mixer ? `<div class="split-col">${renderMixerButtons()}</div>` : ""}
     </div>`;
 }
 
@@ -397,18 +398,23 @@ function midiLabel(port) {
   return `${port.slice(MIDI_PREFIX.length)} (MIDI)`;
 }
 
-// The names follow core.MixerButton's Kind and N.
-function mixerButtonName(b) {
-  switch (b.kind) {
-    case "channel":
-      return t("mixer.channel", { n: String(b.n) });
-    case "up":
-      return t("mixer.up");
-    case "down":
-      return t("mixer.down");
-    default:
-      return t("mixer.button", { n: String(b.n) });
-  }
+function usesMixer() {
+  return isMidiPort(init.forcedPort || draft.port);
+}
+
+// The calibration of whatever is connected, as Go's activeColumns picks it. A mixer never
+// calibrated reads knob i from its column i, as core.Setup.ForMixer does.
+function knobColumns() {
+  if (!usesMixer()) return draft.columns;
+  return draft.mixerColumns || draft.columns.map((_, i) => i);
+}
+
+function knobCount() {
+  return knobColumns().length;
+}
+
+function padJobRows(setup) {
+  for (const p of setup.profiles) while (p.jobs.length < knobCount()) p.jobs.push([]);
 }
 
 const MIXER_ACTIONS = [
@@ -423,7 +429,7 @@ const MIXER_ACTIONS = [
 
 function mixerActionOptions(current) {
   const options = [["", t("job.nothing")]];
-  for (let i = 0; i < draft.columns.length; i++) {
+  for (let i = 0; i < knobCount(); i++) {
     options.push([`mute:${i}`, t("action.mute", { letter: letterFor(i) })]);
   }
   for (const [value, key] of MIXER_ACTIONS) options.push([value, t(key)]);
@@ -437,14 +443,14 @@ function mixerActionOptions(current) {
 }
 
 function renderMixerButtons() {
-  const buttons = init.mixerButtons || [];
+  const order = draft.mixerButtonOrder || init.mixerButtonDefaults || [];
   const actions = draft.mixerButtons || {};
-  const rows = buttons
+  const rows = order
     .map(
-      (b) => `
-          <div class="row" data-cc="${b.cc}">
-            <div class="row-main"><span class="row-title">${esc(mixerButtonName(b))}</span></div>
-            <div class="row-control"><select class="select" data-mixer-cc="${b.cc}">${mixerActionOptions(actions[b.cc] || "")}</select></div>
+      (cc, i) => `
+          <div class="row" data-cc="${cc}">
+            <div class="row-main"><span class="row-title">${esc(t("mixer.button", { n: String(i + 1) }))}</span></div>
+            <div class="row-control"><select class="select" data-mixer-cc="${cc}">${mixerActionOptions(actions[cc] || "")}</select></div>
           </div>`
     )
     .join("");
@@ -456,10 +462,8 @@ function renderMixerButtons() {
       </div>`;
 }
 
-function flashMixerButton(cc) {
-  if (activeTab !== "general") return;
-  const row = document.querySelector(`.row[data-cc="${cc}"]`);
-  if (!row) return;
+function flashRow(row) {
+  if (activeTab !== "general" || !row) return;
   row.classList.remove("flash");
   void row.offsetWidth; // restarts the animation when the same button is pressed again
   row.classList.add("flash");
@@ -602,7 +606,7 @@ function renderDialog() {
     title = name ? t("remove_named", { name }) : t("remove_this_profile");
     body = t("remove_profile_info");
   } else {
-    title = t("remove_knob_q", { letter: letterFor(draft.columns.length - 1) });
+    title = t("remove_knob_q", { letter: letterFor(knobCount() - 1) });
     body = t("remove_knob_info");
   }
   const html = `
@@ -622,7 +626,8 @@ function renderDialog() {
 // --- Mutations --------------------------------------------------------------
 
 function addProfile() {
-  draft.profiles.push({ name: "", jobs: draft.columns.map(() => []), shortcut: null });
+  draft.profiles.push({ name: "", jobs: [], shortcut: null });
+  padJobRows(draft);
   draft.profile = draft.profiles.length - 1;
   render();
 }
@@ -645,7 +650,7 @@ let swallowClick = false;
 // one, as cards in a list do. Knobs keep their letters, inputs and calibration.
 function moveKnobJobs(from, to) {
   const jobs = activeProfile().jobs;
-  while (jobs.length < draft.columns.length) jobs.push([]);
+  while (jobs.length < knobCount()) jobs.push([]);
   const [moved] = jobs.splice(from, 1);
   jobs.splice(to, 0, moved);
 }
@@ -732,7 +737,7 @@ function onKnobKeydown(e) {
   if (!row) return;
   const from = Number(row.dataset.knob);
   const to = from + (e.key === "ArrowUp" ? -1 : 1);
-  if (to < 0 || to >= draft.columns.length) return;
+  if (to < 0 || to >= knobCount()) return;
   e.preventDefault();
   moveKnobJobs(from, to);
   render();
@@ -740,17 +745,25 @@ function onKnobKeydown(e) {
   if (moved) moved.focus();
 }
 
+// Adding or removing a knob changes the calibration of whatever is connected; the other input
+// keeps its own knobs.
+function editableKnobColumns() {
+  if (!usesMixer()) return draft.columns;
+  if (!draft.mixerColumns) draft.mixerColumns = draft.columns.map((_, i) => i);
+  return draft.mixerColumns;
+}
+
 function addKnob() {
-  draft.columns.push(-1);
-  if (draft.mixerColumns) draft.mixerColumns.push(-1);
-  for (const p of draft.profiles) p.jobs.push([]);
+  editableKnobColumns().push(-1);
+  padJobRows(draft);
   render();
 }
 
 function removeKnobConfirmed() {
-  draft.columns.pop();
-  if (draft.mixerColumns && draft.mixerColumns.length > draft.columns.length) draft.mixerColumns.pop();
-  for (const p of draft.profiles) p.jobs.pop();
+  editableKnobColumns().pop();
+  // A job row stays while the other input still has that knob.
+  const rows = Math.max(draft.columns.length, draft.mixerColumns ? draft.mixerColumns.length : 0);
+  for (const p of draft.profiles) if (p.jobs.length > rows) p.jobs.pop();
 }
 
 function applyRecorded(field, shortcut) {
@@ -856,7 +869,7 @@ function onClick(e) {
       addKnob();
       break;
     case "remove-knob":
-      if (draft.columns.length > 0) {
+      if (knobCount() > 0) {
         dialog = { kind: "removeKnob" };
         render();
       }
@@ -995,7 +1008,11 @@ function onMessage(msg) {
       break;
     // Go-initiated: a mixer button was pressed, so its row lights up to show which one it is.
     case "mixerButton":
-      flashMixerButton(msg.cc);
+      flashRow(document.querySelector(`.row[data-cc="${msg.cc}"]`));
+      break;
+    // Go-initiated: a knob's control moved, so its row lights up the same way.
+    case "knobMoved":
+      flashRow(document.getElementById(`knob-row-${msg.knob}`));
       break;
     // Go-initiated: the board connected, dropped or got blocked by another app.
     case "connection":
@@ -1046,9 +1063,18 @@ function onMessage(msg) {
     // Go-initiated: Calibration finished with a different column mapping
     // while this window was already open, so the draft's columns are stale.
     case "columns": {
-      const key = msg.mixer ? "mixerColumns" : "columns";
-      draft[key] = msg.columns;
-      if (saved) saved[key] = clone(msg.columns); // Calibration saved them already
+      const changes = { [msg.mixer ? "mixerColumns" : "columns"]: msg.columns };
+      if (msg.mixer) {
+        changes.mixerButtonOrder = msg.buttonOrder;
+        changes.mixerButtons = msg.buttons;
+      }
+      // Calibration saved these already.
+      Object.assign(draft, clone(changes));
+      padJobRows(draft);
+      if (saved) {
+        Object.assign(saved, clone(changes));
+        padJobRows(saved);
+      }
       render();
       break;
     }
