@@ -12,14 +12,17 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/zolferfigueiredo/weej/releases/latest"><img src="https://img.shields.io/github/v/release/zolferfigueiredo/weej" alt="Latest release"></a>
   <a href="https://go.dev"><img src="https://img.shields.io/badge/Go-1.27-00ADD8" alt="Go 1.27"></a>
-  <img src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011-blue" alt="Windows 10 or 11">
+  <img src="https://img.shields.io/badge/Platform-Windows%2010%20%7C%2011%20(x64%20%7C%20x86)-blue" alt="Windows 10 or 11, 64-bit or 32-bit">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow" alt="MIT license"></a>
   <a href="https://github.com/zolferfigueiredo/weej/actions/workflows/ci.yml"><img src="https://github.com/zolferfigueiredo/weej/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/zolferfigueiredo/weej/releases/latest"><b>Download for Windows</b></a>
+  <a href="https://github.com/zolferfigueiredo/weej/releases/latest"><b>Download for Windows</b></a> (64-bit and 32-bit)
+  &nbsp;·&nbsp;
+  <a href="https://weej.zolfer.com">Website</a>
   &nbsp;·&nbsp;
   <a href="https://github.com/zolferfigueiredo/theej">TheeJ, on macOS</a>
 </p>
@@ -188,7 +191,7 @@ Turning a brightness knob fully down sets the backlight to 0, and a contrast kno
 
 ## Disclaimer
 
-Unofficial. An independent client for the [deej](https://github.com/omriharel/deej) serial protocol, not affiliated with deej or with Microsoft. Night light relies on an undocumented Windows setting that a future Windows update may change.
+Unofficial, not affiliated with deej or Microsoft.
 
 ## License
 
