@@ -20,7 +20,9 @@ import (
 const calibrationTurnSeconds = "20"
 
 func (app *App) startCalibration(onlyNew bool) {
+	// Read before taking app.mu: snapshotSettings, under both of these, locks it too.
 	saved := app.activeColumns(app.snapshotSettings().Setup)
+	mixer := app.usesMixer()
 	app.mu.Lock()
 	if app.calibWin != nil {
 		win := app.calibWin
@@ -28,7 +30,7 @@ func (app *App) startCalibration(onlyNew bool) {
 		win.Focus()
 		return
 	}
-	if app.usesMixer() {
+	if mixer {
 		app.calibrator = core.NewMixerCalibrator(saved, onlyNew)
 	} else {
 		app.calibrator = core.NewCalibrator(saved, onlyNew)
