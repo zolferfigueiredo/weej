@@ -71,10 +71,10 @@ func NewMixerCalibrator(saved []int, onlyNew bool) *Calibrator {
 
 // A pot jitters, so a board knob has to swing half its range to be found, and a found one has to
 // move well past the noise to count as the wrong knob. A mixer sends clean steps of about 8, so
-// a few steps are enough.
+// two steps past its first report are enough.
 func (c *Calibrator) swings() (find, wrong int) {
 	if c.mixer {
-		return 32, 32
+		return 16, 32
 	}
 	return 512, 200
 }

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -13,14 +14,12 @@ func IsMidiPort(port string) bool { return strings.HasPrefix(port, midiPortPrefi
 
 func MidiDevice(port string) string { return strings.TrimPrefix(port, midiPortPrefix) }
 
-// The M-VAVE SMC-Mixer's CC mode defaults, read off a real unit: faders 1-8 send CC 40-47 and the
-// rotary knobs CC 30-37, both absolute 0..127, on channel 1.
-var (
-	mixerFaderCCs = []int{40, 41, 42, 43, 44, 45, 46, 47}
-	mixerKnobCCs  = []int{30, 31, 32, 33, 34, 35, 36, 37}
-)
+// A mixer frame has one column per CC number, so a control's column is its CC and any number of
+// controls fits. On the M-VAVE SMC-Mixer in CC mode, read off a real unit, faders 1-8 send CC
+// 40-47 and the rotary knobs CC 30-37, both absolute 0..127, on channel 1.
+const MixerColumns = 128
 
-var MixerColumns = len(mixerFaderCCs) + len(mixerKnobCCs)
+var defaultMixerControls = []int{40, 41, 42, 43, 44, 45, 46, 47, 30, 31, 32, 33, 34, 35, 36, 37}
 
 // DefaultMixerButtonOrder is every button CC the SMC-Mixer sends in CC mode, in the order
 // Settings lists them until Calibrate sets an order. CC 50 never fired on a real unit.
@@ -79,12 +78,15 @@ func DefaultMixerButtons() map[int]ButtonAction {
 
 // ForMixer is the setup a mixer frame is handled with: Columns come from MixerColumns, so the
 // mixer has its own knob count, and a fader's top is already its highest value, so nothing is
-// flipped.
+// flipped. A mixer never calibrated reads its faders, then its knobs.
 func (s Setup) ForMixer() Setup {
 	if s.MixerColumns == nil {
 		cols := make([]int, len(s.Columns))
 		for i := range cols {
-			cols[i] = i
+			cols[i] = -1
+			if i < len(defaultMixerControls) {
+				cols[i] = defaultMixerControls[i]
+			}
 		}
 		s.Columns = cols
 	} else {
@@ -126,29 +128,18 @@ func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 	cc := int(msg>>8) & 0x7F
 	value := int(msg>>16) & 0x7F
 
-	col := -1
-	for i, c := range mixerFaderCCs {
-		if c == cc {
-			col = i
+	if slices.Contains(DefaultMixerButtonOrder, cc) {
+		if value > 0 {
+			return false, cc
 		}
+		return false, -1
 	}
-	for i, c := range mixerKnobCCs {
-		if c == cc {
-			col = len(mixerFaderCCs) + i
-		}
+	scaled := (value*1023 + 63) / 127
+	if m.values[cc] == scaled {
+		return false, -1
 	}
-	if col >= 0 {
-		scaled := (value*1023 + 63) / 127
-		if m.values[col] == scaled {
-			return false, -1
-		}
-		m.values[col] = scaled
-		return true, -1
-	}
-	if value > 0 {
-		return false, cc
-	}
-	return false, -1
+	m.values[cc] = scaled
+	return true, -1
 }
 
 func (m *MixerState) Values() []int { return append([]int(nil), m.values...) }

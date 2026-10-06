@@ -22,11 +22,12 @@ func TestMixerFadersAndKnobsScaleToColumns(t *testing.T) {
 		col  int
 		want int
 	}{
-		{cc(40, 0), 0, 0},
-		{cc(40, 127), 0, 1023},
-		{cc(47, 64), 7, 516},
-		{cc(30, 127), 8, 1023},
-		{cc(37, 1), 15, 8},
+		{cc(40, 0), 40, 0},
+		{cc(40, 127), 40, 1023},
+		{cc(47, 64), 47, 516},
+		{cc(30, 127), 30, 1023},
+		{cc(37, 1), 37, 8},
+		{cc(9, 100), 9, 806},
 	}
 	for _, c := range cases {
 		changed, pressed := m.Feed(c.msg)
@@ -40,7 +41,7 @@ func TestMixerFadersAndKnobsScaleToColumns(t *testing.T) {
 	if changed, _ := m.Feed(cc(37, 1)); changed {
 		t.Error("the same value again reported a change")
 	}
-	if got := m.Values()[1]; got != -1 {
+	if got := m.Values()[41]; got != -1 {
 		t.Errorf("untouched fader 2 = %d, want -1", got)
 	}
 }
@@ -65,7 +66,7 @@ func TestEveryMixerButtonIsListedOnce(t *testing.T) {
 			t.Errorf("CC %d listed twice", b)
 		}
 		seen[b] = true
-		for _, c := range append(append([]int{}, mixerFaderCCs...), mixerKnobCCs...) {
+		for _, c := range defaultMixerControls {
 			if b == c {
 				t.Errorf("button CC %d is also a fader or knob", b)
 			}
@@ -96,11 +97,11 @@ func TestButtonActionsValidate(t *testing.T) {
 	}
 }
 
-func TestForMixerReadsColumnIAndNeverFlips(t *testing.T) {
+func TestForMixerDefaultsToFadersAndNeverFlips(t *testing.T) {
 	s := Setup{Columns: []int{0, 3, -1}, Invert: false}
 	m := s.ForMixer()
-	if !reflect.DeepEqual(m.Columns, []int{0, 1, 2}) || !m.Invert {
-		t.Errorf("ForMixer = %v invert %v, want [0 1 2] and no flip", m.Columns, m.Invert)
+	if !reflect.DeepEqual(m.Columns, []int{40, 41, 42}) || !m.Invert {
+		t.Errorf("ForMixer = %v invert %v, want faders 1-3 (CC 40-42) and no flip", m.Columns, m.Invert)
 	}
 	if !reflect.DeepEqual(s.Columns, []int{0, 3, -1}) {
 		t.Errorf("ForMixer changed the saved columns to %v", s.Columns)
@@ -142,9 +143,10 @@ func TestEngineSkipsUnknownMixerValues(t *testing.T) {
 	a := &fakeApplier{}
 	e := NewEngine(a)
 	setup := Setup{
-		Columns:  []int{0, 1},
-		Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}, {{Kind: JobMicrophone}}}}},
-		Speed:    SpeedSuperFast,
+		Columns:      []int{0, 1},
+		MixerColumns: []int{0, 1},
+		Profiles:     []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}, {{Kind: JobMicrophone}}}}},
+		Speed:        SpeedSuperFast,
 	}.ForMixer()
 	e.Handle([]int{-1, 512}, setup, false)
 
@@ -171,9 +173,10 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 	a := &recordingApplier{}
 	e := NewEngine(a)
 	setup := Setup{
-		Columns:  []int{0},
-		Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}},
-		Speed:    SpeedSuperFast,
+		Columns:      []int{0},
+		MixerColumns: []int{0},
+		Profiles:     []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}},
+		Speed:        SpeedSuperFast,
 	}.ForMixer()
 
 	e.Handle([]int{1023}, setup, false)
@@ -194,7 +197,7 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 
 func TestEngineResetUnmutes(t *testing.T) {
 	e := NewEngine(&fakeApplier{})
-	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}}.ForMixer()
+	setup := Setup{Columns: []int{0}, MixerColumns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}}.ForMixer()
 	e.ToggleMute(0, setup)
 	e.Reset()
 	if !e.ToggleMute(0, setup) {
@@ -307,7 +310,7 @@ func TestMoveWatcherIgnoresJitter(t *testing.T) {
 }
 
 func TestMixerKnobIsFoundAfterAFewSteps(t *testing.T) {
-	few := [][]int{{-1, 500}, {-1, 540}}
+	few := [][]int{{-1, 500}, {-1, 520}}
 
 	board := NewCalibrator(nil, false)
 	mixer := NewMixerCalibrator(nil, false)
@@ -316,9 +319,23 @@ func TestMixerKnobIsFoundAfterAFewSteps(t *testing.T) {
 		mixer.Feed(v, float64(i))
 	}
 	if len(board.Found()) != 0 {
-		t.Errorf("board found %v after a 40 step nudge, want nothing: pots jitter", board.Found())
+		t.Errorf("board found %v after a small nudge, want nothing: pots jitter", board.Found())
 	}
 	if !reflect.DeepEqual(mixer.Found(), []int{1}) {
 		t.Errorf("mixer found %v, want column 1 after a few clean steps", mixer.Found())
+	}
+}
+
+func TestMixerCalibrationNeverRunsOutOfKnobs(t *testing.T) {
+	c := NewMixerCalibrator(nil, false)
+	frame := NewMixerState().Values()
+	for i, cc := range append(append([]int{}, defaultMixerControls...), 1, 2, 3) {
+		frame[cc] = 0
+		c.Feed(frame, float64(i))
+		frame[cc] = 1023
+		c.Feed(frame, float64(i)+0.5)
+	}
+	if len(c.Found()) != 19 || c.Full() {
+		t.Errorf("found %d knobs, full %v, want 19 and still asking for more", len(c.Found()), c.Full())
 	}
 }

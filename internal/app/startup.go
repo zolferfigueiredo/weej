@@ -237,8 +237,11 @@ func (app *App) updateTerminalLine(values []int, setup core.Setup, calibrating b
 		assigned[c] = true
 	}
 
-	segs := make([]string, len(values))
+	segs := make([]string, 0, len(values))
 	for i, raw := range values {
+		if raw < 0 {
+			continue
+		}
 		marker := byte(' ')
 		if assigned[i] {
 			marker = '|'
@@ -246,7 +249,7 @@ func (app *App) updateTerminalLine(values []int, setup core.Setup, calibrating b
 				marker = '*'
 			}
 		}
-		segs[i] = fmt.Sprintf("%c%d:%4d", marker, i, raw)
+		segs = append(segs, fmt.Sprintf("%c%d:%4d", marker, i, raw))
 	}
 
 	tr := app.trFunc()
