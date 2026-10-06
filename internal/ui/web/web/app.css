@@ -307,17 +307,9 @@ p {
   }
 }
 
-.row.flash {
-  animation: row-flash 1200ms var(--ease);
-}
-
-@keyframes row-flash {
-  from {
-    background: var(--selection);
-  }
-  to {
-    background: transparent;
-  }
+.row.lit,
+.row.lit:hover {
+  background: var(--selection);
 }
 
 .row.clickable:hover {

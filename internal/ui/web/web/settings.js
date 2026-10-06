@@ -508,15 +508,23 @@ function onMixerButtonPressed(cc) {
     render();
     updateSaveButton();
   }
-  flashRow(document.querySelector(`.row[data-cc="${cc}"]`));
+  lightRow(document.querySelector(`.row[data-cc="${cc}"]`));
 }
 
-function flashRow(row) {
+// A row stays lit for a second after its control's last move, so a moving fader holds it steady.
+const litTimers = new WeakMap();
+
+function lightRow(row) {
   if (activeTab !== "general" || !row) return;
-  row.classList.remove("flash");
-  void row.offsetWidth; // restarts the animation when the same button is pressed again
-  row.classList.add("flash");
-  row.scrollIntoView({ block: "nearest" });
+  if (!row.classList.contains("lit")) {
+    row.classList.add("lit");
+    row.scrollIntoView({ block: "nearest" });
+  }
+  clearTimeout(litTimers.get(row));
+  litTimers.set(
+    row,
+    setTimeout(() => row.classList.remove("lit"), 1000)
+  );
 }
 
 function renderConnection() {
@@ -1067,7 +1075,7 @@ function onMessage(msg) {
       break;
     // Go-initiated: a knob's control moved, so its row lights up the same way.
     case "knobMoved":
-      flashRow(document.getElementById(`knob-row-${msg.knob}`));
+      lightRow(document.getElementById(`knob-row-${msg.knob}`));
       break;
     // Go-initiated: the board connected, dropped or got blocked by another app.
     case "connection":
