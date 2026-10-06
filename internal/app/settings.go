@@ -262,6 +262,7 @@ func (app *App) sendSettingsInit() {
 	payload["labels"] = app.shortcutLabels(s.Setup)
 	payload["nightLightExperimental"] = true
 	payload["connection"] = app.connectionPayload()
+	payload["calibrating"] = app.isCalibrating()
 	payload["forcedPort"] = app.forcedPort
 	payload["baudRates"] = core.BaudRates
 	payload["mixerButtonDefaults"] = core.DefaultMixerButtonOrder

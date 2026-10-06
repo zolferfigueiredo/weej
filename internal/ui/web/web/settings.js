@@ -21,6 +21,7 @@ let importNote = ""; // last import_skipped / import_failed text, shown under th
 let ports = null; // [{ name, product, usb }] once Go has listed them
 let midiInputs = []; // MIDI input names; a "midi:<name>" port reads that mixer
 let connection = { connected: false, busy: false, port: "" };
+let calibrating = false; // set on the click, so the button greys out before the window opens
 
 const SECTION_LABEL_KEY = {
   volume: "section.volume",
@@ -268,7 +269,7 @@ function renderGeneral() {
         <div class="card">${knobsHtml}</div>
         <div class="group-foot">
           <span class="group-note">${esc(t("jobs_note"))}</span>
-          <button class="btn" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
+          <button class="btn" type="button" data-action="calibrate"${calibrating ? " disabled" : ""}>${esc(t("calibrate"))}</button>
         </div>
       </div>`;
 
@@ -967,6 +968,8 @@ function onClick(e) {
       render();
       break;
     case "calibrate":
+      calibrating = true;
+      render();
       send({ type: "calibrate" });
       break;
     case "import-deej":
@@ -1044,6 +1047,7 @@ function onMessage(msg) {
       labels = Object.assign({}, msg.labels || {});
       activeTab = msg.tab || "general";
       connection = msg.connection || connection;
+      calibrating = !!msg.calibrating;
       if (activeTab === "connection") send({ type: "listPorts" });
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
       saved = clone(draft);
@@ -1070,6 +1074,11 @@ function onMessage(msg) {
       if (activeTab === "connection") render();
       break;
     // Go-initiated: a mixer button was pressed, so its row lights up to show which one it is.
+    // Go-initiated: Calibration opened or closed, from here or from the tray.
+    case "calibrating":
+      calibrating = !!msg.on;
+      render();
+      break;
     case "mixerButton":
       onMixerButtonPressed(msg.cc);
       break;
