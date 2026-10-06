@@ -54,8 +54,8 @@ func TestMixerButtonsPressOnlyOnTheWayDown(t *testing.T) {
 	if _, pressed := m.Feed(cc(20, 0)); pressed != -1 {
 		t.Errorf("release pressed %d, want -1", pressed)
 	}
-	if changed, pressed := m.Feed(0x90 | 40<<8 | 100<<16); changed || pressed != -1 {
-		t.Errorf("note on = %v, %d, want ignored", changed, pressed)
+	if changed, pressed := m.Feed(0x90 | 40<<8 | 100<<16); changed || pressed != MixerNoteButton(40) {
+		t.Errorf("note on = %v, %d, want a DAW-mode button", changed, pressed)
 	}
 }
 
@@ -122,13 +122,13 @@ func TestMixerButtonsSurviveSaving(t *testing.T) {
 	}
 
 	s := DefaultSettings("Default")
-	s.Buttons = map[int]ButtonAction{20: ActionNone, 52: ActionPlayPause, 21: MuteAction(9)}
+	s.Buttons = map[int]ButtonAction{20: ActionNone, 52: ActionPlayPause, 21: MuteAction(9), MixerNoteButton(24): ActionStop}
 	data, err := EncodeSettings(s)
 	if err != nil {
 		t.Fatal(err)
 	}
 	back, _ := DecodeSettings(data, "Default")
-	want := map[int]ButtonAction{52: ActionPlayPause, 21: MuteAction(9)}
+	want := map[int]ButtonAction{52: ActionPlayPause, 21: MuteAction(9), MixerNoteButton(24): ActionStop}
 	if !reflect.DeepEqual(back.Buttons, want) {
 		t.Errorf("round trip = %v, want %v (CC 20 set to nothing stays nothing)", back.Buttons, want)
 	}
@@ -337,5 +337,51 @@ func TestMixerCalibrationNeverRunsOutOfKnobs(t *testing.T) {
 	}
 	if len(c.Found()) != 19 || c.Full() {
 		t.Errorf("found %d knobs, full %v, want 19 and still asking for more", len(c.Found()), c.Full())
+	}
+}
+
+func TestMixerDAWModeLandsOnTheSameColumns(t *testing.T) {
+	m := NewMixerState()
+
+	m.Feed(0xE0 | 0<<8 | 127<<16)
+	m.Feed(0xE7 | 0<<8 | 64<<16)
+	if v := m.Values(); v[40] != 1023 || v[47] != 516 {
+		t.Errorf("faders 1 and 8 = %d, %d, want 1023 and 516 on CC 40 and 47's columns, as CC mode reads them", v[40], v[47])
+	}
+
+	m.Feed(cc(16, 1))
+	m.Feed(cc(16, 1))
+	m.Feed(cc(16, 65))
+	if v := m.Values()[30]; v != 512+vpotStep {
+		t.Errorf("knob 1 = %d, want two steps up and one down from the middle", v)
+	}
+	for i := 0; i < 300; i++ {
+		m.Feed(cc(17, 65))
+	}
+	if v := m.Values()[31]; v != 0 {
+		t.Errorf("knob 2 = %d, want it to stop at 0", v)
+	}
+
+	if _, pressed := m.Feed(cc(20, 127)); pressed != 20 {
+		t.Errorf("CC 20 at 127 pressed %d, want the CC-mode button", pressed)
+	}
+	if _, pressed := m.Feed(cc(20, 1)); pressed != -1 {
+		t.Errorf("CC 20 stepping pressed %d, want knob 5 instead", pressed)
+	}
+}
+
+func TestMixerDAWButtonsAreNotes(t *testing.T) {
+	m := NewMixerState()
+	if _, pressed := m.Feed(0x90 | 24<<8 | 127<<16); pressed != MixerNoteButton(24) {
+		t.Errorf("Square 1 pressed %d, want %d", pressed, MixerNoteButton(24))
+	}
+	if _, pressed := m.Feed(0x90 | 24<<8 | 0<<16); pressed != -1 {
+		t.Errorf("release pressed %d, want -1", pressed)
+	}
+	if note, ok := MixerButtonNote(MixerNoteButton(94)); !ok || note != 94 {
+		t.Errorf("MixerButtonNote = %d, %v, want 94", note, ok)
+	}
+	if _, ok := MixerButtonNote(20); ok {
+		t.Error("CC 20 read as a note")
 	}
 }

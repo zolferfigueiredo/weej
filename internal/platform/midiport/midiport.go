@@ -164,16 +164,21 @@ func closeOutput() {
 	}
 }
 
-// SetLED echoes a button's CC back to the mixer, which lights or clears that button's LED.
-func SetLED(cc int, on bool) {
+// SetLED lights or clears a button's LED. In DAW mode the mixer lights a button when the note
+// comes back on; in CC mode the CC is echoed.
+func SetLED(button int, on bool) {
 	value := 0
 	if on {
 		value = 127
 	}
+	msg := 0xB0 | button<<8 | value<<16
+	if note, ok := core.MixerButtonNote(button); ok {
+		msg = 0x90 | note<<8 | value<<16
+	}
 	led.mu.Lock()
 	defer led.mu.Unlock()
 	if led.h != 0 {
-		procMidiOutShortMsg.Call(led.h, uintptr(0xB0|cc<<8|value<<16))
+		procMidiOutShortMsg.Call(led.h, uintptr(msg))
 	}
 }
 

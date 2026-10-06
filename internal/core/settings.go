@@ -108,7 +108,7 @@ func DecodeButtons(raw map[string]string) map[int]ButtonAction {
 	for k, v := range raw {
 		cc, err := strconv.Atoi(k)
 		a := ButtonAction(v)
-		if err != nil || cc < 0 || cc > 127 || a == ActionNone || !a.Valid() {
+		if err != nil || cc < 0 || cc > 255 || a == ActionNone || !a.Valid() {
 			continue
 		}
 		out[cc] = a

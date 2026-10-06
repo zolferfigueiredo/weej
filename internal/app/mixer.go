@@ -50,9 +50,16 @@ func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
 	}
 }
 
+func mixerButtonName(id int) string {
+	if note, ok := core.MixerButtonNote(id); ok {
+		return fmt.Sprintf("note %d", note)
+	}
+	return fmt.Sprintf("CC %d", id)
+}
+
 func (app *App) onMixerButton(cc int) {
 	if app.isCalibrating() {
-		app.log(fmt.Sprintf("Mixer button CC %d pressed while calibrating", cc))
+		app.log(fmt.Sprintf("Mixer button %s pressed while calibrating", mixerButtonName(cc)))
 		app.loop.Invoke(func() {
 			cal := app.currentCalibrator()
 			if cal == nil {
@@ -68,9 +75,9 @@ func (app *App) onMixerButton(cc int) {
 	setup := app.snapshotSettings().Setup
 	action := setup.Buttons[cc]
 	if action == core.ActionNone {
-		app.log(fmt.Sprintf("Mixer button CC %d pressed: nothing set", cc))
+		app.log(fmt.Sprintf("Mixer button %s pressed: nothing set", mixerButtonName(cc)))
 	} else {
-		app.log(fmt.Sprintf("Mixer button CC %d pressed: %s", cc, action))
+		app.log(fmt.Sprintf("Mixer button %s pressed: %s", mixerButtonName(cc), action))
 	}
 
 	if knob, ok := action.MuteKnob(); ok {
