@@ -3,6 +3,8 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
@@ -50,6 +52,7 @@ func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
 
 func (app *App) onMixerButton(cc int) {
 	if app.isCalibrating() {
+		app.log(fmt.Sprintf("Mixer button CC %d pressed while calibrating", cc))
 		app.loop.Invoke(func() {
 			cal := app.currentCalibrator()
 			if cal == nil {
@@ -64,6 +67,11 @@ func (app *App) onMixerButton(cc int) {
 	}
 	setup := app.snapshotSettings().Setup
 	action := setup.Buttons[cc]
+	if action == core.ActionNone {
+		app.log(fmt.Sprintf("Mixer button CC %d pressed: nothing set", cc))
+	} else {
+		app.log(fmt.Sprintf("Mixer button CC %d pressed: %s", cc, action))
+	}
 
 	if knob, ok := action.MuteKnob(); ok {
 		mixer := setup.ForMixer()

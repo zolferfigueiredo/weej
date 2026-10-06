@@ -31,6 +31,10 @@ func (app *App) startCalibration(onlyNew bool) {
 		return
 	}
 	if mixer {
+		// A full mixer calibration starts empty, so the mixer has as many knobs as get calibrated.
+		if !onlyNew {
+			saved = nil
+		}
 		app.calibrator = core.NewMixerCalibrator(saved, onlyNew)
 	} else {
 		app.calibrator = core.NewCalibrator(saved, onlyNew)
