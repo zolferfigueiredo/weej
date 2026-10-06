@@ -69,6 +69,16 @@ func NewMixerCalibrator(saved []int, onlyNew bool) *Calibrator {
 	return c
 }
 
+// A pot jitters, so a board knob has to swing half its range to be found, and a found one has to
+// move well past the noise to count as the wrong knob. A mixer sends clean steps of about 8, so
+// a few steps are enough.
+func (c *Calibrator) swings() (find, wrong int) {
+	if c.mixer {
+		return 32, 32
+	}
+	return 512, 200
+}
+
 func (c *Calibrator) Mixer() bool       { return c.mixer }
 func (c *Calibrator) ButtonStage() bool { return c.buttonStage }
 func (c *Calibrator) Buttons() []int    { return append([]int{}, c.buttons...) }
@@ -233,9 +243,10 @@ func (c *Calibrator) feedSearch(values []int) {
 		return
 	}
 
+	findSwing, wrongSwing := c.swings()
 	// A found knob moving: say so and start over, so a pin echoing it can't pass for the next knob.
 	for fi, col := range c.found {
-		if col < len(values) && c.high[col]-c.low[col] >= 200 {
+		if col < len(values) && c.high[col]-c.low[col] >= wrongSwing {
 			c.wrongKnob = fi
 			c.low = append([]int{}, values...)
 			c.high = append([]int{}, values...)
@@ -243,7 +254,7 @@ func (c *Calibrator) feedSearch(values []int) {
 		}
 	}
 
-	if bestSwing >= 512 {
+	if bestSwing >= findSwing {
 		c.found = append(c.found, best)
 		c.next()
 	}

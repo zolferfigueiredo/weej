@@ -305,3 +305,20 @@ func TestMoveWatcherIgnoresJitter(t *testing.T) {
 		t.Errorf("moved %v, want nothing within the threshold of the new spot", got)
 	}
 }
+
+func TestMixerKnobIsFoundAfterAFewSteps(t *testing.T) {
+	few := [][]int{{-1, 500}, {-1, 540}}
+
+	board := NewCalibrator(nil, false)
+	mixer := NewMixerCalibrator(nil, false)
+	for i, v := range few {
+		board.Feed(v, float64(i))
+		mixer.Feed(v, float64(i))
+	}
+	if len(board.Found()) != 0 {
+		t.Errorf("board found %v after a 40 step nudge, want nothing: pots jitter", board.Found())
+	}
+	if !reflect.DeepEqual(mixer.Found(), []int{1}) {
+		t.Errorf("mixer found %v, want column 1 after a few clean steps", mixer.Found())
+	}
+}
