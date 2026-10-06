@@ -292,23 +292,18 @@ p {
   cursor: pointer;
 }
 
-.tabpanel.split {
+.split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
   gap: 20px;
 }
 
-.split-col {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
 @media (max-width: 760px) {
-  .tabpanel.split {
+  .split {
     display: flex;
     flex-direction: column;
+    gap: 14px;
   }
 }
 

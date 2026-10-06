@@ -230,9 +230,7 @@ function renderGeneral() {
         .join("")
     : `<div class="row"><span class="row-desc">${esc(t("no_knobs"))}</span></div>`;
 
-  document.getElementById("panel").innerHTML = `
-    <div class="tabpanel${mixer ? " split" : ""}" role="tabpanel">
-      <div class="split-col">
+  const profileGroup = `
       <div class="group">
         <div class="group-head">
           <h2 class="group-title">${esc(t("profile"))}</h2>
@@ -255,8 +253,9 @@ function renderGeneral() {
             <div class="row-control">${shortcutControl("profile:" + draft.profile, profile.shortcut)}</div>
           </div>
         </div>
-      </div>
+      </div>`;
 
+  const knobsGroup = `
       <div class="group">
         <div class="group-head">
           <h2 class="group-title">${esc(t("knobs"))}</h2>
@@ -271,8 +270,9 @@ function renderGeneral() {
           <span class="group-note">${esc(t("jobs_note"))}</span>
           <button class="btn" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
         </div>
-      </div>
+      </div>`;
 
+  const optionsGroup = `
       <div class="group">
         <div class="card">
           <div class="row">
@@ -287,10 +287,12 @@ function renderGeneral() {
           ${importNote ? `<span class="group-note">${esc(importNote)}</span>` : ""}
           <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
         </div>
-      </div>
-      </div>
-      ${mixer ? `<div class="split-col">${renderMixerButtons()}</div>` : ""}
-    </div>`;
+      </div>`;
+
+  // With the mixer, its knobs and its buttons are two lists side by side.
+  const lists = mixer ? `<div class="split">${knobsGroup}${renderMixerButtons()}</div>` : knobsGroup;
+  document.getElementById("panel").innerHTML = `
+    <div class="tabpanel" role="tabpanel">${profileGroup}${lists}${optionsGroup}</div>`;
 }
 
 function renderApp() {
@@ -442,24 +444,71 @@ function mixerActionOptions(current) {
     .join("");
 }
 
+function buttonOrder() {
+  return draft.mixerButtonOrder || init.mixerButtonDefaults || [];
+}
+
+function editableButtonOrder() {
+  if (!draft.mixerButtonOrder) draft.mixerButtonOrder = clone(init.mixerButtonDefaults || []);
+  return draft.mixerButtonOrder;
+}
+
+// A row added with + reads -1 until a mixer button is pressed to fill it in.
 function renderMixerButtons() {
-  const order = draft.mixerButtonOrder || init.mixerButtonDefaults || [];
+  const order = buttonOrder();
   const actions = draft.mixerButtons || {};
-  const rows = order
-    .map(
-      (cc, i) => `
-          <div class="row" data-cc="${cc}">
-            <div class="row-main"><span class="row-title">${esc(t("mixer.button", { n: String(i + 1) }))}</span></div>
-            <div class="row-control"><select class="select" data-mixer-cc="${cc}">${mixerActionOptions(actions[cc] || "")}</select></div>
-          </div>`
-    )
-    .join("");
+  const rows = order.length
+    ? order
+        .map((cc, i) => {
+          const pending = cc < 0;
+          return `
+          <div class="row"${pending ? "" : ` data-cc="${cc}"`}>
+            <div class="row-main">
+              <span class="row-title">${esc(t("mixer.button", { n: String(i + 1) }))}</span>
+              ${pending ? `<span class="row-desc warning">${esc(t("mixer.press"))}</span>` : ""}
+            </div>
+            <div class="row-control"><select class="select" data-mixer-cc="${cc}"${pending ? " disabled" : ""}>${mixerActionOptions(actions[cc] || "")}</select></div>
+          </div>`;
+        })
+        .join("")
+    : `<div class="row"><span class="row-desc">${esc(t("mixer.none"))}</span></div>`;
   return `
       <div class="group">
-        <div class="group-head"><h2 class="group-title">${esc(t("mixer_buttons"))}</h2></div>
+        <div class="group-head">
+          <h2 class="group-title">${esc(t("mixer_buttons"))}</h2>
+          <span class="spacer"></span>
+          <span class="segmented">
+            <button class="btn btn-icon" type="button" data-action="add-button" title="${escAttr(t("add_button"))}" aria-label="${escAttr(t("add_button"))}">+</button>
+            <button class="btn btn-icon" type="button" data-action="remove-button" title="${escAttr(t("remove_button"))}" aria-label="${escAttr(t("remove_button"))}"${order.length === 0 ? " disabled" : ""}>&minus;</button>
+          </span>
+        </div>
         <div class="card">${rows}</div>
         <div class="group-foot"><span class="group-note">${esc(t("mixer_buttons_note"))}</span></div>
       </div>`;
+}
+
+function addButton() {
+  editableButtonOrder().push(-1);
+  render();
+}
+
+function removeButton() {
+  const cc = editableButtonOrder().pop();
+  if (cc >= 0 && draft.mixerButtons) delete draft.mixerButtons[cc];
+  render();
+}
+
+// A pressed button not on the list yet fills the first row waiting for one.
+function onMixerButtonPressed(cc) {
+  if (activeTab !== "general") return;
+  const order = buttonOrder();
+  if (!order.includes(cc) && order.includes(-1)) {
+    const editable = editableButtonOrder();
+    editable[editable.indexOf(-1)] = cc;
+    render();
+    updateSaveButton();
+  }
+  flashRow(document.querySelector(`.row[data-cc="${cc}"]`));
 }
 
 function flashRow(row) {
@@ -893,6 +942,12 @@ function onClick(e) {
       else startRecording(field);
       break;
     }
+    case "add-button":
+      addButton();
+      break;
+    case "remove-button":
+      removeButton();
+      break;
     case "refresh-ports":
       send({ type: "listPorts" });
       break;
@@ -1008,7 +1063,7 @@ function onMessage(msg) {
       break;
     // Go-initiated: a mixer button was pressed, so its row lights up to show which one it is.
     case "mixerButton":
-      flashRow(document.querySelector(`.row[data-cc="${msg.cc}"]`));
+      onMixerButtonPressed(msg.cc);
       break;
     // Go-initiated: a knob's control moved, so its row lights up the same way.
     case "knobMoved":
