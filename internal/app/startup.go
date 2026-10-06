@@ -14,6 +14,7 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/lang"
 	"github.com/zolferfigueiredo/weej/internal/platform/audio"
 	"github.com/zolferfigueiredo/weej/internal/platform/display"
+	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
 	"github.com/zolferfigueiredo/weej/internal/platform/nightlight"
 	"github.com/zolferfigueiredo/weej/internal/platform/serialport"
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
@@ -113,6 +114,9 @@ func (app *App) printStartupSummary() {
 	active := s.Profiles[s.Active]
 	tr := app.trFunc()
 	app.log("profile " + active.Name)
+	if app.usesMixer() {
+		s.Setup = s.ForMixer()
+	}
 	for i, col := range s.Columns {
 		letter := core.Letter(i)
 		if col < 0 {
@@ -132,15 +136,12 @@ func (app *App) printStartupSummary() {
 	}
 }
 
-// startSerial (re)starts the serial loop with the saved port and speed. A port given on the
-// command line wins over the saved one. The previous loop has closed its port before the new
-// one opens it, or the board would look busy for a moment.
+// startSerial (re)starts the input loop, serial or MIDI, with the saved port and speed. A port
+// given on the command line wins over the saved one. The previous loop has closed its port
+// before the new one opens it, or the board would look busy for a moment.
 func (app *App) startSerial() {
 	s := app.snapshotSettings()
-	port := app.forcedPort
-	if port == "" {
-		port = s.Port
-	}
+	port := app.sourcePort()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	app.mu.Lock()
@@ -154,6 +155,19 @@ func (app *App) startSerial() {
 			prevCancel()
 			<-prevDone
 			app.onSerialStatus(serialport.Status{})
+		}
+		if core.IsMidiPort(port) {
+			device := core.MidiDevice(port)
+			midiport.Run(ctx, midiport.Config{
+				Device:   device,
+				OnValues: app.onMixerValues,
+				OnButton: app.onMixerButton,
+				OnStatus: func(connected, busy bool) {
+					app.onSerialStatus(serialport.Status{Connected: connected, Busy: busy, Port: device})
+				},
+				Log: app.log,
+			}, app.reconnectCh)
+			return
 		}
 		serialport.Run(ctx, serialport.Config{
 			ForcedPort: port,
@@ -195,6 +209,9 @@ func (app *App) onSerialStatus(status serialport.Status) {
 }
 
 func (app *App) calibrateIfNeeded() {
+	if app.usesMixer() {
+		return
+	}
 	cols := app.snapshotSettings().Columns
 	if len(cols) == 0 || hasUncalibratedColumn(cols) {
 		app.startCalibration(true)

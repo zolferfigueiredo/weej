@@ -11,6 +11,7 @@ import (
 
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/lang"
+	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
 	"github.com/zolferfigueiredo/weej/internal/platform/serialport"
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/ui/web"
@@ -25,19 +26,20 @@ const (
 )
 
 type setupJSON struct {
-	Columns         []*int         `json:"columns"`
-	Profiles        []core.Profile `json:"profiles"`
-	Profile         int            `json:"profile"`
-	NextProfile     *core.Shortcut `json:"nextProfile"`
-	PreviousProfile *core.Shortcut `json:"previousProfile"`
-	InvertKnobs     bool           `json:"invertKnobs"`
-	HideTrayIcon    bool           `json:"hideTrayIcon"`
-	ShowProfileList bool           `json:"showProfileList"`
-	TrayIcon        string         `json:"trayIcon"`
-	Speed           string         `json:"speed"`
-	Port            string         `json:"port"`
-	BaudRate        int            `json:"baudRate"`
-	Language        string         `json:"language"`
+	Columns         []*int            `json:"columns"`
+	Profiles        []core.Profile    `json:"profiles"`
+	Profile         int               `json:"profile"`
+	NextProfile     *core.Shortcut    `json:"nextProfile"`
+	PreviousProfile *core.Shortcut    `json:"previousProfile"`
+	InvertKnobs     bool              `json:"invertKnobs"`
+	HideTrayIcon    bool              `json:"hideTrayIcon"`
+	ShowProfileList bool              `json:"showProfileList"`
+	TrayIcon        string            `json:"trayIcon"`
+	Speed           string            `json:"speed"`
+	Port            string            `json:"port"`
+	BaudRate        int               `json:"baudRate"`
+	MixerButtons    map[string]string `json:"mixerButtons"`
+	Language        string            `json:"language"`
 }
 
 func columnsToJSON(cols []int) []*int {
@@ -99,6 +101,7 @@ func setupToJSON(s core.Setup) setupJSON {
 		Speed:           string(s.Speed),
 		Port:            s.Port,
 		BaudRate:        s.BaudRate(),
+		MixerButtons:    core.EncodeButtons(s.Buttons),
 	}
 }
 
@@ -122,6 +125,7 @@ func setupFromJSON(j setupJSON) core.Setup {
 		Speed:        core.ParseSpeed(j.Speed),
 		Port:         j.Port,
 		Baud:         j.BaudRate,
+		Buttons:      core.DecodeButtons(j.MixerButtons),
 	}
 }
 
@@ -243,6 +247,7 @@ func (app *App) sendSettingsInit() {
 	payload["connection"] = app.connectionPayload()
 	payload["forcedPort"] = app.forcedPort
 	payload["baudRates"] = core.BaudRates
+	payload["mixerButtons"] = core.MixerButtons
 	win.Send(payload)
 }
 
@@ -285,7 +290,7 @@ func (app *App) handleSettingsSave(data []byte) {
 		win.Send(map[string]any{"type": "saved", "setup": setupToJSONWithLanguage(cur)})
 	}
 
-	if hasUncalibratedColumn(cur.Columns) {
+	if hasUncalibratedColumn(cur.Columns) && !app.usesMixer() {
 		app.loop.Invoke(func() { app.startCalibration(true) })
 	}
 }
@@ -577,6 +582,6 @@ func (app *App) sendPorts() {
 		if ports == nil {
 			ports = []serialport.PortInfo{}
 		}
-		win.Send(map[string]any{"type": "ports", "ports": ports})
+		win.Send(map[string]any{"type": "ports", "ports": ports, "midi": midiport.List()})
 	}()
 }

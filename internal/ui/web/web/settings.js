@@ -19,6 +19,7 @@ let dialog = null; // { kind: "removeProfile" | "removeKnob" }
 let saved = null; // the setup as last saved, so Save is enabled only when the draft differs
 let importNote = ""; // last import_skipped / import_failed text, shown under the import button
 let ports = null; // [{ name, product, usb }] once Go has listed them
+let midiInputs = []; // MIDI input names; a "midi:<name>" port reads that mixer
 let connection = { connected: false, busy: false, port: "" };
 
 const SECTION_LABEL_KEY = {
@@ -265,7 +266,7 @@ function renderGeneral() {
         <div class="card">${knobsHtml}</div>
         <div class="group-foot">
           <span class="group-note">${esc(t("jobs_note"))}</span>
-          <button class="btn" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
+          <button class="btn" type="button" data-action="calibrate"${isMidiPort(init.forcedPort || draft.port) ? " disabled" : ""}>${esc(t("calibrate"))}</button>
         </div>
       </div>
 
@@ -382,6 +383,85 @@ function portLabel(p) {
   return p.product ? `${p.name} (${p.product})` : p.name;
 }
 
+const MIDI_PREFIX = "midi:";
+
+function isMidiPort(port) {
+  return (port || "").startsWith(MIDI_PREFIX);
+}
+
+function midiLabel(port) {
+  return `${port.slice(MIDI_PREFIX.length)} (MIDI)`;
+}
+
+// The names follow core.MixerButton's Kind and N.
+function mixerButtonName(b) {
+  switch (b.kind) {
+    case "channel":
+      return t("mixer.channel", { n: String(b.n) });
+    case "up":
+      return t("mixer.up");
+    case "down":
+      return t("mixer.down");
+    default:
+      return t("mixer.button", { n: String(b.n) });
+  }
+}
+
+const MIXER_ACTIONS = [
+  ["media.playpause", "action.play_pause"],
+  ["media.stop", "action.stop"],
+  ["media.previous", "action.previous_track"],
+  ["media.next", "action.next_track"],
+  ["profile.previous", "previous_profile"],
+  ["profile.next", "next_profile"],
+  ["settings", "action.open_settings"],
+];
+
+function mixerActionOptions(current) {
+  const options = [["", t("job.nothing")]];
+  for (let i = 0; i < draft.columns.length; i++) {
+    options.push([`mute:${i}`, t("action.mute", { letter: letterFor(i) })]);
+  }
+  for (const [value, key] of MIXER_ACTIONS) options.push([value, t(key)]);
+  // A mute for a knob that has since been removed still shows, so opening Settings never drops it.
+  if (!options.some(([value]) => value === current) && current.startsWith("mute:")) {
+    options.push([current, t("action.mute", { letter: letterFor(parseInt(current.slice(5), 10)) })]);
+  }
+  return options
+    .map(([value, label]) => `<option value="${escAttr(value)}"${value === current ? " selected" : ""}>${esc(label)}</option>`)
+    .join("");
+}
+
+function renderMixerButtons() {
+  const buttons = init.mixerButtons || [];
+  const actions = draft.mixerButtons || {};
+  const rows = buttons
+    .map(
+      (b) => `
+          <div class="row" data-cc="${b.cc}">
+            <div class="row-main"><span class="row-title">${esc(mixerButtonName(b))}</span></div>
+            <div class="row-control"><select class="select" data-mixer-cc="${b.cc}">${mixerActionOptions(actions[b.cc] || "")}</select></div>
+          </div>`
+    )
+    .join("");
+  return `
+      <div class="group">
+        <div class="group-head"><h2 class="group-title">${esc(t("mixer_buttons"))}</h2></div>
+        <div class="card">${rows}</div>
+        <div class="group-foot"><span class="group-note">${esc(t("mixer_buttons_note"))}</span></div>
+      </div>`;
+}
+
+function flashMixerButton(cc) {
+  if (activeTab !== "connection") return;
+  const row = document.querySelector(`.row[data-cc="${cc}"]`);
+  if (!row) return;
+  row.classList.remove("flash");
+  void row.offsetWidth; // restarts the animation when the same button is pressed again
+  row.classList.add("flash");
+  row.scrollIntoView({ block: "nearest" });
+}
+
 function renderConnection() {
   const forced = init.forcedPort || "";
   const autoLabel =
@@ -395,12 +475,18 @@ function renderConnection() {
       `<option value=""${draft.port ? "" : " selected"}>${esc(autoLabel)}</option>` +
       list
         .map((p) => `<option value="${escAttr(p.name)}"${draft.port === p.name ? " selected" : ""}>${esc(portLabel(p))}</option>`)
+        .join("") +
+      midiInputs
+        .map((name) => MIDI_PREFIX + name)
+        .map((port) => `<option value="${escAttr(port)}"${draft.port === port ? " selected" : ""}>${esc(midiLabel(port))}</option>`)
         .join("");
     // A saved port that is unplugged right now still has to show as the choice.
-    if (draft.port && !list.some((p) => p.name === draft.port)) {
-      portOptions += `<option value="${escAttr(draft.port)}" selected>${esc(draft.port)}</option>`;
+    if (draft.port && !list.some((p) => p.name === draft.port) && !midiInputs.some((name) => MIDI_PREFIX + name === draft.port)) {
+      const label = isMidiPort(draft.port) ? midiLabel(draft.port) : draft.port;
+      portOptions += `<option value="${escAttr(draft.port)}" selected>${esc(label)}</option>`;
     }
   }
+  const midi = isMidiPort(forced || draft.port);
 
   const rates = (init.baudRates || [9600]).slice();
   if (draft.baudRate && !rates.includes(draft.baudRate)) rates.push(draft.baudRate);
@@ -439,15 +525,20 @@ function renderConnection() {
               <select class="select" id="port-select"${forced ? " disabled" : ""}>${portOptions}</select>
             </div>
           </div>
-          <div class="row">
+          ${
+            midi
+              ? ""
+              : `<div class="row">
             <div class="row-main">
               <span class="row-title">${esc(t("baud_rate"))}</span>
               <span class="row-desc">${esc(t("baud_note"))}</span>
             </div>
             <div class="row-control"><select class="select" id="baud-select">${baudOptions}</select></div>
-          </div>
+          </div>`
+          }
         </div>
       </div>
+      ${midi ? renderMixerButtons() : ""}
     </div>`;
 }
 
@@ -856,6 +947,11 @@ function onChange(e) {
       draft.baudRate = parseInt(el.value, 10);
       break;
   }
+  if (el.dataset.mixerCc) {
+    draft.mixerButtons = draft.mixerButtons || {};
+    if (el.value) draft.mixerButtons[el.dataset.mixerCc] = el.value;
+    else delete draft.mixerButtons[el.dataset.mixerCc];
+  }
   updateSaveButton();
 }
 
@@ -889,7 +985,12 @@ function onMessage(msg) {
       break;
     case "ports":
       ports = msg.ports || [];
+      midiInputs = msg.midi || [];
       if (activeTab === "connection") render();
+      break;
+    // Go-initiated: a mixer button was pressed, so its row lights up to show which one it is.
+    case "mixerButton":
+      flashMixerButton(msg.cc);
       break;
     // Go-initiated: the board connected, dropped or got blocked by another app.
     case "connection":

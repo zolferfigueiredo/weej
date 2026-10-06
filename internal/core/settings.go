@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"strconv"
 	"time"
 )
 
@@ -25,6 +26,7 @@ func DefaultSettings(defaultProfileName string) Settings {
 			ShowProfiles: true,
 			Icon:         IconMixer,
 			Speed:        SpeedSlow,
+			Buttons:      DefaultMixerButtons(),
 		},
 		ShowDataInMenu: true,
 		UpdateEvery:    604800,
@@ -33,26 +35,27 @@ func DefaultSettings(defaultProfileName string) Settings {
 
 // The on-disk shape, key order matching the spec exactly so EncodeSettings is deterministic.
 type settingsJSON struct {
-	Columns          []*int     `json:"columns"`
-	Profiles         []Profile  `json:"profiles"`
-	Profile          int        `json:"profile"`
-	NextProfile      *Shortcut  `json:"nextProfile"`
-	PreviousProfile  *Shortcut  `json:"previousProfile"`
-	InvertKnobs      bool       `json:"invertKnobs"`
-	HideTrayIcon     bool       `json:"hideTrayIcon"`
-	ShowProfileList  bool       `json:"showProfileList"`
-	TrayIcon         string     `json:"trayIcon"`
-	Speed            string     `json:"speed"`
-	Port             string     `json:"port"`
-	BaudRate         int        `json:"baudRate"`
-	Language         string     `json:"language"`
-	ShowDataInMenu   bool       `json:"showDataInMenu"`
-	UpdateEvery      int        `json:"updateEvery"`
-	LastUpdateCheck  *time.Time `json:"lastUpdateCheck,omitempty"`
-	AvailableVersion string     `json:"availableVersion"`
-	NotifiedVersion  string     `json:"notifiedVersion"`
-	UpdatedTo        string     `json:"updatedTo"`
-	TrayTipShown     bool       `json:"trayTipShown"`
+	Columns          []*int            `json:"columns"`
+	Profiles         []Profile         `json:"profiles"`
+	Profile          int               `json:"profile"`
+	NextProfile      *Shortcut         `json:"nextProfile"`
+	PreviousProfile  *Shortcut         `json:"previousProfile"`
+	InvertKnobs      bool              `json:"invertKnobs"`
+	HideTrayIcon     bool              `json:"hideTrayIcon"`
+	ShowProfileList  bool              `json:"showProfileList"`
+	TrayIcon         string            `json:"trayIcon"`
+	Speed            string            `json:"speed"`
+	Port             string            `json:"port"`
+	BaudRate         int               `json:"baudRate"`
+	MixerButtons     map[string]string `json:"mixerButtons"`
+	Language         string            `json:"language"`
+	ShowDataInMenu   bool              `json:"showDataInMenu"`
+	UpdateEvery      int               `json:"updateEvery"`
+	LastUpdateCheck  *time.Time        `json:"lastUpdateCheck,omitempty"`
+	AvailableVersion string            `json:"availableVersion"`
+	NotifiedVersion  string            `json:"notifiedVersion"`
+	UpdatedTo        string            `json:"updatedTo"`
+	TrayTipShown     bool              `json:"trayTipShown"`
 }
 
 func columnsToJSON(cols []int) []*int {
@@ -75,6 +78,30 @@ func columnsFromJSON(ptrs []*int) []int {
 		} else {
 			out[i] = *p
 		}
+	}
+	return out
+}
+
+func EncodeButtons(buttons map[int]ButtonAction) map[string]string {
+	out := map[string]string{}
+	for cc, a := range buttons {
+		if a != ActionNone {
+			out[strconv.Itoa(cc)] = string(a)
+		}
+	}
+	return out
+}
+
+// A saved map replaces the defaults whole, so a button set to Nothing stays that way.
+func DecodeButtons(raw map[string]string) map[int]ButtonAction {
+	out := map[int]ButtonAction{}
+	for k, v := range raw {
+		cc, err := strconv.Atoi(k)
+		a := ButtonAction(v)
+		if err != nil || cc < 0 || cc > 127 || a == ActionNone || !a.Valid() {
+			continue
+		}
+		out[cc] = a
 	}
 	return out
 }
@@ -116,6 +143,7 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		Speed:            string(s.Speed),
 		Port:             s.Port,
 		BaudRate:         s.BaudRate(),
+		MixerButtons:     EncodeButtons(s.Buttons),
 		Language:         s.Language,
 		ShowDataInMenu:   s.ShowDataInMenu,
 		UpdateEvery:      s.UpdateEvery,
@@ -196,6 +224,9 @@ func DecodeSettings(data []byte, defaultProfileName string) (Settings, error) {
 	}
 	if v, ok := take[int](raw, "baudRate"); ok && v > 0 {
 		s.Baud = v
+	}
+	if v, ok := take[map[string]string](raw, "mixerButtons"); ok {
+		s.Buttons = DecodeButtons(v)
 	}
 	if v, ok := take[string](raw, "language"); ok {
 		s.Language = v

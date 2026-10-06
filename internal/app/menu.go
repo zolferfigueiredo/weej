@@ -101,7 +101,7 @@ func (app *App) buildMenu() []winui.MenuItem {
 
 	items = append(items,
 		winui.MenuItem{Text: app.tr("settings"), OnClick: func() { app.openSettings("") }},
-		winui.MenuItem{Text: app.tr("calibrate"), Disabled: !connected, OnClick: func() { app.startCalibration(false) }},
+		winui.MenuItem{Text: app.tr("calibrate"), Disabled: !connected || app.usesMixer(), OnClick: func() { app.startCalibration(false) }},
 		winui.MenuItem{Text: app.tr("language"), Children: app.languageMenuItems(s.Language)},
 	)
 

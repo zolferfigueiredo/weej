@@ -20,6 +20,9 @@ import (
 const calibrationTurnSeconds = "20"
 
 func (app *App) startCalibration(onlyNew bool) {
+	if app.usesMixer() {
+		return
+	}
 	app.mu.Lock()
 	if app.calibWin != nil {
 		win := app.calibWin

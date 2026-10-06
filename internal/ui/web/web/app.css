@@ -292,6 +292,19 @@ p {
   cursor: pointer;
 }
 
+.row.flash {
+  animation: row-flash 1200ms var(--ease);
+}
+
+@keyframes row-flash {
+  from {
+    background: var(--selection);
+  }
+  to {
+    background: transparent;
+  }
+}
+
 .row.clickable:hover {
   background: var(--card-bg-hover);
 }

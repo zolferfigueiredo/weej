@@ -308,10 +308,12 @@ type Setup struct {
 	ShowProfiles bool
 	Icon         IconStyle
 	Speed        Speed
-	// Port is a COM port to use instead of finding the board automatically; empty means automatic.
+	// Port is a COM port or a MidiPort to use instead of finding the board automatically; empty
+	// means automatic, which only ever looks for serial boards.
 	Port string
 	// Baud is the serial speed; 0 means DefaultBaud.
-	Baud int
+	Baud    int
+	Buttons map[int]ButtonAction
 }
 
 func (s Setup) activeJobs() [][]Job {
