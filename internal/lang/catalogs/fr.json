@@ -96,7 +96,7 @@
   "mixer.button": "Touche {n}",
   "mixer.none": "Aucune touche pour l’instant",
   "mixer.press": "Appuyez sur une touche de la table de mixage",
-  "mixer_buttons": "Touches de la table de mixage",
+  "mixer_buttons": "Touches",
   "mixer_buttons_note": "Cliquez sur + puis appuyez sur une touche de la table de mixage pour l’ajouter. Une touche pressée allume sa ligne.",
   "name": "Nom",
   "needs_calibration": "À calibrer",

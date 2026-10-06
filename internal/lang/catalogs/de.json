@@ -96,7 +96,7 @@
   "mixer.button": "Taste {n}",
   "mixer.none": "Noch keine Tasten",
   "mixer.press": "Drück eine Taste am Mixer",
-  "mixer_buttons": "Mixer-Tasten",
+  "mixer_buttons": "Tasten",
   "mixer_buttons_note": "Klicke auf +, dann drück eine Taste am Mixer, um sie hinzuzufügen. Eine gedrückte Taste leuchtet in ihrer Zeile auf.",
   "name": "Name",
   "needs_calibration": "Muss kalibriert werden",

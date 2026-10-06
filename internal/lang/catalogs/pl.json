@@ -98,7 +98,7 @@
   "mixer.button": "Przycisk {n}",
   "mixer.none": "Brak przycisków",
   "mixer.press": "Naciśnij przycisk na mikserze",
-  "mixer_buttons": "Przyciski miksera",
+  "mixer_buttons": "Przyciski",
   "mixer_buttons_note": "Kliknij + i naciśnij przycisk na mikserze, aby go dodać. Naciśnięty przycisk podświetla swój wiersz.",
   "name": "Nazwa",
   "needs_calibration": "Wymaga kalibracji",

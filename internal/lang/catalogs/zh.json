@@ -95,7 +95,7 @@
   "mixer.button": "按钮 {n}",
   "mixer.none": "还没有按钮",
   "mixer.press": "请按下调音台上的按钮",
-  "mixer_buttons": "调音台按钮",
+  "mixer_buttons": "按钮",
   "mixer_buttons_note": "点 + 然后按下调音台上的按钮即可添加。按下按钮时，对应的行会亮起。",
   "name": "名称",
   "needs_calibration": "需要校准",

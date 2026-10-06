@@ -96,7 +96,7 @@
   "mixer.button": "Tecla {n}",
   "mixer.none": "Nenhuma tecla ainda",
   "mixer.press": "Aperte uma tecla no mixer",
-  "mixer_buttons": "Teclas do mixer",
+  "mixer_buttons": "Teclas",
   "mixer_buttons_note": "Clique em + e aperte uma tecla no mixer para adicioná-la. Ao apertar uma tecla, a linha dela se acende.",
   "name": "Nome",
   "needs_calibration": "Precisa de calibração",

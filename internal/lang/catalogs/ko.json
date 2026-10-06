@@ -95,7 +95,7 @@
   "mixer.button": "버튼 {n}",
   "mixer.none": "아직 버튼이 없습니다",
   "mixer.press": "믹서의 버튼을 누르세요",
-  "mixer_buttons": "믹서 버튼",
+  "mixer_buttons": "버튼",
   "mixer_buttons_note": "+를 클릭하고 믹서의 버튼을 누르면 추가됩니다. 버튼을 누르면 해당 줄이 강조됩니다.",
   "name": "이름",
   "needs_calibration": "보정 필요",

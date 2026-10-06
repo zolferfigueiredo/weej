@@ -96,7 +96,7 @@
   "mixer.button": "Botón {n}",
   "mixer.none": "Aún no hay botones",
   "mixer.press": "Pulsa un botón del mezclador",
-  "mixer_buttons": "Botones del mezclador",
+  "mixer_buttons": "Botones",
   "mixer_buttons_note": "Haz clic en + y pulsa un botón del mezclador para añadirlo. Al pulsar un botón, su fila se ilumina.",
   "name": "Nombre",
   "needs_calibration": "Necesita calibración",

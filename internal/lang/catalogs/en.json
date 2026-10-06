@@ -96,7 +96,7 @@
   "mixer.button": "Button {n}",
   "mixer.none": "No buttons yet",
   "mixer.press": "Press a button on the mixer",
-  "mixer_buttons": "Mixer buttons",
+  "mixer_buttons": "Buttons",
   "mixer_buttons_note": "Click + and press a button on the mixer to add it. Pressing a button lights up its row.",
   "name": "Name",
   "needs_calibration": "Needs calibration",

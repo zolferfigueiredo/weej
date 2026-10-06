@@ -95,7 +95,7 @@
   "mixer.button": "ボタン {n}",
   "mixer.none": "まだボタンがありません",
   "mixer.press": "ミキサーのボタンを押してください",
-  "mixer_buttons": "ミキサーのボタン",
+  "mixer_buttons": "ボタン",
   "mixer_buttons_note": "＋をクリックしてミキサーのボタンを押すと追加されます。ボタンを押すとその行が光ります。",
   "name": "名前",
   "needs_calibration": "キャリブレーションが必要",
