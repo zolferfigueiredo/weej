@@ -141,7 +141,6 @@ function render() {
   renderTabs();
   renderFooter();
   if (activeTab === "app") renderApp();
-  else if (activeTab === "connection") renderConnection();
   else if (activeTab === "about") renderAbout();
   else renderGeneral();
 
@@ -157,7 +156,6 @@ function renderTabs() {
   const tabs = [
     ["general", t("tab.general")],
     ["app", t("tab.app")],
-    ["connection", t("tab.connection")],
     ["about", t("tab.about")],
   ];
   document.getElementById("tabs").innerHTML = tabs
@@ -257,7 +255,7 @@ function renderGeneral() {
       </div>`;
 
   const knobsGroup = `
-      <div class="group">
+      <div class="group list-group">
         <div class="group-head">
           <h2 class="group-title">${esc(t("knobs"))}</h2>
           <span class="spacer"></span>
@@ -269,11 +267,10 @@ function renderGeneral() {
         <div class="card">${knobsHtml}</div>
         <div class="group-foot">
           <span class="group-note">${esc(t("jobs_note"))}</span>
-          <button class="btn" type="button" data-action="calibrate"${calibrating ? " disabled" : ""}>${esc(t("calibrate"))}</button>
         </div>
       </div>`;
 
-  const optionsGroup = `
+  const invertGroup = `
       <div class="group">
         <div class="card">
           <div class="row">
@@ -284,19 +281,38 @@ function renderGeneral() {
             <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft.invertKnobs ? " checked" : ""} /></div>
           </div>
         </div>
-        <div class="group-foot end">
-          ${importNote ? `<span class="group-note">${esc(importNote)}</span>` : ""}
-          <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
+      </div>`;
+
+  const calibrateGroup = `
+      <div class="group">
+        <div class="card">
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("calibrate"))}</span>
+              <span class="row-desc">${esc(t(mixer ? "calibrate_note_mixer" : "calibrate_note"))}</span>
+            </div>
+            <div class="row-control"><button class="btn" type="button" data-action="calibrate"${calibrating ? " disabled" : ""}>${esc(t("calibrate"))}</button></div>
+          </div>
         </div>
       </div>`;
 
-  // With the mixer, its knobs and its buttons are two lists side by side, each scrolling on its
-  // own; a redraw keeps where each list was scrolled to.
-  const listCards = () => document.querySelectorAll(".split > .group > .card");
+  const importFoot = `
+      <div class="group-foot">
+        <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
+        ${importNote ? `<span class="group-note">${esc(importNote)}</span>` : ""}
+      </div>`;
+
+  // Two columns whose rows line up: connection and profile, invert and calibrate, then the knobs
+  // and (with the mixer) the buttons. A redraw keeps where each list was scrolled to.
+  const listCards = () => document.querySelectorAll(".list-group > .card");
   const scrolled = Array.from(listCards(), (card) => card.scrollTop);
-  const lists = mixer ? `<div class="split">${knobsGroup}${renderMixerButtons()}</div>` : knobsGroup;
   document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel">${profileGroup}${lists}${optionsGroup}</div>`;
+    <div class="tabpanel general-grid" role="tabpanel">
+      ${connectionGroup()}${profileGroup}
+      ${invertGroup}${calibrateGroup}
+      ${knobsGroup}${mixer ? renderMixerButtons() : "<div></div>"}
+      ${importFoot}
+    </div>`;
   listCards().forEach((card, i) => {
     card.scrollTop = scrolled[i] || 0;
   });
@@ -480,7 +496,7 @@ function renderMixerButtons() {
         .join("")
     : `<div class="row"><span class="row-desc">${esc(t("mixer.none"))}</span></div>`;
   return `
-      <div class="group">
+      <div class="group list-group">
         <div class="group-head">
           <h2 class="group-title">${esc(t("mixer_buttons"))}</h2>
           <span class="spacer"></span>
@@ -534,7 +550,7 @@ function lightRow(row) {
   );
 }
 
-function renderConnection() {
+function connectionGroup() {
   const forced = init.forcedPort || "";
   const autoLabel =
     !draft.port && connection.connected && connection.port ? t("port_auto_found", { port: connection.port }) : t("port_auto");
@@ -576,8 +592,7 @@ function renderConnection() {
     statusClass = " warning";
   }
 
-  document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel">
+  return `
       <div class="group">
         <div class="card">
           <div class="row">
@@ -609,8 +624,7 @@ function renderConnection() {
           </div>`
           }
         </div>
-      </div>
-    </div>`;
+      </div>`;
 }
 
 function hostnameOf(url) {
@@ -917,7 +931,7 @@ function onClick(e) {
   switch (target.dataset.action) {
     case "switch-tab":
       activeTab = target.dataset.tab;
-      if (activeTab === "connection") send({ type: "listPorts" });
+      if (activeTab === "general") send({ type: "listPorts" });
       render();
       break;
     case "add-profile":
@@ -1057,7 +1071,7 @@ function onMessage(msg) {
       activeTab = msg.tab || "general";
       connection = msg.connection || connection;
       calibrating = !!msg.calibrating;
-      if (activeTab === "connection") send({ type: "listPorts" });
+      if (activeTab === "general") send({ type: "listPorts" });
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
       saved = clone(draft);
       render();
@@ -1080,7 +1094,7 @@ function onMessage(msg) {
     case "ports":
       ports = msg.ports || [];
       midiInputs = msg.midi || [];
-      if (activeTab === "connection") render();
+      if (activeTab === "general") render();
       break;
     // Go-initiated: a mixer button was pressed, so its row lights up to show which one it is.
     // Go-initiated: Calibration opened or closed, from here or from the tray.
@@ -1098,7 +1112,7 @@ function onMessage(msg) {
     // Go-initiated: the board connected, dropped or got blocked by another app.
     case "connection":
       connection = { connected: !!msg.connected, busy: !!msg.busy, port: msg.port || "" };
-      if (activeTab === "connection") {
+      if (activeTab === "general") {
         send({ type: "listPorts" });
         render();
       }

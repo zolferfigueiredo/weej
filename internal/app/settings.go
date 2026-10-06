@@ -159,13 +159,8 @@ func (app *App) openSettings(tab string) {
 	app.settingsPendingTab = tab
 	app.mu.Unlock()
 
-	// The mixer's buttons sit beside the knobs, so Settings opens wide enough for both.
-	width := 460
-	if app.usesMixer() {
-		width = 900
-	}
 	w, err := web.Open(app.loop.Invoke, "settings", web.Options{
-		Title: app.tr("settings"), Width: width, Height: 560,
+		Title: app.tr("settings"), Width: 900, Height: 560,
 		OnClose: func() {
 			app.mu.Lock()
 			app.settingsWin = nil

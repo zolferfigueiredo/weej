@@ -382,7 +382,6 @@ const MOCK_EN_STRINGS = {
   speed_note: "How soon a change lands after a turn.",
   "tab.about": "About",
   "tab.app": "App settings",
-  "tab.connection": "Connection",
   status: "Status",
   port: "Port",
   port_auto: "Automatic",

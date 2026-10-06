@@ -292,23 +292,21 @@ p {
   cursor: pointer;
 }
 
-.split {
+.tabpanel.general-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
-  gap: 20px;
+  gap: 14px 20px;
 }
 
 @media (max-width: 760px) {
-  .split {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
+  .tabpanel.general-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-/* The mixer's two lists scroll on their own, so the page itself stays put. */
-.split > .group > .card {
+/* The knob and button lists scroll on their own, so the page itself stays put. */
+.list-group > .card {
   max-height: var(--list-max, 420px);
   overflow-y: auto;
 }
