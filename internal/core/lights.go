@@ -10,7 +10,7 @@ import (
 // follows the computer's sound (EQFrame) and "clock" the time (ClockFrame); LightFrame draws the
 // rest.
 var LightPatterns = []string{
-	"off", "on", "eq", "fire", "chase", "bounce", "wave", "sparkle", "blink", "rain", "matrix",
+	"off", "on", "random", "eq", "fire", "chase", "bounce", "wave", "sparkle", "blink", "rain", "matrix",
 	"snake", "fill", "explode", "checker", "rise", "zigzag", "orbit", "heartbeat", "stars", "bars",
 	"ball", "comet", "helix", "breathe", "clock",
 }
@@ -95,8 +95,45 @@ func (g *grid) ids() []int {
 	return on
 }
 
+// randomEvery is how long "random" keeps each pattern, in seconds; it picks among LightFrame's
+// own, leaving out On, the EQ and the clock.
+const randomEvery = 6
+
+// RandomPattern is the pattern "random" shows t seconds after it started. It goes through all of
+// them in a shuffled order, then another, never showing the same one twice in a row.
+func RandomPattern(t float64) string {
+	var pool []string
+	for _, p := range LightPatterns {
+		if Animated(p) && p != "random" && p != "eq" && p != "clock" {
+			pool = append(pool, p)
+		}
+	}
+	round := func(r int) []string {
+		keys := make([]int, len(pool))
+		for i := range keys {
+			keys[i] = noise(r, i)<<8 | i
+		}
+		slices.Sort(keys)
+		order := make([]string, len(pool))
+		for i, k := range keys {
+			order[i] = pool[k&0xFF]
+		}
+		return order
+	}
+	n := int(t / randomEvery)
+	r, pos := n/len(pool), n%len(pool)
+	order := round(r)
+	if r > 0 && order[0] == round(r - 1)[len(pool)-1] {
+		order[0], order[1] = order[1], order[0]
+	}
+	return order[pos]
+}
+
 // LightFrame lists the buttons a pattern lights t seconds after it started.
 func LightFrame(pattern string, t float64) []int {
+	if pattern == "random" {
+		pattern = RandomPattern(t)
+	}
 	var g grid
 	step := func(every float64) int { return int(t / every) }
 	switch pattern {
@@ -336,9 +373,11 @@ type LightGuard struct {
 }
 
 const (
-	guardWindow = 0.6 // seconds after a light change
-	guardSteps  = 5   // of 127
-	guardAwake  = 0.3 // seconds a hand's move keeps being followed
+	guardWindow    = 0.6  // seconds after a light change
+	guardSteps     = 5    // of 127
+	guardJump      = 0.05 // seconds after a light change, when the jumps come
+	guardJumpSteps = 10   // of 127, then
+	guardAwake     = 0.3  // seconds a hand's move keeps being followed
 )
 
 // Pass tells whether a message should be read, at now, the last light change having been at
@@ -348,7 +387,11 @@ func (g *LightGuard) Pass(msg uint32, now, lightChanged float64) bool {
 	if !ok {
 		return true
 	}
-	hand := now < g.awake[col] || g.known[col] && abs(v-g.reported[col]) > guardSteps
+	steps := guardSteps
+	if now-lightChanged <= guardJump {
+		steps = guardJumpSteps
+	}
+	hand := now < g.awake[col] || g.known[col] && abs(v-g.reported[col]) > steps
 	if g.known[col] && now-lightChanged <= guardWindow && !hand {
 		return false
 	}

@@ -16,20 +16,28 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/core"
 )
 
-// Loopback listens to what the default speakers play and feeds it to a Spectrum, for the button
-// lights' EQ. It follows the default speakers when they change.
+// Loopback listens to what the default speakers play and hands it to a Sink, such as the
+// core.Spectrum behind the button lights' EQ. It follows the default speakers when they change.
 type Loopback struct {
-	spectrum *core.Spectrum
-	log      func(string)
-	stop     chan struct{}
-	done     chan struct{}
+	sink Sink
+	log  func(string)
+	stop chan struct{}
+	done chan struct{}
 }
 
 // 200 ms of buffer, in REFERENCE_TIME's 100 ns units; it is read every 20 ms.
 const loopbackBuffer = 2_000_000
 
-func StartLoopback(spectrum *core.Spectrum, log func(string)) *Loopback {
-	l := &Loopback{spectrum: spectrum, log: log, stop: make(chan struct{}), done: make(chan struct{})}
+// Sink takes what Loopback hears: the sample rate, then mono samples from -1 to 1.
+type Sink interface {
+	SetRate(hz float64)
+	Add(samples []float32)
+}
+
+var _ Sink = (*core.Spectrum)(nil)
+
+func StartLoopback(sink Sink, log func(string)) *Loopback {
+	l := &Loopback{sink: sink, log: log, stop: make(chan struct{}), done: make(chan struct{})}
 	go l.run()
 	return l
 }
@@ -111,7 +119,7 @@ func (l *Loopback) capture() error {
 		return err
 	}
 	defer ac.Stop() //nolint:errcheck // stopping on the way out; nothing to do if it fails
-	l.spectrum.SetRate(float64(wfx.NSamplesPerSec))
+	l.sink.SetRate(float64(wfx.NSamplesPerSec))
 
 	read := time.NewTicker(20 * time.Millisecond)
 	defer read.Stop()
@@ -149,7 +157,7 @@ func (l *Loopback) capture() error {
 				if err := acc.ReleaseBuffer(frames); err != nil {
 					return err
 				}
-				l.spectrum.Add(mono)
+				l.sink.Add(mono)
 			}
 		}
 	}

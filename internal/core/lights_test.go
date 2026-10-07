@@ -53,7 +53,7 @@ func TestParseLightPattern(t *testing.T) {
 			t.Errorf("ParseLightPattern(%q) = %q, want %q", in, got, want)
 		}
 	}
-	if NextLightPattern("") != "on" || NextLightPattern("wave") != "sparkle" || NextLightPattern("clock") != "" {
+	if NextLightPattern("on") != "random" || NextLightPattern("wave") != "sparkle" || NextLightPattern("clock") != "" {
 		t.Error("Next doesn't step through the patterns and back to off")
 	}
 	if Animated("on") || Animated("") || !Animated("sparkle") {
@@ -83,6 +83,20 @@ func TestLightGuardDropsTheLightsDriftButNotAHand(t *testing.T) {
 	}
 }
 
+func TestRandomChangesPatternEverySixSeconds(t *testing.T) {
+	last := ""
+	for n := range 50 {
+		p := RandomPattern(float64(n)*randomEvery + 1)
+		if p == last || !Animated(p) || p == "eq" || p == "clock" || p == "random" {
+			t.Fatalf("random's pattern %d is %q after %q", n, p, last)
+		}
+		if RandomPattern(float64(n)*randomEvery+5.9) != p {
+			t.Fatalf("random changed its pattern %d before six seconds", n)
+		}
+		last = p
+	}
+}
+
 func TestEQFrameFillsEachColumnToItsBand(t *testing.T) {
 	frame := EQFrame([8]float64{0, 1, 0.5, 0, 0, 0, 0, 0.05})
 	want := []int{MixerNoteButton(16 + 1), MixerNoteButton(8 + 1), MixerNoteButton(0 + 1), MixerNoteButton(0 + 2), MixerNoteButton(24 + 1), MixerNoteButton(24 + 2)}
@@ -102,22 +116,36 @@ func TestClockFrameShowsTheTimeInBinary(t *testing.T) {
 	}
 }
 
-func TestSpectrumFindsATone(t *testing.T) {
+func TestSpectrumJumpsTheBandThatGetsLouder(t *testing.T) {
 	s := NewSpectrum()
-	tone := make([]float32, 4096)
-	for i := range tone {
-		tone[i] = float32(0.5 * math.Sin(2*math.Pi*3000*float64(i)/48000))
-	}
-	s.Add(tone)
-	bands := s.Bands(1)
-	for b, v := range bands {
-		if b == 5 && v < 0.9 || b != 5 && b != 4 && b != 6 && v > 0.5 {
-			t.Errorf("a 3 kHz tone gives bands %.2f", bands)
-			break
+	tone := func(hz, amp float64) []float32 {
+		out := make([]float32, 1920)
+		for i := range out {
+			out[i] = float32(amp * math.Sin(2*math.Pi*hz*float64(i)/48000))
 		}
+		return out
 	}
-	s.Add(make([]float32, 4096))
-	if bands := s.Bands(3); bands != [8]float64{} {
+	// Two quiet tones for a while, a bass and a high one, then the high one jumps.
+	now := 0.0
+	for range 100 {
+		s.Add(tone(60, 0.05))
+		s.Add(tone(3000, 0.02))
+		now += 0.04
+		s.Bands(now)
+	}
+	loud := tone(3000, 0.5)
+	for i := range loud {
+		loud[i] += tone(60, 0.05)[i]
+	}
+	s.Add(loud)
+	s.Add(loud)
+	now += 0.04
+	bands := s.Bands(now)
+	if bands[5] < 0.9 || bands[0] > 0.6 {
+		t.Errorf("the high tone jumping gives bands %.2f, want column 6 full and the bass calm", bands)
+	}
+	s.Add(make([]float32, fftSize))
+	if bands := s.Bands(now + 2); bands != [8]float64{} {
 		t.Errorf("silence two seconds later gives %.2f, want nothing", bands)
 	}
 }
