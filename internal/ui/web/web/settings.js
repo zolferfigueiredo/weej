@@ -522,10 +522,6 @@ function onChange(e) {
       S.draft.hideTrayIcon = el.checked;
       render();
       break;
-    case "tray-icon-style":
-      S.draft.trayIcon = el.value;
-      render();
-      break;
     case "show-profile-list":
       S.draft.showProfileList = el.checked;
       break;

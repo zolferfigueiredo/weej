@@ -31,15 +31,6 @@ func cutMask(dst, src *image.Alpha) {
 	}
 }
 
-func overAlpha(dst, src *image.Alpha, alpha float64) {
-	for i, v := range src.Pix {
-		sa := float64(v) / 255 * alpha
-		da := float64(dst.Pix[i]) / 255
-		out := sa + da*(1-sa)
-		dst.Pix[i] = clamp255(out * 255)
-	}
-}
-
 // Combines as independent coverages (1-(1-a)(1-b)) rather than max(), which leaves a faint seam
 // where two anti-aliased edges partially overlap.
 func unionMask(dst, src *image.Alpha) {

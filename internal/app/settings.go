@@ -179,7 +179,6 @@ func (app *App) sendSettingsInit() {
 	payload["language"] = s.Language
 	payload["settings"] = settingsJSON(s)
 	payload["catalog"] = app.buildCatalog(s.Devices)
-	payload["iconPreviews"] = app.iconPreviews()
 	payload["labels"] = app.shortcutLabels(s)
 	payload["nightLightExperimental"] = true
 	payload["status"] = status
@@ -235,7 +234,7 @@ func (app *App) handleSettingsSave(data []byte) {
 	page := core.DecodeSettings(msg.Settings, app.profileName())
 	next := app.snapshotSettings()
 	next.Devices = page.Devices
-	next.HideIcon, next.ShowProfiles, next.Icon = page.HideIcon, page.ShowProfiles, page.Icon
+	next.HideIcon, next.ShowProfiles = page.HideIcon, page.ShowProfiles
 	app.applySettings(next)
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "saved", "settings": settingsJSON(app.snapshotSettings())})

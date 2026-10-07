@@ -14,7 +14,6 @@ type Settings struct {
 
 	HideIcon         bool
 	ShowProfiles     bool
-	Icon             IconStyle
 	Language         string
 	ShowDataInMenu   bool
 	UpdateEvery      int
@@ -30,7 +29,7 @@ type Settings struct {
 const settingsVersion = 2
 
 func DefaultSettings() Settings {
-	return Settings{ShowProfiles: true, Icon: IconMixer, ShowDataInMenu: true, UpdateEvery: 604800}
+	return Settings{ShowProfiles: true, ShowDataInMenu: true, UpdateEvery: 604800}
 }
 
 // The on-disk shape, key order fixed so EncodeSettings is deterministic.
@@ -40,7 +39,6 @@ type settingsJSON struct {
 	Added            int          `json:"added"`
 	HideTrayIcon     bool         `json:"hideTrayIcon"`
 	ShowProfileList  bool         `json:"showProfileList"`
-	TrayIcon         string       `json:"trayIcon"`
 	Language         string       `json:"language"`
 	ShowDataInMenu   bool         `json:"showDataInMenu"`
 	UpdateEvery      int          `json:"updateEvery"`
@@ -92,7 +90,6 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		Added:            s.Added,
 		HideTrayIcon:     s.HideIcon,
 		ShowProfileList:  s.ShowProfiles,
-		TrayIcon:         string(s.Icon),
 		Language:         s.Language,
 		ShowDataInMenu:   s.ShowDataInMenu,
 		UpdateEvery:      s.UpdateEvery,
@@ -190,9 +187,6 @@ func DecodeSettings(data []byte, profileName string) Settings {
 	}
 	if v, ok := take[bool](raw, "showProfileList"); ok {
 		s.ShowProfiles = v
-	}
-	if v, ok := take[string](raw, "trayIcon"); ok {
-		s.Icon = ParseIconStyle(v)
 	}
 	if v, ok := take[string](raw, "language"); ok {
 		s.Language = v

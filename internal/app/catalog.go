@@ -14,7 +14,6 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/draw"
 	"github.com/zolferfigueiredo/weej/internal/platform/display"
-	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 )
 
@@ -238,15 +237,6 @@ func (app *App) forgetApp(exe string) {
 	delete(app.appName, exe)
 	delete(app.appIcon, exe)
 	app.appCacheMu.Unlock()
-}
-
-func (app *App) iconPreviews() map[string]string {
-	light := sys.TaskbarLight()
-	out := map[string]string{}
-	for _, style := range []core.IconStyle{core.IconMixer, core.IconDial, core.IconApp} {
-		out[string(style)] = pngDataURL(draw.TrayIcon(draw.IconStyle(style), true, 32, light))
-	}
-	return out
 }
 
 func (app *App) shortcutLabels(s core.Settings) map[string]string {

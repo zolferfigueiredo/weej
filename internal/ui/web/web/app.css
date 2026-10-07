@@ -1380,12 +1380,6 @@ select.select,
   min-width: 44px;
 }
 
-.tray-preview {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-}
-
 .about {
   align-items: center;
   text-align: center;

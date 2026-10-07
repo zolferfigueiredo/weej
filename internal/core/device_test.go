@@ -115,7 +115,7 @@ func boardFixture() Settings {
 	smc.Profiles[0].Shortcut = &Shortcut{VK: 0x70, Mods: 2, Key: "F1"}
 	s.Devices = []Device{diy, smc}
 	s.Added = 3
-	s.Language, s.ShowProfiles, s.Icon = "it", false, IconDial
+	s.Language, s.ShowProfiles = "it", false
 	return s
 }
 

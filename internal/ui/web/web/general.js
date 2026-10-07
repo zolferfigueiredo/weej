@@ -18,13 +18,6 @@ export function renderGeneral() {
   const langOptions = (S.init.languages || [])
     .map((l) => `<option value="${escAttr(l.code)}"${l.code === draft.language ? " selected" : ""}>${esc(l.name)}</option>`)
     .join("");
-  const trayPreview =
-    S.init.iconPreviews && S.init.iconPreviews[draft.trayIcon]
-      ? `<img class="tray-preview" src="${S.init.iconPreviews[draft.trayIcon]}" alt="" />`
-      : "";
-  const iconOptions = ["mixer", "dial", "app"]
-    .map((style) => `<option value="${style}"${draft.trayIcon === style ? " selected" : ""}>${esc(t("icon." + style))}</option>`)
-    .join("");
   const hidden = draft.hideTrayIcon;
 
   document.getElementById("panel").innerHTML = `
@@ -60,13 +53,6 @@ export function renderGeneral() {
               <span class="row-desc">${esc(t("hide_icon_note"))}</span>
             </div>
             <div class="row-control"><input class="toggle" id="hide-icon" type="checkbox" role="switch"${hidden ? " checked" : ""} /></div>
-          </div>
-          <div class="row">
-            <div class="row-main"><span class="row-title${hidden ? " disabled" : ""}">${esc(t("icon"))}</span></div>
-            <div class="row-control">
-              ${trayPreview}
-              <select class="select" id="tray-icon-style"${hidden ? " disabled" : ""}>${iconOptions}</select>
-            </div>
           </div>
           <div class="row">
             <div class="row-main"><span class="row-title${hidden ? " disabled" : ""}">${esc(t("profile_list"))}</span></div>
