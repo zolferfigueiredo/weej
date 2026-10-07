@@ -326,9 +326,10 @@ type Setup struct {
 	// Baud is the serial speed; 0 means DefaultBaud.
 	Baud int
 	// MixerColumns is the mixer's own calibration, so the board's Columns survive a switch to
-	// the mixer and back. Nil means never calibrated: knob i reads mixer column i.
+	// the mixer and back. Nil means never calibrated. An SMC-Mixer has neither: its controls are
+	// fixed (smc.go).
 	MixerColumns []int
-	// ButtonOrder is the mixer buttons Calibrate found, as CCs: Button 1 first. Nil means never.
+	// ButtonOrder is the mixer buttons Calibrate found, by id: Button 1 first. Nil means never.
 	ButtonOrder []int
 }
 

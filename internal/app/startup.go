@@ -165,7 +165,9 @@ func (app *App) startSerial() {
 				OnStatus: func(connected, busy bool) {
 					app.onSerialStatus(serialport.Status{Connected: connected, Busy: busy, Port: device})
 				},
-				Log: app.log,
+				StripLights:  core.IsSMCName(device),
+				OnStripLight: app.onStripLight,
+				Log:          app.log,
 			}, app.reconnectCh)
 			return
 		}

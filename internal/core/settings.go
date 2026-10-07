@@ -334,6 +334,7 @@ func DecodeSettings(data []byte, defaultProfileName string) (Settings, error) {
 	if v, ok := take[bool](raw, "trayTipShown"); ok {
 		s.TrayTipShown = v
 	}
+	MigrateSMC(&s.Setup)
 
 	return s, nil
 }

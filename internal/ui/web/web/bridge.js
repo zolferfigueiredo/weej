@@ -456,6 +456,57 @@ function mockShortcutKeyJSON(s) {
   return JSON.stringify({ vk: s.vk, mods: s.mods, key: s.key });
 }
 
+// The SMC-Mixer preview (?mock=settings&device=smc): a profile set up the way a real one was.
+function mockSMC(init) {
+  const setup = init.setup;
+  setup.port = "midi:SMC-Mixer";
+  for (const p of setup.profiles) {
+    p.mixerJobs = Array.from({ length: 16 }, () => []);
+    p.buttons = { 174: ["profile.previous"], 175: ["profile.next"] };
+  }
+  const p = setup.profiles[0];
+  p.mixerJobs[0] = [{ kind: "master" }];
+  p.mixerJobs[1] = [{ kind: "brightness", screen: 0 }];
+  p.mixerJobs[2] = [{ kind: "brightness", screen: 1 }];
+  p.mixerJobs[3] = [{ kind: "app", exe: "discord.exe" }, { kind: "app", exe: "spotify.exe" }, { kind: "otherApps" }];
+  p.mixerJobs[5] = [{ kind: "microphone" }];
+  p.mixerJobs[6] = [{ kind: "nightLight" }];
+  p.mixerJobs[8] = [{ kind: "zoom" }];
+  p.mixerJobs[9] = [{ kind: "contrast", screen: 0 }];
+  for (let i = 0; i < 8; i++) p.buttons[144 + i] = [`mute:${i}`];
+  p.buttons[222] = ["media.playpause"];
+  p.buttons[227] = ["settings", "url:https://weej.zolfer.com"];
+  init.connection = { connected: true, busy: false, port: "SMC-Mixer" };
+  init.controls = [1023, 600, 300, -1, -1, 800, 150, -1, 512, -1, -1, -1, -1, -1, -1, -1];
+  return init;
+}
+
+// Moves fader 3 for a moment after the page opens, its light on meanwhile, as the mixer would.
+function startSMCDemo(post, controls) {
+  const values = controls.slice();
+  setTimeout(() => {
+    post({ type: "knobMoved", knob: 2 });
+    post({ type: "stripLight", strip: 2, on: true });
+    let step = 0;
+    const timer = setInterval(() => {
+      values[2] = Math.round(512 + 400 * Math.sin(step / 5));
+      post({ type: "controls", values: values.slice() });
+      if (++step > 30) {
+        clearInterval(timer);
+        setTimeout(() => post({ type: "stripLight", strip: 2, on: false }), 300);
+      }
+    }, 50);
+  }, 800);
+}
+
+// Served from the repository root, the preview reads the real English catalog, so every string
+// shows; anywhere else it keeps the sample copy above.
+function loadMockStrings(fallback) {
+  return fetch("../../../lang/catalogs/en.json")
+    .then((r) => (r.ok ? r.json() : fallback))
+    .catch(() => fallback);
+}
+
 function mockSettingsInit(enStrings) {
   const profiles = [
     {
@@ -542,8 +593,14 @@ function startSettingsMock(post, enStrings) {
   return (msg) => {
     switch (msg.type) {
       case "ready":
-        draft = mockSettingsInit(enStrings);
-        post(draft);
+        loadMockStrings(enStrings).then((strings) => {
+          draft = mockSettingsInit(strings);
+          if (new URLSearchParams(location.search).get("device") === "smc") {
+            mockSMC(draft);
+            startSMCDemo(post, draft.controls);
+          }
+          post(draft);
+        });
         break;
       case "save":
         post({ type: "saved", setup: msg.setup });

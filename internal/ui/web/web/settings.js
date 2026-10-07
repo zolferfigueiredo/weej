@@ -1,4 +1,14 @@
 import { connect, send, t } from "./bridge.js";
+import {
+  SMC_COLUMNS,
+  isSMCPort,
+  isStripControl,
+  smcButtonIcon,
+  smcControlName,
+  smcShowStrip,
+  smcShowValue,
+  smcSVG,
+} from "./device.js";
 
 // A 1x1 transparent GIF: the About tab's icon falls back to this rather than an
 // empty src, which some browsers render as a visible broken-image box.
@@ -22,6 +32,11 @@ let ports = null; // [{ name, product, usb }] once Go has listed them
 let midiInputs = []; // MIDI input names; a "midi:<name>" port reads that mixer
 let connection = { connected: false, busy: false, port: "" };
 let calibrating = false; // set on the click, so the button greys out before the window opens
+let selected = 0; // the SMC-Mixer control the inspector shows: a fader or knob 0-15, or a button id
+let controlValues = Array(16).fill(-1); // each SMC-Mixer fader and knob, 0..1023, -1 until it moves
+let stripLights = Array(8).fill(false);
+const litUntil = new Map(); // control id to when it stops showing as touched
+const controlTimers = new Map();
 
 const SECTION_LABEL_KEY = {
   volume: "section.volume",
@@ -264,7 +279,7 @@ function renderGeneral() {
             <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${cols.length === 0 ? " disabled" : ""}>&minus;</button>
           </span>
         </div>
-        <div class="card">${knobsHtml}</div>
+        <div class="card" data-keep-scroll="knobs">${knobsHtml}</div>
         <div class="group-foot">
           <span class="group-note">${esc(t("jobs_note"))}</span>
         </div>
@@ -302,20 +317,219 @@ function renderGeneral() {
         ${importNote ? `<span class="group-note">${esc(importNote)}</span>` : ""}
       </div>`;
 
+  if (usesSMC()) {
+    renderSMCGeneral(profileGroup, importFoot);
+    return;
+  }
+
   // Two columns whose rows line up: connection and profile, invert and calibrate, then the knobs
-  // and the buttons. A redraw keeps where each list was scrolled to.
-  const listCards = () => document.querySelectorAll(".list-group > .card");
-  const scrolled = Array.from(listCards(), (card) => card.scrollTop);
-  document.getElementById("panel").innerHTML = `
+  // and the buttons.
+  keepScroll(() => {
+    document.getElementById("panel").innerHTML = `
     <div class="tabpanel general-grid" role="tabpanel">
       ${connectionGroup()}${profileGroup}
       ${invertGroup}${calibrateGroup}
       ${knobsGroup}${renderMixerButtons()}
       ${importFoot}
     </div>`;
-  listCards().forEach((card, i) => {
-    card.scrollTop = scrolled[i] || 0;
   });
+}
+
+// A redraw keeps where each list was scrolled to.
+function keepScroll(draw) {
+  const scrolled = new Map();
+  document.querySelectorAll("[data-keep-scroll]").forEach((el) => scrolled.set(el.dataset.keepScroll, el.scrollTop));
+  draw();
+  document.querySelectorAll("[data-keep-scroll]").forEach((el) => {
+    if (scrolled.has(el.dataset.keepScroll)) {
+      el.scrollTop = scrolled.get(el.dataset.keepScroll);
+      return;
+    }
+    // A control's list opens on the first thing it already does.
+    const first = el.querySelector(".chk:checked");
+    if (first) el.scrollTop = first.getBoundingClientRect().top - el.getBoundingClientRect().top - 40;
+  });
+}
+
+// --- SMC-Mixer ----------------------------------------------------------------
+
+// The mixer drawn as it is, with what the control picked on it does beside it.
+function renderSMCGeneral(profileGroup, importFoot) {
+  const invertRow = `
+          <div class="row">
+            <div class="row-main"><span class="row-title">${esc(t("invert"))}</span></div>
+            <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft.invertMixer ? " checked" : ""} /></div>
+          </div>`;
+  const svg = smcSVG({
+    name: (id) => smcControlName(id, t),
+    label: controlLabel,
+    assigned: (id) => buttonActions(id).length > 0,
+    selected,
+    values: controlValues,
+    strips: stripLights,
+    lit: (id) => (litUntil.get(id) || 0) > Date.now(),
+  });
+  keepScroll(() => {
+    document.getElementById("panel").innerHTML = `
+    <div class="tabpanel general-grid" role="tabpanel">
+      ${connectionGroup(invertRow)}${profileGroup}
+      <div class="device-row">
+        <div class="group">
+          <div class="group-head"><h2 class="group-title">${esc(draft.port.slice(MIDI_PREFIX.length))}</h2></div>
+          <div class="card device-card">${svg}</div>
+        </div>
+        ${inspector()}
+        <div class="group-foot device-foot"><span class="group-note">${esc(t("smc.hint"))}</span></div>
+      </div>
+      ${importFoot}
+    </div>`;
+  });
+}
+
+// The label under a fader or knob: its first job and how many more it has. A screen's short
+// name says which screen but not whether brightness or contrast, so those keep their title.
+function controlLabel(id) {
+  if (!isStripControl(id)) return { title: buttonActions(id).map(actionLabel).join(", ") };
+  const jobs = deviceJobs(activeProfile())[id] || [];
+  if (!jobs.length) return { text: t("job.empty"), empty: true };
+  const titleOf = (job) => (jobEntryFor(job) || {}).title || job.exe || job.kind;
+  const entry = jobEntryFor(jobs[0]);
+  const text = entry && jobs[0].kind !== "brightness" && jobs[0].kind !== "contrast" ? entry.short : titleOf(jobs[0]);
+  return { text, more: jobs.length - 1, title: jobs.map(titleOf).join(", ") };
+}
+
+function inspector() {
+  const id = selected;
+  const strip = isStripControl(id);
+  const empty = strip ? !(deviceJobs(activeProfile())[id] || []).length : !buttonActions(id).length;
+  return `
+        <div class="group inspector">
+          <div class="group-head">
+            ${strip ? "" : smcButtonIcon(id)}<h2 class="group-title">${esc(smcControlName(id, t))}</h2>
+            <span class="spacer"></span>
+            <button class="btn" type="button" data-action="clear-control"${empty ? " disabled" : ""}>${esc(t("clear"))}</button>
+          </div>
+          <div class="card inspector-card" data-keep-scroll="control-${id}">${strip ? jobPicks(id) : actionPicks(id)}</div>
+        </div>`;
+}
+
+function pickRow(n, checked, data, title, icon, badge) {
+  return `<label class="pick-row"><input class="chk" type="checkbox" id="pick-${n}" ${data}${checked ? " checked" : ""} />${icon ? `<img src="${escAttr(icon)}" alt="" />` : ""}<span class="pick-title">${esc(title)}</span>${badge ? `<span class="badge">${esc(t("experimental"))}</span>` : ""}</label>`;
+}
+
+function jobPicks(knob) {
+  const jobs = deviceJobs(activeProfile())[knob] || [];
+  const bySection = sectionsFromCatalog();
+  const order = [...bySection.keys()].filter((s) => s !== "apps").concat("apps");
+  let n = 0;
+  let html = "";
+  for (const section of order) {
+    html += `<div class="pick-head">${esc(t(SECTION_LABEL_KEY[section] || ""))}</div>`;
+    for (const entry of bySection.get(section) || []) {
+      const badge = entry.job.kind === "nightLight" && !!init.nightLightExperimental;
+      html += pickRow(n++, hasJob(jobs, entry.job), `data-pick="job" data-job="${escAttr(jobKey(entry.job))}"`, entry.title, entry.icon, badge);
+    }
+  }
+  return html + `<div class="pick-more"><button class="btn" type="button" data-action="pick-control-app">${esc(t("other"))}</button></div>`;
+}
+
+// The same choices as a button's popup menu, ticked in place; an action that takes a setting
+// shows what sets it under its tick.
+function actionPicks(cc) {
+  const actions = buttonActions(cc);
+  const kinds = new Set(actions.map(actionKind));
+  let n = 0;
+  const row = ([value, title]) => {
+    const html = pickRow(n++, kinds.has(value), `data-pick="action" data-value="${escAttr(value)}"`, title);
+    const action = PARAM_KINDS.includes(value) && actions.find((a) => actionKind(a) === value);
+    return action ? html + `<div class="pick-param">${paramControl(cc, action)}</div>` : html;
+  };
+  const group = (title, items) => `<div class="pick-head">${esc(title)}</div>` + items.map(row).join("");
+  const mutes = (from) =>
+    Array.from({ length: 8 }, (_, i) => [`mute:${from + i}`, t("action.mute", { name: controlName(from + i) })]);
+  const groups = BUTTON_GROUPS.map(([key, items]) => {
+    const list = items.map(([value, k]) => [value, t(k)]);
+    if (key === "action.group.weej") {
+      list.splice(2, 0, ...draft.profiles.map((_, i) => [`profile:${i}`, t("action.go_profile", { name: profileLabel(i) })]));
+    }
+    return group(t(key), list);
+  });
+  return groups.join("") + group(t("action.group.fkeys"), FKEYS) + group(t("mixer.faders"), mutes(0)) + group(t("knobs"), mutes(8));
+}
+
+function onPick(el) {
+  if (el.dataset.pick === "job") {
+    const entry = init.catalog.find((c) => jobKey(c.job) === el.dataset.job);
+    if (!entry) return;
+    const knobs = deviceJobs(activeProfile());
+    const jobs = knobs[selected] || (knobs[selected] = []);
+    const idx = jobs.findIndex((j) => jobKey(j) === el.dataset.job);
+    if (el.checked && idx < 0) jobs.push(entry.job);
+    if (!el.checked && idx >= 0) jobs.splice(idx, 1);
+    render();
+    return;
+  }
+  const value = el.dataset.value;
+  onButtonMenuToggle(selected, value, el.checked);
+  // A website or keys to press need setting right away, so their box takes over.
+  if (el.checked && value === "url:") document.getElementById(`url-${selected}`)?.focus();
+  if (el.checked && value === "keys:") startRecording(`button:${selected}`);
+}
+
+function selectControl(id) {
+  if (id === selected) return;
+  selected = id;
+  render();
+}
+
+// Moving or pressing a control on the mixer lights it, and picks it unless an address is being
+// typed or keys recorded for the one picked.
+function onControlTouched(id) {
+  if (activeTab !== "general" || !document.getElementById(`ctl-${id}`)) return;
+  const el = document.activeElement;
+  const typing = el && (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && el.type === "text"));
+  if (id !== selected && !recording && !typing) {
+    if (el && el.closest && el.closest(".inspector")) el.blur();
+    selectControl(id);
+  }
+  lightControl(id);
+}
+
+// A control stays lit for a second after it last moved, as a row in the lists does.
+function lightControl(id) {
+  litUntil.set(id, Date.now() + 1000);
+  document.getElementById(`ctl-${id}`)?.classList.add("lit");
+  clearTimeout(controlTimers.get(id));
+  controlTimers.set(
+    id,
+    setTimeout(() => document.getElementById(`ctl-${id}`)?.classList.remove("lit"), 1000)
+  );
+}
+
+function showControls(values) {
+  values.slice(0, 16).forEach((v, id) => {
+    if (controlValues[id] === v) return;
+    controlValues[id] = v;
+    if (activeTab === "general") smcShowValue(document, id, v);
+  });
+}
+
+// The drawn controls take Enter and Space as buttons do, and the arrow keys walk between them.
+function onControlKeydown(e) {
+  const ctl = e.target.closest && e.target.closest(".smc .ctl");
+  if (!ctl) return;
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    e.stopPropagation();
+    selectControl(parseInt(ctl.dataset.control, 10));
+    return;
+  }
+  const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+  if (!step) return;
+  e.preventDefault();
+  const all = [...document.querySelectorAll(".smc .ctl")];
+  const next = all[all.indexOf(ctl) + step];
+  if (next) next.focus();
 }
 
 function renderApp() {
@@ -427,10 +641,15 @@ function usesMixer() {
   return isMidiPort(init.forcedPort || draft.port);
 }
 
-// The calibration of whatever is connected, as Go's activeColumns picks it. A mixer never
-// calibrated reads knob i from its column i, as core.Setup.ForMixer does.
+function usesSMC() {
+  return isSMCPort(init.forcedPort || draft.port);
+}
+
+// The knobs of whatever is connected, as Go's activeColumns picks them; only how many matters
+// here. The SMC-Mixer's are fixed.
 function knobColumns() {
   if (!usesMixer()) return draft.columns;
+  if (usesSMC()) return SMC_COLUMNS;
   return draft.mixerColumns || draft.columns.map((_, i) => i);
 }
 
@@ -516,12 +735,17 @@ function profileLabel(i) {
   return p && p.name ? p.name : t("profile_n", { n: String(i + 1) });
 }
 
+// A mute names its control: the SMC-Mixer's fader or knob, or another mixer's knob letter.
+function controlName(knob) {
+  return usesSMC() ? smcControlName(knob, t) : t("knob", { letter: letterFor(knob) });
+}
+
 function actionLabel(action) {
   const kind = actionKind(action);
   const fkey = FKEYS.find(([value]) => value === kind);
   if (fkey) return fkey[1];
   for (const [, items] of BUTTON_GROUPS) for (const [value, key] of items) if (value === kind) return t(key);
-  if (kind.startsWith("mute:")) return t("action.mute", { letter: letterFor(parseInt(kind.slice(5), 10)) });
+  if (kind.startsWith("mute:")) return t("action.mute", { name: controlName(parseInt(kind.slice(5), 10)) });
   if (kind.startsWith("profile:")) return t("action.go_profile", { name: profileLabel(parseInt(kind.slice(8), 10)) });
   return kind;
 }
@@ -555,23 +779,22 @@ function keysShortcut(value) {
   return vk ? { vk: parseInt(vk, 10), mods: parseInt(mods, 10), key: key.join(":") } : null;
 }
 
+// What sets the part of an action after its ":": an address box, keys to record or an app.
+function paramControl(cc, action) {
+  const kind = actionKind(action);
+  const value = action.slice(kind.length);
+  if (kind === "url:") {
+    return `<input class="input" type="text" id="url-${cc}" data-button-url="${cc}" value="${escAttr(value)}" placeholder="https://" spellcheck="false" />`;
+  }
+  if (kind === "keys:") return shortcutControl(`button:${cc}`, keysShortcut(value));
+  const label = value ? appNames[value] || baseName(value) : t("choose");
+  return `<button class="btn" type="button" data-action="pick-button-app" data-cc="${cc}" data-mode="${kind.slice(0, -1)}">${esc(label)}</button>`;
+}
+
 function buttonParams(cc) {
   return buttonActions(cc)
-    .map((action) => {
-      const kind = actionKind(action);
-      if (!PARAM_KINDS.includes(kind)) return "";
-      const value = action.slice(kind.length);
-      let control;
-      if (kind === "url:") {
-        control = `<input class="input" type="text" data-button-url="${cc}" value="${escAttr(value)}" placeholder="https://" spellcheck="false" />`;
-      } else if (kind === "keys:") {
-        control = shortcutControl(`button:${cc}`, keysShortcut(value));
-      } else {
-        const label = value ? appNames[value] || baseName(value) : t("choose");
-        control = `<button class="btn" type="button" data-action="pick-button-app" data-cc="${cc}" data-mode="${kind.slice(0, -1)}">${esc(label)}</button>`;
-      }
-      return `<div class="button-param"><span class="param-label">${esc(actionLabel(action))}</span>${control}</div>`;
-    })
+    .filter((action) => PARAM_KINDS.includes(actionKind(action)))
+    .map((action) => `<div class="button-param"><span class="param-label">${esc(actionLabel(action))}</span>${paramControl(cc, action)}</div>`)
     .join("");
 }
 
@@ -590,7 +813,7 @@ function openButtonMenu(cc, row) {
   weej.items.splice(2, 0, ...draft.profiles.map((_, i) => item(`profile:${i}`, t("action.go_profile", { name: profileLabel(i) }))));
   sections.push({ title: t("action.group.fkeys"), items: FKEYS.map(([v, label]) => item(v, label)) });
   const mutes = [];
-  for (let i = 0; i < knobCount(); i++) mutes.push(item(`mute:${i}`, t("action.mute", { letter: letterFor(i) })));
+  for (let i = 0; i < knobCount(); i++) mutes.push(item(`mute:${i}`, t("action.mute", { name: controlName(i) })));
   sections.push({ title: t("action.group.knobs"), items: mutes });
   send({
     type: "openJobMenu",
@@ -656,7 +879,7 @@ function renderMixerButtons() {
             <button class="btn btn-icon" type="button" data-action="remove-button" title="${escAttr(t("remove_button"))}" aria-label="${escAttr(t("remove_button"))}"${order.length === 0 ? " disabled" : ""}>&minus;</button>
           </span>
         </div>
-        <div class="card">${rows}</div>
+        <div class="card" data-keep-scroll="buttons">${rows}</div>
         <div class="group-foot"><span class="group-note">${esc(t("mixer_buttons_note"))}</span></div>
       </div>`;
 }
@@ -701,7 +924,7 @@ function lightRow(row) {
   );
 }
 
-function connectionGroup() {
+function connectionGroup(extra = "") {
   const forced = init.forcedPort || "";
   const autoLabel =
     !draft.port && connection.connected && connection.port ? t("port_auto_found", { port: connection.port }) : t("port_auto");
@@ -773,7 +996,7 @@ function connectionGroup() {
             </div>
             <div class="row-control"><select class="select" id="baud-select">${baudOptions}</select></div>
           </div>`
-          }
+          }${extra}
         </div>
       </div>`;
 }
@@ -1134,6 +1357,17 @@ function onClick(e) {
     case "pick-button-app":
       send({ type: "pickApp", button: parseInt(target.dataset.cc, 10), mode: target.dataset.mode });
       break;
+    case "select-control":
+      selectControl(parseInt(target.dataset.control, 10));
+      break;
+    case "clear-control":
+      if (isStripControl(selected)) deviceJobs(activeProfile())[selected] = [];
+      else setButtonActions(selected, []);
+      render();
+      break;
+    case "pick-control-app":
+      send({ type: "pickApp", knob: selected });
+      break;
     case "add-button":
       addButton();
       break;
@@ -1181,6 +1415,11 @@ function onInput(e) {
 
 function onChange(e) {
   const el = e.target;
+  if (el.dataset.pick) {
+    onPick(el);
+    updateSaveButton();
+    return;
+  }
   switch (el.id) {
     case "profile-select":
       draft.profile = parseInt(el.value, 10);
@@ -1209,6 +1448,7 @@ function onChange(e) {
       break;
     case "port-select":
       draft.port = el.value;
+      padJobRows(draft);
       render();
       break;
     case "baud-select":
@@ -1230,6 +1470,7 @@ function onMessage(msg) {
       activeTab = msg.tab || "general";
       connection = msg.connection || connection;
       calibrating = !!msg.calibrating;
+      showControls(msg.controls || []);
       if (activeTab === "general") send({ type: "listPorts" });
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
       saved = clone(draft);
@@ -1270,11 +1511,22 @@ function onMessage(msg) {
       break;
     }
     case "mixerButton":
-      onMixerButtonPressed(msg.cc);
+      if (usesSMC()) onControlTouched(msg.id);
+      else onMixerButtonPressed(msg.id);
       break;
     // Go-initiated: a knob's control moved, so its row lights up the same way.
     case "knobMoved":
-      lightRow(document.getElementById(`knob-row-${msg.knob}`));
+      if (usesSMC()) onControlTouched(msg.knob);
+      else lightRow(document.getElementById(`knob-row-${msg.knob}`));
+      break;
+    // Go-initiated: where the SMC-Mixer's faders and knobs are, about 20 times a second.
+    case "controls":
+      showControls(msg.values || []);
+      break;
+    // Go-initiated: a strip's light over its fader went on or off.
+    case "stripLight":
+      stripLights[msg.strip] = !!msg.on;
+      if (activeTab === "general") smcShowStrip(document, msg.strip, !!msg.on);
       break;
     // Go-initiated: the board connected, dropped or got blocked by another app.
     case "connection":
@@ -1370,6 +1622,7 @@ document.getElementById("root").addEventListener("pointermove", onDragMove);
 document.getElementById("root").addEventListener("pointerup", onDragEnd);
 document.getElementById("root").addEventListener("pointercancel", onDragEnd);
 document.getElementById("root").addEventListener("keydown", onKnobKeydown);
+document.getElementById("root").addEventListener("keydown", onControlKeydown);
 document.getElementById("btn-close").addEventListener("click", () => send({ type: "close" }));
 document.getElementById("btn-save").addEventListener("click", doSave);
 

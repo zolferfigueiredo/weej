@@ -19,6 +19,10 @@ import (
 const calibrationTurnSeconds = "20"
 
 func (app *App) startCalibration(onlyNew bool) {
+	// The SMC-Mixer's controls are fixed, so there is nothing to find.
+	if app.isSMC() {
+		return
+	}
 	// Read before taking app.mu: snapshotSettings, under both of these, locks it too.
 	saved := app.activeColumns(app.snapshotSettings().Setup)
 	mixer := app.usesMixer()

@@ -2,6 +2,7 @@ package core
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -48,8 +49,8 @@ func TestMixerFadersAndKnobsScaleToColumns(t *testing.T) {
 
 func TestMixerButtonsPressOnlyOnTheWayDown(t *testing.T) {
 	m := NewMixerState()
-	if changed, pressed := m.Feed(cc(20, 127)); changed || pressed != 20 {
-		t.Errorf("press = %v, %d, want no change and CC 20", changed, pressed)
+	if changed, pressed := m.Feed(cc(20, 127)); changed || pressed != MixerNoteButton(16) {
+		t.Errorf("press = %v, %d, want no change and M1", changed, pressed)
 	}
 	if _, pressed := m.Feed(cc(20, 0)); pressed != -1 {
 		t.Errorf("release pressed %d, want -1", pressed)
@@ -61,20 +62,23 @@ func TestMixerButtonsPressOnlyOnTheWayDown(t *testing.T) {
 
 func TestEveryMixerButtonIsListedOnce(t *testing.T) {
 	seen := map[int]bool{}
-	for _, b := range DefaultMixerButtonOrder {
+	for _, b := range SMCButtonOrder() {
 		if seen[b] {
-			t.Errorf("CC %d listed twice", b)
+			t.Errorf("button %d listed twice", b)
 		}
 		seen[b] = true
-		for _, c := range defaultMixerControls {
-			if b == c {
-				t.Errorf("button CC %d is also a fader or knob", b)
-			}
+	}
+	if len(seen) != 43 {
+		t.Errorf("%d buttons, want 8 strips of 4 and a bottom row of 11", len(seen))
+	}
+	for cc := 0; cc < 128; cc++ {
+		if _, ok := SMCButtonID(cc); ok && slices.Contains(defaultMixerControls, cc) {
+			t.Errorf("button CC %d is also a fader or knob", cc)
 		}
 	}
-	for cc := range DefaultMixerButtons() {
-		if !seen[cc] {
-			t.Errorf("default action on CC %d, which is not a listed button", cc)
+	for id := range DefaultMixerButtons() {
+		if !seen[id] {
+			t.Errorf("default action on button %d, which is not a listed button", id)
 		}
 	}
 }
@@ -123,7 +127,7 @@ func TestMixerButtonsSurviveSaving(t *testing.T) {
 
 	s := DefaultSettings("Default")
 	s.Profiles = []Profile{
-		{Name: "One", Buttons: ButtonMap{20: {ActionNone}, 52: {ActionPlayPause, ActionMuteMic}, MixerNoteButton(24): {ActionStop}}},
+		{Name: "One", Buttons: ButtonMap{144: {ActionNone}, 222: {ActionPlayPause, ActionMuteMic}, MixerNoteButton(24): {ActionStop}}},
 		{Name: "Two", Buttons: ButtonMap{}},
 	}
 	data, err := EncodeSettings(s)
@@ -131,17 +135,17 @@ func TestMixerButtonsSurviveSaving(t *testing.T) {
 		t.Fatal(err)
 	}
 	back, _ := DecodeSettings(data, "Default")
-	want := ButtonMap{52: {ActionPlayPause, ActionMuteMic}, MixerNoteButton(24): {ActionStop}}
+	want := ButtonMap{222: {ActionPlayPause, ActionMuteMic}, MixerNoteButton(24): {ActionStop}}
 	if !reflect.DeepEqual(back.Profiles[0].Buttons, want) {
-		t.Errorf("profile one = %v, want %v (CC 20 set to nothing stays nothing)", back.Profiles[0].Buttons, want)
+		t.Errorf("profile one = %v, want %v (M1 set to nothing stays nothing)", back.Profiles[0].Buttons, want)
 	}
 	if b := back.Profiles[1].Buttons; b == nil || len(b) != 0 {
 		t.Errorf("profile two = %v, want still cleared, not the defaults", b)
 	}
 
-	bad, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[],"buttons":{"52":"bogus","x":["settings"],"61":"settings","62":["pc.lock","bogus","pc.lock"]}}]}`), "Default")
-	if !reflect.DeepEqual(bad.ActiveButtons(), ButtonMap{61: {ActionOpenSettings}, 62: {ActionLockPC}}) {
-		t.Errorf("bad entries = %v, want CC 61 read from a single action and CC 62 cleaned", bad.ActiveButtons())
+	bad, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[],"buttons":{"222":"bogus","x":["settings"],"226":"settings","227":["pc.lock","bogus","pc.lock"]}}]}`), "Default")
+	if !reflect.DeepEqual(bad.ActiveButtons(), ButtonMap{226: {ActionOpenSettings}, 227: {ActionLockPC}}) {
+		t.Errorf("bad entries = %v, want 226 read from a single action and 227 cleaned", bad.ActiveButtons())
 	}
 }
 
@@ -149,15 +153,15 @@ func TestSharedButtonsMoveIntoEveryProfile(t *testing.T) {
 	old, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[]},{"name":"B","jobs":[]}],"profile":1,`+
 		`"mixerButtons":{"20":"media.stop"}}`), "Default")
 	for i, p := range old.Profiles {
-		if !reflect.DeepEqual(p.Buttons, ButtonMap{20: {ActionStop}}) {
-			t.Errorf("profile %d = %v, want the shared set", i, p.Buttons)
+		if !reflect.DeepEqual(p.Buttons, ButtonMap{144: {ActionStop}}) {
+			t.Errorf("profile %d = %v, want the shared set, on M1's id", i, p.Buttons)
 		}
 	}
-	old.Profiles[0].Buttons[21] = []ButtonAction{ActionNextTrack}
-	if _, ok := old.Profiles[1].Buttons[21]; ok {
+	old.Profiles[0].Buttons[145] = []ButtonAction{ActionNextTrack}
+	if _, ok := old.Profiles[1].Buttons[145]; ok {
 		t.Error("profiles share one map, want a copy each")
 	}
-	if !reflect.DeepEqual(old.ActiveButtons(), ButtonMap{20: {ActionStop}}) {
+	if !reflect.DeepEqual(old.ActiveButtons(), ButtonMap{144: {ActionStop}}) {
 		t.Errorf("active buttons = %v, want profile B's", old.ActiveButtons())
 	}
 }
@@ -305,14 +309,14 @@ func TestForMixerHasItsOwnKnobCount(t *testing.T) {
 
 func TestButtonOrderSurvivesSaving(t *testing.T) {
 	s := DefaultSettings("Default")
-	if !reflect.DeepEqual(s.MixerButtonOrder(), DefaultMixerButtonOrder) {
-		t.Errorf("fresh order = %v, want the default", s.MixerButtonOrder())
+	if !reflect.DeepEqual(s.MixerButtonOrder(), SMCButtonOrder()) {
+		t.Errorf("fresh order = %v, want the SMC-Mixer's", s.MixerButtonOrder())
 	}
-	s.ButtonOrder = []int{52, 20}
+	s.ButtonOrder = []int{222, 144}
 	data, _ := EncodeSettings(s)
 	back, _ := DecodeSettings(data, "Default")
-	if !reflect.DeepEqual(back.ButtonOrder, []int{52, 20}) {
-		t.Errorf("round trip = %v, want [52 20]", back.ButtonOrder)
+	if !reflect.DeepEqual(back.ButtonOrder, []int{222, 144}) {
+		t.Errorf("round trip = %v, want [222 144]", back.ButtonOrder)
 	}
 }
 
@@ -386,8 +390,8 @@ func TestMixerDAWModeLandsOnTheSameColumns(t *testing.T) {
 		t.Errorf("knob 2 = %d, want it to stop at 0", v)
 	}
 
-	if _, pressed := m.Feed(cc(20, 127)); pressed != 20 {
-		t.Errorf("CC 20 at 127 pressed %d, want the CC-mode button", pressed)
+	if _, pressed := m.Feed(cc(20, 127)); pressed != MixerNoteButton(16) {
+		t.Errorf("CC 20 at 127 pressed %d, want M1", pressed)
 	}
 	if _, pressed := m.Feed(cc(20, 1)); pressed != -1 {
 		t.Errorf("CC 20 stepping pressed %d, want knob 5 instead", pressed)

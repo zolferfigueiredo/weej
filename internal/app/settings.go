@@ -262,7 +262,8 @@ func (app *App) sendSettingsInit() {
 	payload["calibrating"] = app.isCalibrating()
 	payload["forcedPort"] = app.forcedPort
 	payload["baudRates"] = core.BaudRates
-	payload["mixerButtonDefaults"] = core.DefaultMixerButtonOrder
+	payload["mixerButtonDefaults"] = core.SMCButtonOrder()
+	payload["controls"] = app.lastControls()
 	payload["ctrlName"] = app.ctrlLabelName()
 	win.Send(payload)
 }
@@ -282,6 +283,8 @@ func (app *App) handleSettingsSave(data []byte) {
 	if newSetup.Active < 0 || newSetup.Active >= len(newSetup.Profiles) {
 		newSetup.Active = 0
 	}
+	// Switching to an SMC-Mixer drops the calibration it had before WeeJ knew it.
+	core.MigrateSMC(&newSetup)
 
 	for i := range newSetup.Profiles {
 		if strings.TrimSpace(newSetup.Profiles[i].Name) == "" {

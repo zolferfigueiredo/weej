@@ -5,6 +5,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
@@ -20,6 +21,12 @@ func (app *App) sourcePort() string {
 
 func (app *App) usesMixer() bool { return core.IsMidiPort(app.sourcePort()) }
 
+// isSMC tells whether the mixer read is an SMC-Mixer, whose controls are fixed.
+func (app *App) isSMC() bool {
+	port := app.sourcePort()
+	return core.IsMidiPort(port) && core.IsSMCName(core.MidiDevice(port))
+}
+
 // activeColumns is the calibration of whatever is connected: the board's or the mixer's.
 func (app *App) activeColumns(s core.Setup) []int {
 	if app.usesMixer() {
@@ -29,7 +36,47 @@ func (app *App) activeColumns(s core.Setup) []int {
 }
 
 func (app *App) onMixerValues(values []int) {
-	app.handleValues(values, app.snapshotSettings().ForMixer())
+	setup := app.snapshotSettings().ForMixer()
+	app.handleValues(values, setup)
+	app.showControls(values, setup.Columns)
+}
+
+// showControls keeps where each knob is for the mixer Settings draws, and hands it over at most
+// 20 times a second, the last position always among them.
+func (app *App) showControls(values, columns []int) {
+	controls := make([]int, len(columns))
+	for i, col := range columns {
+		controls[i] = -1
+		if col >= 0 && col < len(values) {
+			controls[i] = values[col]
+		}
+	}
+	app.controlsMu.Lock()
+	defer app.controlsMu.Unlock()
+	app.controls = controls
+	if app.controlsTimer == nil && app.settingsWin != nil {
+		app.controlsTimer = time.AfterFunc(50*time.Millisecond, func() {
+			app.controlsMu.Lock()
+			controls := app.controls
+			app.controlsTimer = nil
+			app.controlsMu.Unlock()
+			if win := app.settingsWin; win != nil {
+				win.Send(map[string]any{"type": "controls", "values": controls})
+			}
+		})
+	}
+}
+
+func (app *App) lastControls() []int {
+	app.controlsMu.Lock()
+	defer app.controlsMu.Unlock()
+	return app.controls
+}
+
+func (app *App) onStripLight(strip int, on bool) {
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "stripLight", "strip": strip, "on": on})
+	}
 }
 
 // pointOutMovedKnobs lights up a knob's row in Settings while its control moves, so it is easy
@@ -74,45 +121,45 @@ func mixerButtonName(id int) string {
 	return fmt.Sprintf("CC %d", id)
 }
 
-func (app *App) onMixerButton(cc int) {
+func (app *App) onMixerButton(id int) {
 	if app.isCalibrating() {
-		app.log(fmt.Sprintf("Mixer button %s pressed while calibrating", mixerButtonName(cc)))
+		app.log(fmt.Sprintf("Mixer button %s pressed while calibrating", mixerButtonName(id)))
 		app.loop.Invoke(func() {
 			cal := app.currentCalibrator()
 			if cal == nil {
 				return
 			}
-			cal.PressButton(cc)
+			cal.PressButton(id)
 			app.refreshCalibration()
 		})
 		return
 	}
 	setup := app.snapshotSettings().Setup
-	actions := setup.ActiveButtons()[cc]
+	actions := setup.ActiveButtons()[id]
 	if len(actions) == 0 {
-		app.log(fmt.Sprintf("Mixer button %s pressed: empty", mixerButtonName(cc)))
+		app.log(fmt.Sprintf("Mixer button %s pressed: empty", mixerButtonName(id)))
 	} else {
 		names := make([]string, len(actions))
 		for i, a := range actions {
 			names[i] = string(a)
 		}
-		app.log(fmt.Sprintf("Mixer button %s pressed: %s", mixerButtonName(cc), strings.Join(names, ", ")))
+		app.log(fmt.Sprintf("Mixer button %s pressed: %s", mixerButtonName(id), strings.Join(names, ", ")))
 	}
 	for _, action := range actions {
-		app.runButtonAction(cc, action, setup)
+		app.runButtonAction(id, action, setup)
 	}
 
 	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "mixerButton", "cc": cc})
+		win.Send(map[string]any{"type": "mixerButton", "id": id})
 	}
 }
 
-func (app *App) runButtonAction(cc int, action core.ButtonAction, setup core.Setup) {
+func (app *App) runButtonAction(id int, action core.ButtonAction, setup core.Setup) {
 	if knob, ok := action.MuteKnob(); ok {
 		mixer := setup.ForMixer()
 		if knob < len(mixer.Columns) && mixer.Columns[knob] >= 0 {
 			muted := app.engine.ToggleMute(mixer.Columns[knob], mixer)
-			midiport.SetLED(cc, muted)
+			midiport.SetLED(id, muted)
 		}
 	}
 	if path, ok := action.OpenApp(); ok && !winui.FocusApp(core.ExeName(path)) {

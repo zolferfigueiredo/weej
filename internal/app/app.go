@@ -106,6 +106,10 @@ type App struct {
 	movesMu      sync.Mutex
 	moves        core.MoveWatcher
 	shutdownOnce sync.Once
+
+	controlsMu    sync.Mutex
+	controls      []int
+	controlsTimer *time.Timer
 }
 
 func Main(args []string) int {

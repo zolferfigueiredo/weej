@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 )
@@ -45,13 +44,6 @@ func MixerNoteButton(note int) int { return 128 + note }
 
 // MixerButtonNote reports the note behind a DAW-mode button id.
 func MixerButtonNote(id int) (int, bool) { return id - 128, id >= 128 }
-
-// DefaultMixerButtonOrder is every button CC the SMC-Mixer sends in CC mode, in the order
-// Settings lists them until Calibrate sets an order. CC 50 never fired on a real unit.
-var DefaultMixerButtonOrder = []int{
-	20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 38, 39, 48, 49,
-	51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
-}
 
 type ButtonAction string
 
@@ -178,10 +170,11 @@ func (a ButtonAction) Valid() bool {
 	return mute || open || closeApp || url || keys || profile
 }
 
+// DefaultMixerButtons has the SMC-Mixer's M buttons mute their faders, and « and » step profiles.
 func DefaultMixerButtons() ButtonMap {
-	m := ButtonMap{59: {ActionPreviousProfile}, 60: {ActionNextProfile}}
+	m := ButtonMap{MixerNoteButton(46): {ActionPreviousProfile}, MixerNoteButton(47): {ActionNextProfile}}
 	for i := 0; i < 8; i++ {
-		m[20+i] = []ButtonAction{MuteAction(i)}
+		m[MixerNoteButton(16+i)] = []ButtonAction{MuteAction(i)}
 	}
 	return m
 }
@@ -189,7 +182,7 @@ func DefaultMixerButtons() ButtonMap {
 // ForMixer is the setup a mixer frame is handled with: Columns come from MixerColumns and every
 // profile's Jobs from its MixerJobs, so the mixer has its own knobs. A fader's top is already its
 // highest value, so only the mixer's own MixerInvert flips it. A mixer never calibrated reads its
-// faders, then its knobs.
+// faders, then its knobs, and an SMC-Mixer always does.
 func (s Setup) ForMixer() Setup {
 	profiles := make([]Profile, len(s.Profiles))
 	for i, p := range s.Profiles {
@@ -197,7 +190,9 @@ func (s Setup) ForMixer() Setup {
 		profiles[i] = p
 	}
 	s.Profiles = profiles
-	if s.MixerColumns == nil {
+	if s.MixerIsSMC() {
+		s.Columns = append([]int{}, smcColumns...)
+	} else if s.MixerColumns == nil {
 		cols := make([]int, len(s.Columns))
 		for i := range cols {
 			cols[i] = -1
@@ -213,18 +208,23 @@ func (s Setup) ForMixer() Setup {
 	return s
 }
 
-// MixerButtonOrder is the order Settings lists the mixer's buttons in: Calibrate's, or the default.
+// MixerButtonOrder is the order Settings lists the mixer's buttons in: Calibrate's, or the
+// SMC-Mixer's own.
 func (s Setup) MixerButtonOrder() []int {
-	if s.ButtonOrder != nil {
+	if s.ButtonOrder != nil && !s.MixerIsSMC() {
 		return s.ButtonOrder
 	}
-	return DefaultMixerButtonOrder
+	return SMCButtonOrder()
 }
 
 // MixerState turns MIDI short messages into a frame of 0..1023 values. A control that has not
 // moved yet reads -1, since its position is unknown until the mixer sends it.
 type MixerState struct {
 	values []int
+	// The last pitch bend each fader sent, as it came, which the strip LED needs to stop blinking.
+	pitch   [8][2]int
+	pitchOK [8]bool
+	last    int
 }
 
 func NewMixerState() *MixerState {
@@ -232,12 +232,27 @@ func NewMixerState() *MixerState {
 	for i := range v {
 		v[i] = -1
 	}
-	return &MixerState{values: v}
+	return &MixerState{values: v, last: -1}
+}
+
+// Pitch is the last pitch bend fader strip sent, if it has sent one.
+func (m *MixerState) Pitch(strip int) (lsb, msb int, ok bool) {
+	return m.pitch[strip][0], m.pitch[strip][1], m.pitchOK[strip]
+}
+
+// LastChanged is the column the last Feed changed, or -1.
+func (m *MixerState) LastChanged() int { return m.last }
+
+// A step is never 0 or 127, and a CC-mode button on the same number never sends anything else.
+func isVPotStep(cc, value int) bool {
+	return cc >= vpotFirstCC && cc < vpotFirstCC+vpotCount && value != 0 && value != 127
 }
 
 // Feed takes a WinMM short message (status | data1<<8 | data2<<16). It reports whether a column
-// changed, and the id of a button that was just pressed, or -1.
+// changed, and the id of a button that was just pressed, or -1: a button has the same id in
+// either mode (SMCButtonID).
 func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
+	m.last = -1
 	status := int(msg & 0xFF)
 	data1 := int(msg>>8) & 0x7F
 	data2 := int(msg>>16) & 0x7F
@@ -253,6 +268,8 @@ func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 		col := pitchBendColumn + channel
 		if channel < 8 {
 			col = faderFirstCC + channel
+			m.pitch[channel] = [2]int{data1, data2}
+			m.pitchOK[channel] = true
 		}
 		// The SMC-Mixer only sends the top 7 bits, so its fader tops out at 127<<7, not 16383.
 		return m.set(col, min(((data1|data2<<7)*1023+8128)/16256, 1023)), -1
@@ -262,8 +279,7 @@ func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 	}
 
 	cc, value := data1, data2
-	// A step is never 0 or 127, and a CC-mode button on the same number never sends anything else.
-	if cc >= vpotFirstCC && cc < vpotFirstCC+vpotCount && value != 0 && value != 127 {
+	if isVPotStep(cc, value) {
 		col := knobFirstCC + cc - vpotFirstCC
 		pos := m.values[col]
 		if pos < 0 {
@@ -275,9 +291,9 @@ func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 		}
 		return m.set(col, min(max(pos+step*vpotStep, 0), 1023)), -1
 	}
-	if slices.Contains(DefaultMixerButtonOrder, cc) {
+	if id, ok := SMCButtonID(cc); ok {
 		if value > 0 {
-			return false, cc
+			return false, id
 		}
 		return false, -1
 	}
@@ -289,6 +305,7 @@ func (m *MixerState) set(col, value int) bool {
 		return false
 	}
 	m.values[col] = value
+	m.last = col
 	return true
 }
 

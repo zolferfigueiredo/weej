@@ -99,11 +99,11 @@ func (app *App) buildMenu() []winui.MenuItem {
 		items = append(items, winui.MenuItem{Separator: true})
 	}
 
-	items = append(items,
-		winui.MenuItem{Text: app.tr("settings"), OnClick: func() { app.openSettings("") }},
-		winui.MenuItem{Text: app.tr("calibrate"), Disabled: !connected, OnClick: func() { app.startCalibration(false) }},
-		winui.MenuItem{Text: app.tr("language"), Children: app.languageMenuItems(s.Language)},
-	)
+	items = append(items, winui.MenuItem{Text: app.tr("settings"), OnClick: func() { app.openSettings("") }})
+	if !app.isSMC() {
+		items = append(items, winui.MenuItem{Text: app.tr("calibrate"), Disabled: !connected, OnClick: func() { app.startCalibration(false) }})
+	}
+	items = append(items, winui.MenuItem{Text: app.tr("language"), Children: app.languageMenuItems(s.Language)})
 
 	items = append(items, winui.MenuItem{Separator: true})
 	var connLine string
