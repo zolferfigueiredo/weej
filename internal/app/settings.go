@@ -182,6 +182,7 @@ func (app *App) sendSettingsInit() {
 	payload["language"] = s.Language
 	payload["settings"] = settingsJSON(s)
 	payload["catalog"] = app.buildCatalog(s.Devices)
+	payload["actionIcons"] = app.actionIcons()
 	payload["labels"] = app.shortcutLabels(s)
 	payload["nightLightExperimental"] = true
 	payload["status"] = status

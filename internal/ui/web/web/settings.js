@@ -38,7 +38,7 @@ import {
 
 // A 1x1 transparent GIF: the About tab's icon falls back to this rather than an empty src, which
 // some browsers render as a visible broken-image box.
-const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 // --- Rendering ------------------------------------------------------------
 
