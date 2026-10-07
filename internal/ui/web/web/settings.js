@@ -324,8 +324,11 @@ function onClick(e) {
       if (dev) calibrate(dev);
       break;
     }
-    case "find-control":
-      if (d) calibrate(d, [picked(d)]);
+    case "arrange":
+      if (d) {
+        S.arrange[d.id] = !S.arrange[d.id];
+        render();
+      }
       break;
     case "wizard-op":
       send({ type: "wizard", op: target.dataset.op });

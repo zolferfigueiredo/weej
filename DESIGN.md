@@ -187,7 +187,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - A row in the Boards card: the on/off toggle at its left, the board's name, its status (Connected in Success, Disconnected or Off in secondary text) and an icon-button gear at its right that opens the board's settings.
 
 ### Drawn board (Boards tab, Draw)
-- An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. An inspector card edits the control picked: finding its input, four arrows laid out as a keyboard's (up above left, down and right), and Clear.
+- An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. Draw | List heads the drawing, level with the inspector's head, which names the control picked beside Clear. On a DIY or MIDI board a gear between Draw and List turns on four arrows laid out as a keyboard's (up above left, down and right) that move the control picked.
 
 ### List (Boards tab, List)
 - Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions, ten rows at most before the card scrolls; a row takes the selection tint while its control moves or is pressed.
@@ -196,7 +196,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - First the 0% and the 100% readings, each an instruction in subtitle type with Next as the primary button. Then one control at a time: the step count, the instruction, a press counter for a button, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.
 
 ### Tabs (Settings' Pivot)
-- Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab lists the connected boards in a card on the left, the one picked marked by the hover tint and a 3px accent bar at its left edge, beside that board's profile on the right; a segmented Draw | List switch sits under them.
+- Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab lists the connected boards in a card on the left, the one picked marked by the hover tint and a 3px accent bar at its left edge, beside that board's profile on the right.
 
 ### Dialog (confirm sheets, a board's settings, Add board, calibration)
 - Centered over the Scrim color (`rgba(0, 0, 0, 0.35)`, the one color in the system not tied to light/dark since a dimming layer reads the same over either), Card Surface, the system's one shadow, title (subtitle type) + body (secondary text) + right-aligned Cancel/destructive-action button pair.

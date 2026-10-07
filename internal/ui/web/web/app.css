@@ -1163,17 +1163,8 @@ select.select,
 
 .board-edit {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  justify-content: center;
   padding: 8px 12px;
-}
-
-.edit-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 
 .arrow-keys {
@@ -1201,23 +1192,10 @@ select.select,
   grid-area: right;
 }
 
-.edit-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-height: 26px;
-}
-
 .segmented .btn.on {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-text);
-}
-
-.waiting-note {
-  color: var(--accent);
-  font-weight: 600;
 }
 
 .inspector-empty {

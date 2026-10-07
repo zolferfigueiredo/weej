@@ -79,11 +79,7 @@ export function renderBoards() {
           </div>`
     )
     .join("");
-  const view = d.view === "list" ? "list" : "draw";
-  const viewSwitch = ["draw", "list"]
-    .map((v) => `<button class="btn${v === view ? " on" : ""}" type="button" data-action="set-view" data-view="${v}" aria-pressed="${v === view}">${esc(t("view." + v))}</button>`)
-    .join("");
-  const body = view === "list" ? listView(d) : drawView(d);
+  const body = d.view === "list" ? `<div class="board-bar">${viewBar(d)}</div>${listView(d)}` : drawView(d);
   keepScroll(() => {
     panel.innerHTML = `
     <div class="tabpanel" role="tabpanel">
@@ -100,7 +96,6 @@ export function renderBoards() {
           </div>
         </div>
       </div>
-      <div class="board-bar"><span class="segmented">${viewSwitch}</span></div>
       ${body}
     </div>`;
     fitLists();
@@ -177,6 +172,19 @@ function profileCard(d) {
 
 // --- Draw --------------------------------------------------------------------
 
+// Draw | List, with a gear beside Draw that turns on moving a DIY or MIDI board's controls.
+function viewBar(d) {
+  const view = d.view === "list" ? "list" : "draw";
+  const button = (v) =>
+    `<button class="btn${v === view ? " on" : ""}" type="button" data-action="set-view" data-view="${v}" aria-pressed="${v === view}">${esc(t("view." + v))}</button>`;
+  const arranging = !!S.arrange[d.id];
+  const gear =
+    view === "draw" && !isSMC(d) && d.controls.length
+      ? `<button class="btn btn-icon${arranging ? " on" : ""}" type="button" data-action="arrange" aria-pressed="${arranging}" title="${escAttr(t("board.arrange"))}" aria-label="${escAttr(t("board.arrange"))}">${GEAR_ICON}</button>`
+      : "";
+  return `<span class="segmented">${button("draw")}${gear}${button("list")}</span>`;
+}
+
 function drawView(d) {
   const k = picked(d);
   const opts = {
@@ -205,6 +213,7 @@ function drawView(d) {
   return `
       <div class="device-row">
         <div class="group">
+          <div class="group-head">${viewBar(d)}</div>
           <div class="card device-card">${svg}</div>
         </div>
         ${isSMC(d) ? smcInspector(d, k) : boardInspector(d, k)}
@@ -237,10 +246,6 @@ function boardInspector(d, k) {
   const button = kind === "button";
   const key = buttonKey(d, k);
   const empty = button ? !actionsOf(d, key).length : !jobsOf(d, k).length;
-  const found = d.controls[k].input >= 0;
-  const input = found
-    ? `<span class="row-desc">${esc(t("board.found"))}</span><button class="btn btn-icon btn-subtle" type="button" data-action="find-control" title="${escAttr(t("board.find_again"))}" aria-label="${escAttr(t("board.find_again"))}">&#x21bb;</button>`
-    : `<span class="waiting-note">${esc(t("board.not_found"))}</span><button class="btn" type="button" data-action="find-control">${esc(t("board.find"))}</button>`;
   const moves = [
     ["up", "&#x2191;"],
     ["left", "&#x2190;"],
@@ -256,12 +261,7 @@ function boardInspector(d, k) {
             <span class="spacer"></span>
             <button class="btn" type="button" data-action="clear-control"${empty ? " disabled" : ""}>${esc(t("clear"))}</button>
           </div>
-          <div class="card board-edit">
-            <div class="edit-main">
-              <div class="edit-row">${input}</div>
-            </div>
-            <div class="arrow-keys">${moves}</div>
-          </div>
+          ${S.arrange[d.id] ? `<div class="card board-edit"><div class="arrow-keys">${moves}</div></div>` : ""}
           <div class="card inspector-card" data-keep-scroll="board-${d.id}-${k}">${button ? actionPicks(d, key) : jobPicks(d, k)}</div>
         </div>`;
 }

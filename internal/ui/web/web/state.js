@@ -14,6 +14,8 @@ export const S = {
   // board is the ID of the board the Boards tab shows; selected is each board's picked control.
   board: null,
   selected: {},
+  // Per board, whether the Draw view's controls are being moved.
+  arrange: {},
   dialog: null,
   // recording is { field, device, dialog }: dialog when the gear's dialog owns the shortcut.
   recording: null,
