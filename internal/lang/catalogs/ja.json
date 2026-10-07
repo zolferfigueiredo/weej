@@ -103,7 +103,6 @@
   "icon.dial": "ダイヤル",
   "icon.mixer": "ミキサー",
   "import_deej": "deej からインポート…",
-  "import_done": "deej の設定は、プロファイル“{name}”になりました。",
   "import_failed": "その deej の設定を読み込めませんでした。",
   "import_skipped": "インポートされませんでした: {items}",
   "inspired_by": "着想元:",

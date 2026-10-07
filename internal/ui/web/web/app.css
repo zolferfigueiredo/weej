@@ -336,13 +336,6 @@ p {
   background: var(--card-bg-hover);
 }
 
-.row-icon {
-  width: 20px;
-  height: 20px;
-  flex: none;
-  border-radius: var(--radius-sm);
-}
-
 .row-main {
   flex: 1 1 auto;
   min-width: 0;
@@ -456,20 +449,6 @@ p {
   justify-content: center;
   font-size: var(--fs-body);
   line-height: 1;
-}
-
-.btn-link {
-  border: none;
-  background: none;
-  color: var(--accent);
-  padding: 0;
-  cursor: pointer;
-  font-size: inherit;
-  text-align: left;
-}
-
-.btn-link:hover {
-  text-decoration: underline;
 }
 
 /* --- Inputs / Select --- */
@@ -702,7 +681,7 @@ button.popover-item {
   }
 }
 
-/* --- Standalone window layouts (calibration / language / update) --- */
+/* --- Standalone window layouts (language / update) --- */
 
 .center-page {
   min-height: 100vh;
@@ -728,17 +707,6 @@ button.popover-item {
   max-width: 320px;
   color: var(--text-secondary);
   font-size: var(--fs-body);
-}
-
-.progress-line {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-caption);
-  color: var(--text-secondary);
-  min-height: 16px;
-}
-
-.progress-line.warning {
-  color: var(--warning);
 }
 
 .button-row {
@@ -819,14 +787,6 @@ button.popover-item {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
 }
 
 /* --- Compact layout, matching TheeJ's Settings --- */
@@ -927,44 +887,6 @@ button.popover-item {
 .select-inline {
   width: auto;
   max-width: 200px;
-}
-
-/* Knob reorder: the grip on each knob row, and the row lifted while it is dragged. */
-.knob-grip {
-  flex: none;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  margin: -6px -4px -6px -6px;
-  padding: 0 6px;
-  color: var(--text-secondary);
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-}
-
-.knob-grip svg {
-  width: 8px;
-  height: 14px;
-  fill: currentColor;
-}
-
-.card.reordering .knob-row {
-  transition: transform var(--motion) var(--ease);
-  user-select: none;
-}
-
-.card.reordering .knob-row.dragging {
-  position: relative;
-  z-index: 1;
-  transition: none;
-  background: var(--card-bg-hover);
-  box-shadow: var(--shadow-flyout);
-}
-
-.card.reordering,
-.card.reordering * {
-  cursor: grabbing;
 }
 
 .job-list {
@@ -1550,4 +1472,8 @@ select.select,
 
 .wizard-note {
   color: var(--text-secondary);
+}
+
+.wizard-warning {
+  color: var(--warning);
 }

@@ -103,7 +103,6 @@
   "icon.dial": "Регулятор",
   "icon.mixer": "Микшер",
   "import_deej": "Импортировать из deej…",
-  "import_done": "Ваша настройка deej теперь это профиль «{name}».",
   "import_failed": "Не удалось прочитать эту конфигурацию deej.",
   "import_skipped": "Не импортировано: {items}",
   "inspired_by": "Вдохновлено:",

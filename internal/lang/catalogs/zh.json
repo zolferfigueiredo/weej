@@ -103,7 +103,6 @@
   "icon.dial": "旋钮",
   "icon.mixer": "调音台",
   "import_deej": "从 deej 导入…",
-  "import_done": "你的 deej 设置现在是配置方案“{name}”。",
   "import_failed": "无法读取该 deej 配置。",
   "import_skipped": "未导入：{items}",
   "inspired_by": "灵感来自",

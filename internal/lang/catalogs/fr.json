@@ -103,7 +103,6 @@
   "icon.dial": "Molette",
   "icon.mixer": "Table de mixage",
   "import_deej": "Importer depuis deej…",
-  "import_done": "Votre configuration deej est maintenant le profil « {name} ».",
   "import_failed": "Impossible de lire cette configuration deej.",
   "import_skipped": "Non importé : {items}",
   "inspired_by": "Inspiré de",

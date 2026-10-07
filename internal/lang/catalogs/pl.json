@@ -103,7 +103,6 @@
   "icon.dial": "Pokrętło",
   "icon.mixer": "Mikser",
   "import_deej": "Importuj z deej…",
-  "import_done": "Twoja konfiguracja deej to teraz profil „{name}”.",
   "import_failed": "Nie udało się wczytać tej konfiguracji deej.",
   "import_skipped": "Nie zaimportowano: {items}",
   "inspired_by": "Inspiracja:",

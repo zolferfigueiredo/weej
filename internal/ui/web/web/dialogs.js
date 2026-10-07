@@ -169,7 +169,7 @@ function wizardDialog(dlg) {
           <p class="wizard-text">${esc(text)}</p>
           ${pot ? `<div class="level"><div class="level-fill" id="wizard-level"></div></div>` : ""}
           ${counter ? `<p class="wizard-count">${esc(counter)}</p>` : ""}
-          ${warning ? `<p class="wizard-warning warning">${esc(warning)}</p>` : ""}
+          ${warning ? `<p class="wizard-warning">${esc(warning)}</p>` : ""}
           ${connected ? "" : `<p class="wizard-note">${esc(t("wizard.waiting", { name }))}</p>`}`;
   }
   const done = w && w.done;

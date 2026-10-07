@@ -103,7 +103,6 @@
   "icon.dial": "다이얼",
   "icon.mixer": "믹서",
   "import_deej": "deej에서 가져오기…",
-  "import_done": "이제 deej 설정이 ‘{name}’ 프로필이 되었습니다.",
   "import_failed": "그 deej 설정을 읽을 수 없습니다.",
   "import_skipped": "가져오지 않음: {items}",
   "inspired_by": "영감:",

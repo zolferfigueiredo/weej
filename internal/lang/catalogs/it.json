@@ -103,7 +103,6 @@
   "icon.dial": "Manopola",
   "icon.mixer": "Mixer",
   "import_deej": "Importa da deej…",
-  "import_done": "La tua configurazione deej è ora il profilo “{name}”.",
   "import_failed": "Impossibile leggere quella configurazione deej.",
   "import_skipped": "Non importato: {items}",
   "inspired_by": "Ispirato a",

@@ -103,7 +103,6 @@
   "icon.dial": "Drehregler",
   "icon.mixer": "Mischpult",
   "import_deej": "Von deej importieren…",
-  "import_done": "Dein deej-Setup ist jetzt das Profil „{name}“.",
   "import_failed": "Diese deej-Konfiguration konnte nicht gelesen werden.",
   "import_skipped": "Nicht importiert: {items}",
   "inspired_by": "Inspiriert von",
