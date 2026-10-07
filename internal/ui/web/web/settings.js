@@ -532,12 +532,14 @@ function currentDevice() {
   return usesMixer() ? "mixer" : "board";
 }
 
-// Drawn as the hardware sits, whatever Invert does to the volume: a mixer's faders read highest at
-// the top, and a board's pots, as boards are usually wired, highest when turned down.
+// Drawn the way the volume moves, so 0 to 100% turns clockwise: core's engine reads the board as
+// 1 - raw and the mixer as raw, each flipped by its Invert as saved, which is what it runs with.
 function valueAt(col) {
   const v = live[currentDevice()][col];
   if (v === undefined || col < 0) return -1;
-  return currentDevice() === "mixer" ? v : 1023 - v;
+  const s = saved || draft;
+  const flip = currentDevice() === "mixer" ? s.invertMixer : !s.invertKnobs;
+  return flip ? 1023 - v : v;
 }
 
 // Moves the drawn faders and knobs to a device's new frame, and finds the input of a control
