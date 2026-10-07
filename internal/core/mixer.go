@@ -222,10 +222,6 @@ func (s Setup) MixerButtonOrder() []int {
 // moved yet reads -1, since its position is unknown until the mixer sends it.
 type MixerState struct {
 	values []int
-	// The last pitch bend each fader sent, as it came, which the strip LED needs to stop blinking.
-	pitch   [8][2]int
-	pitchOK [8]bool
-	last    int
 }
 
 func NewMixerState() *MixerState {
@@ -233,16 +229,8 @@ func NewMixerState() *MixerState {
 	for i := range v {
 		v[i] = -1
 	}
-	return &MixerState{values: v, last: -1}
+	return &MixerState{values: v}
 }
-
-// Pitch is the last pitch bend fader strip sent, if it has sent one.
-func (m *MixerState) Pitch(strip int) (lsb, msb int, ok bool) {
-	return m.pitch[strip][0], m.pitch[strip][1], m.pitchOK[strip]
-}
-
-// LastChanged is the column the last Feed changed, or -1.
-func (m *MixerState) LastChanged() int { return m.last }
 
 // A step is never 0 or 127, and a CC-mode button on the same number never sends anything else.
 func isVPotStep(cc, value int) bool {
@@ -253,7 +241,6 @@ func isVPotStep(cc, value int) bool {
 // changed, and the id of a button that was just pressed, or -1: a button has the same id in
 // either mode (SMCButtonID).
 func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
-	m.last = -1
 	status := int(msg & 0xFF)
 	data1 := int(msg>>8) & 0x7F
 	data2 := int(msg>>16) & 0x7F
@@ -269,8 +256,6 @@ func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 		col := pitchBendColumn + channel
 		if channel < 8 {
 			col = faderFirstCC + channel
-			m.pitch[channel] = [2]int{data1, data2}
-			m.pitchOK[channel] = true
 		}
 		// The SMC-Mixer only sends the top 7 bits, so its fader tops out at 127<<7, not 16383.
 		return m.set(col, min(((data1|data2<<7)*1023+8128)/16256, 1023)), -1
@@ -306,7 +291,6 @@ func (m *MixerState) set(col, value int) bool {
 		return false
 	}
 	m.values[col] = value
-	m.last = col
 	return true
 }
 

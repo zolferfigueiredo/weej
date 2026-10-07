@@ -108,15 +108,6 @@ func TestSMCLEDMessages(t *testing.T) {
 	if _, ok := SMCButtonLED(MixerNoteButton(24), true, false); ok {
 		t.Error("Square 1 lit in CC mode, where it sends nothing")
 	}
-	if got := SMCStripBlink(2, 10); got != 0xE2|127<<16 {
-		t.Errorf("blink for a low fader = %#x, want a pitch bend to the top", got)
-	}
-	if got := SMCStripBlink(2, 100); got != 0xE2 {
-		t.Errorf("blink for a high fader = %#x, want a pitch bend to the bottom", got)
-	}
-	if got := SMCStripRestore(7, 3, 99); got != 0xE7|3<<8|99<<16 {
-		t.Errorf("restore = %#x, want the fader's own pitch bend", got)
-	}
 }
 
 func TestSMCButtonReleasedInBothModes(t *testing.T) {
@@ -136,42 +127,6 @@ func TestSMCButtonReleasedInBothModes(t *testing.T) {
 		if id, ok := SMCButtonReleased(c.msg); ok != c.want || ok && id != c.id {
 			t.Errorf("SMCButtonReleased(%#x) = %d, %v, want %d, %v", c.msg, id, ok, c.id, c.want)
 		}
-	}
-}
-
-func TestStripLightsStayOnBrieflyAfterAMove(t *testing.T) {
-	var l StripLights
-	l.Move(3, 1.0)
-	l.Move(3, 1.25)
-	if off := l.Due(1.54); off != nil || !l.Any() {
-		t.Errorf("off %v at 0.29 s after the last move, want still lit", off)
-	}
-	if off := l.Due(1.55); !reflect.DeepEqual(off, []int{3}) || l.Any() {
-		t.Errorf("off %v at 0.3 s, want strip 3 out", off)
-	}
-	l.Move(0, 2)
-	l.Move(5, 2)
-	if off := l.AllOff(); !reflect.DeepEqual(off, []int{0, 5}) || l.Any() {
-		t.Errorf("AllOff = %v, want strips 0 and 5", off)
-	}
-}
-
-func TestMixerStateKeepsTheFaderPitch(t *testing.T) {
-	m := NewMixerState()
-	if _, _, ok := m.Pitch(2); ok {
-		t.Error("a fader that never moved has a position")
-	}
-	m.Feed(0xE2 | 5<<8 | 70<<16)
-	if lsb, msb, ok := m.Pitch(2); !ok || lsb != 5 || msb != 70 || m.LastChanged() != 42 {
-		t.Errorf("pitch = %d, %d, %v, last %d, want 5, 70 on column 42", lsb, msb, ok, m.LastChanged())
-	}
-	m.Feed(note(16, 127))
-	if m.LastChanged() != -1 {
-		t.Errorf("a press changed column %d", m.LastChanged())
-	}
-	m.Feed(cc(16, 1))
-	if m.LastChanged() != 30 {
-		t.Errorf("knob 1's step changed column %d, want 30", m.LastChanged())
 	}
 }
 

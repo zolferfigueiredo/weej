@@ -90,33 +90,6 @@ func SMCButtonOrder() []int {
 	return ids
 }
 
-// SMCStripOf is the strip a fader or knob column belongs to.
-func SMCStripOf(column int) (int, bool) {
-	switch {
-	case column >= 40 && column < 48:
-		return column - 40, true
-	case column >= 30 && column < 38:
-		return column - 30, true
-	}
-	return 0, false
-}
-
-// The LED above a strip's fader blinks while the fader position the computer last sent differs
-// from where the fader is, and stops once they match (tried on a real unit, in DAW mode only;
-// meters, the knob ring and touch notes leave it alone). So a pitch bend far from the fader starts
-// it blinking, and the fader's own position stops it.
-func SMCStripBlink(strip, faderMSB int) uint32 {
-	far := 127
-	if faderMSB >= 64 {
-		far = 0
-	}
-	return uint32(0xE0|strip) | uint32(far)<<16
-}
-
-func SMCStripRestore(strip, lsb, msb int) uint32 {
-	return uint32(0xE0|strip) | uint32(lsb)<<8 | uint32(msb)<<16
-}
-
 // SMCButtonLED lights or clears a button's LED: by its note in DAW mode, or by its CC in CC mode,
 // which R and Square don't have.
 func SMCButtonLED(id int, on, daw bool) (uint32, bool) {
@@ -154,47 +127,6 @@ func (m *SMCMode) Seen(msg uint32) {
 	case status == 0xB0:
 		m.daw.Store(false)
 	}
-}
-
-// StripLights times the strip LEDs: a strip lights when it moves and goes out stripLightTail
-// seconds after it last moved, so a hand pausing mid-move doesn't make it flicker.
-type StripLights struct {
-	lit  [8]bool
-	last [8]float64
-}
-
-const stripLightTail = 0.3
-
-// Move lights the strip, or keeps it lit, from now.
-func (l *StripLights) Move(strip int, now float64) {
-	l.last[strip] = now
-	l.lit[strip] = true
-}
-
-// Due puts out the strips that have been still for the whole tail, and lists them.
-func (l *StripLights) Due(now float64) []int {
-	var off []int
-	for s := range l.lit {
-		if l.lit[s] && now-l.last[s] >= stripLightTail {
-			l.lit[s] = false
-			off = append(off, s)
-		}
-	}
-	return off
-}
-
-func (l *StripLights) Any() bool { return slices.Contains(l.lit[:], true) }
-
-// AllOff puts out every lit strip and lists them.
-func (l *StripLights) AllOff() []int {
-	var off []int
-	for s := range l.lit {
-		if l.lit[s] {
-			l.lit[s] = false
-			off = append(off, s)
-		}
-	}
-	return off
 }
 
 // MigrateSMC moves mixer data saved before WeeJ knew the SMC-Mixer onto its fixed ids. Buttons

@@ -39,6 +39,7 @@ type setupJSON struct {
 	Speed            string         `json:"speed"`
 	Port             string         `json:"port"`
 	MixerPort        string         `json:"mixerPort"`
+	MixerLights      string         `json:"mixerLights"`
 	BaudRate         int            `json:"baudRate"`
 	BoardKinds       []string       `json:"boardKinds"`
 	BoardLayout      [][]int        `json:"boardLayout"`
@@ -115,6 +116,7 @@ func setupToJSON(s core.Setup) setupJSON {
 		Speed:            string(s.Speed),
 		Port:             s.Port,
 		MixerPort:        s.MixerPort,
+		MixerLights:      s.MixerLights,
 		BaudRate:         s.BaudRate(),
 		BoardKinds:       core.EncodeKinds(s.BoardKinds),
 		BoardLayout:      s.BoardLayout,
@@ -144,6 +146,7 @@ func setupFromJSON(j setupJSON) core.Setup {
 		Speed:        core.ParseSpeed(j.Speed),
 		Port:         j.Port,
 		MixerPort:    j.MixerPort,
+		MixerLights:  core.ParseLightPattern(j.MixerLights),
 		Baud:         j.BaudRate,
 		MixerColumns: mixerColumnsFromJSON(j.MixerColumns),
 		ButtonOrder:  j.MixerButtonOrder,
@@ -277,6 +280,7 @@ func (app *App) sendSettingsInit() {
 	payload["forcedPort"] = app.forcedPort
 	payload["baudRates"] = core.BaudRates
 	payload["mixerButtonDefaults"] = core.SMCButtonOrder()
+	payload["lightPatterns"] = core.LightPatterns
 	payload["values"] = map[string][]int{"board": app.boardLive.frame(), "mixer": app.mixerLive.frame()}
 	payload["ctrlName"] = app.ctrlLabelName()
 	win.Send(payload)
@@ -318,6 +322,7 @@ func (app *App) handleSettingsSave(data []byte) {
 	if old.Port != newSetup.Port || old.BaudRate() != newSetup.BaudRate() {
 		app.startSerial()
 	}
+	midiport.SetLights(newSetup.MixerLights)
 	if old.MixerPort != newSetup.MixerPort {
 		app.startMixer()
 	}

@@ -362,10 +362,21 @@ function keepScroll(draw) {
 
 // The mixer drawn as it is, with what the control picked on it does beside it.
 function renderSMCGeneral(profileGroup, importFoot) {
+  const pattern = draft.mixerLights || "off";
+  const lightOptions = (init.lightPatterns || ["off"])
+    .map((p) => `<option value="${p}"${p === pattern ? " selected" : ""}>${esc(t("lights." + p))}</option>`)
+    .join("");
   const invertRow = `
           <div class="row">
             <div class="row-main"><span class="row-title">${esc(t("invert"))}</span></div>
             <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft.invertMixer ? " checked" : ""} /></div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("lights"))}</span>
+              <span class="row-desc">${esc(t("lights_note"))}</span>
+            </div>
+            <div class="row-control"><select class="select" id="lights-select">${lightOptions}</select></div>
           </div>`;
   const svg = smcSVG({
     name: (id) => smcControlName(id, t),
@@ -1738,6 +1749,9 @@ function onChange(e) {
       break;
     case "invert":
       draft[usesMixer() ? "invertMixer" : "invertKnobs"] = el.checked;
+      break;
+    case "lights-select":
+      draft.mixerLights = el.value === "off" ? "" : el.value;
       break;
     case "language-select":
       draft.language = el.value;
