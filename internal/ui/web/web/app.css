@@ -1431,21 +1431,6 @@ select.select,
   width: 72px;
 }
 
-.level {
-  height: 8px;
-  border-radius: 4px;
-  background: var(--control-border);
-  overflow: hidden;
-  margin: 10px 0;
-}
-
-.level-fill {
-  height: 100%;
-  width: 0;
-  background: var(--accent);
-  transition: width 80ms linear;
-}
-
 .wizard-step,
 .wizard-text,
 .wizard-count,

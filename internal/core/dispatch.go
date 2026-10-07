@@ -51,7 +51,6 @@ type Engine struct {
 	applier     Applier
 	debouncer   *Debouncer
 	lastApplied map[int]float64
-	lastInvert  bool
 	// A muted column keeps recording its position, so unmuting puts it back where it now is.
 	muted map[int]bool
 	lines []Line
@@ -95,13 +94,6 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 	mapping := setup.Mapping()
 	settle := setup.Speed.Settle()
 
-	if setup.Invert != e.lastInvert {
-		for k, v := range e.lastApplied {
-			e.lastApplied[k] = 1 - v
-		}
-		e.lastInvert = setup.Invert
-	}
-
 	shown := map[string]bool{}
 	once := func(display string, show func()) {
 		if !shown[display] {
@@ -114,11 +106,7 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 		if raw < 0 {
 			continue
 		}
-		scalar := float64(raw) / 1023.0
-		u := scalar
-		if !setup.Invert {
-			u = 1 - scalar
-		}
+		u := float64(raw) / 1023.0
 		switch {
 		case u < 0.01:
 			u = 0

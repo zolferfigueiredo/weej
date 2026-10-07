@@ -57,7 +57,6 @@ type deviceJSON struct {
 	Port            string        `json:"port"`
 	BaudRate        int           `json:"baudRate,omitempty"`
 	Speed           string        `json:"speed"`
-	Invert          bool          `json:"invert"`
 	Controls        []controlJSON `json:"controls"`
 	Layout          [][]int       `json:"layout,omitempty"`
 	View            string        `json:"view"`
@@ -116,7 +115,6 @@ func encodeDevice(d Device) deviceJSON {
 		Port:            d.Port,
 		BaudRate:        d.Baud,
 		Speed:           string(d.Speed),
-		Invert:          d.Invert,
 		Controls:        make([]controlJSON, len(d.Controls)),
 		Layout:          d.Layout,
 		View:            d.View,
@@ -239,7 +237,6 @@ func decodeDevice(data json.RawMessage, profileName string) (Device, bool) {
 	if v, ok := take[string](raw, "speed"); ok {
 		d.Speed = ParseSpeed(v)
 	}
-	d.Invert, _ = take[bool](raw, "invert")
 
 	if t == DeviceSMC {
 		d.Controls = SMCControls()

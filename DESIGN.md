@@ -102,7 +102,7 @@ The three windows share one visual system (one stylesheet, one component set) bu
 Restrained by the brief, not by default: a single accent carries every call to action, every selection state and nothing else.
 
 ### Primary
-- **Windows Accent** (`#0078d4` fallback; the real value arrives live from `sys.Accent()` via the `theme` message): the Apply/Continue/Next/Finish primary buttons, the active tab's underline, a checked toggle or checkbox, the outline of the control picked on a drawn board, the calibration level bar, and the focus ring on interactive controls. Never used for body text or decoration.
+- **Windows Accent** (`#0078d4` fallback; the real value arrives live from `sys.Accent()` via the `theme` message): the Apply/Continue/Next/Finish primary buttons, the active tab's underline, a checked toggle or checkbox, the outline of the control picked on a drawn board, and the focus ring on interactive controls. Never used for body text or decoration.
 
 ### Neutral
 - **Mica Ground** (`#f3f3f3` light / `#202020` dark): the window background, standing in for the native Mica backdrop the host applies to the HWND itself (see Elevation & Depth).
@@ -110,7 +110,7 @@ Restrained by the brief, not by default: a single accent carries every call to a
 - **Control Surface** (`#ffffff` light / `#2c2c2c` dark): text inputs, selects, and secondary buttons, one step brighter than the card they usually sit inside.
 - **Primary Text** (`#1a1a1a` light / `#ffffff` dark) and **Secondary Text** (`#5d5d5d` light / `#c5c5c5` dark): row titles versus row descriptions/hints; both verified at or above 4.5:1 against their surface.
 - **Danger** (`#c42b1c` light / `#ff99a4` dark): Remove board and the remove dialogs' destructive action, and a port another app holds.
-- **Warning** (`#9d5d00` light / `#ffb956` dark): the calibration dialog's warning line (a control already found, a press on another button).
+- **Warning** (`#9d5d00` light / `#ffb956` dark): the calibration dialog's warning line (a control already found, a press on another button, nothing moved between 0% and 100%).
 - **Success** (`#0f7b0f` light / `#6ccb5f` dark): a board's Connected status, the one place a state is shown in color as well as words.
 
 ### Named Rules
@@ -193,7 +193,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions, ten rows at most before the card scrolls; a row takes the selection tint while its control moves or is pressed.
 
 ### Calibration dialog
-- One control at a time: the step count, the instruction in subtitle type, a level bar in the accent that follows the control live, a sweep or press counter, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.
+- First the 0% and the 100% readings, each an instruction in subtitle type with Next as the primary button. Then one control at a time: the step count, the instruction, a press counter for a button, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.
 
 ### Tabs (Settings' Pivot)
 - Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab has a second row of tabs, one per board, and a segmented Draw | List switch.

@@ -310,8 +310,6 @@ const MOCK_EN_STRINGS = {
   installed: "Version {version} is installed.",
   installed_only: "WeeJ updates itself only when it runs from its installed folder.",
   installing: "Installing...",
-  invert: "Invert knobs",
-  invert_note: "For pots wired the other way round.",
   "job.brightness": "Screen {n} brightness",
   "job.builtin_brightness": "Built-in display brightness",
   "job.contrast": "Screen {n} contrast",
@@ -473,7 +471,6 @@ function mockDIY(id) {
     port: "COM6",
     baudRate: 9600,
     speed: "slow",
-    invert: false,
     controls: [mockKnob(0), mockKnob(3), mockKnob(2), mockKnob(4, "fader"), mockKnob(1, "fader"), mockKnob(-1, "button")],
     layout: [[0, 1, 2], [3, 4, 5]],
     view: "draw",
@@ -504,7 +501,6 @@ function mockSMC(id) {
     enabled: true,
     port: "SMC-Mixer",
     speed: "slow",
-    invert: false,
     controls,
     view: "draw",
     profiles: [{ name: "Default", jobs, buttons }],
@@ -521,7 +517,6 @@ function mockMIDI(id) {
     enabled: false,
     port: "nanoKONTROL2",
     speed: "slow",
-    invert: false,
     controls: [mockKnob(16), mockKnob(17), mockKnob(0, "fader"), mockKnob(1, "fader"), mockKnob(171, "button"), mockKnob(-1, "button")],
     layout: [[0, 1], [2, 3], [4, 5]],
     view: "list",
@@ -601,33 +596,50 @@ function mockSettingsInit(enStrings) {
 }
 
 // A scripted calibration: each control is found, swept and held, or pressed three times.
+// A scripted calibration: it waits for Next at 0% and at 100%, then finds each control in turn.
 function mockWizard(post, device, controls) {
+  const base = { device: device.id, control: -1, kind: "", count: 0, need: 0, warning: "", other: -1, index: 0, total: controls.length, done: false };
   const steps = [];
   controls.forEach((k, index) => {
-    const button = device.controls[k].kind === "button";
-    const base = { device: device.id, control: k, kind: device.controls[k].kind, index, total: controls.length, warning: "", other: -1, done: false };
-    if (button) {
-      for (let n = 0; n <= 2; n++) steps.push({ ...base, stage: "press", count: n, need: 3, level: 0 });
-    } else {
-      steps.push({ ...base, stage: "find", count: 0, need: 2, level: 0 });
-      for (let n = 1; n <= 2; n++) for (const level of [300, 700, 1023]) steps.push({ ...base, stage: "sweep", count: n, need: 2, level });
-    }
+    const step = { ...base, control: k, kind: device.controls[k].kind, index };
+    if (step.kind === "button") for (let n = 0; n <= 2; n++) steps.push({ ...step, stage: "press", count: n, need: 3 });
+    else steps.push({ ...step, stage: "find" });
   });
-  steps.push({ device: device.id, control: -1, kind: "", stage: "done", count: 0, need: 0, level: 0, warning: "", other: -1, index: controls.length, total: controls.length, done: true });
-  let i = 0;
-  const timer = setInterval(() => {
-    if (i >= steps.length) {
+  steps.push({ ...base, stage: "done", index: controls.length, done: true });
+  const pots = controls.some((k) => device.controls[k].kind !== "button");
+  let timer = null;
+  const run = () => {
+    let i = 0;
+    timer = setInterval(() => {
+      if (i >= steps.length) {
+        clearInterval(timer);
+        return;
+      }
+      post(Object.assign({ type: "wizard" }, steps[i++]));
+    }, 700);
+  };
+  let stage = pots ? "zero" : "";
+  if (stage) post({ type: "wizard", ...base, stage });
+  else run();
+  return {
+    next() {
+      if (stage === "zero") {
+        stage = "full";
+        post({ type: "wizard", ...base, stage });
+      } else if (stage === "full") {
+        stage = "";
+        run();
+      }
+    },
+    stop() {
       clearInterval(timer);
-      return;
-    }
-    post(Object.assign({ type: "wizard" }, steps[i++]));
-  }, 350);
-  return () => clearInterval(timer);
+    },
+  };
 }
 
 function startSettingsMock(post, enStrings) {
   let init = null;
-  let stopWizard = null;
+  let wizard = null;
   let wizardDevice = null;
   const find = (id) => init.settings.devices.find((d) => d.id === id);
   const saveDevice = (d) => {
@@ -661,7 +673,7 @@ function startSettingsMock(post, enStrings) {
         const d =
           msg.deviceType === "smc"
             ? Object.assign(mockSMC(id), { name: msg.name, port: msg.port, lights: "" })
-            : { id, name: msg.name, type: msg.deviceType, enabled: true, port: msg.port, baudRate: msg.baudRate, speed: "slow", invert: false, controls, view: "draw", profiles: [{ name: "Default", jobs: controls.map(() => []), buttons: {} }], profile: 0 };
+            : { id, name: msg.name, type: msg.deviceType, enabled: true, port: msg.port, baudRate: msg.baudRate, speed: "slow", controls, view: "draw", profiles: [{ name: "Default", jobs: controls.map(() => []), buttons: {} }], profile: 0 };
         saveDevice(d);
         post({ type: "status", device: id, connected: true, busy: false, port: msg.port || "COM7" });
         post({ type: "added", device: id });
@@ -674,14 +686,18 @@ function startSettingsMock(post, enStrings) {
       case "calibrate": {
         const d = find(msg.device);
         if (!d) break;
-        if (stopWizard) stopWizard();
+        if (wizard) wizard.stop();
         wizardDevice = d;
-        stopWizard = mockWizard(post, d, msg.controls && msg.controls.length ? msg.controls : d.controls.map((_, k) => k));
+        wizard = mockWizard(post, d, msg.controls && msg.controls.length ? msg.controls : d.controls.map((_, k) => k));
         break;
       }
       case "wizard":
-        if (stopWizard) stopWizard();
-        stopWizard = null;
+        if (msg.op === "next") {
+          if (wizard) wizard.next();
+          break;
+        }
+        if (wizard) wizard.stop();
+        wizard = null;
         if (msg.op === "finish" && wizardDevice) {
           wizardDevice.controls.forEach((c, k) => {
             if (c.input < 0) c.input = 10 + k;

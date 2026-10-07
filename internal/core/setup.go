@@ -274,13 +274,12 @@ func Letter(i int) string {
 }
 
 // Setup is one board as the Engine reads it (Device.EngineSetup): a column per control, -1 for
-// one with no jobs to run, and Invert the Engine's own, which flips unless set.
+// one with no jobs to run.
 type Setup struct {
 	Columns  []int
 	Profiles []Profile
 	Active   int
 	Speed    Speed
-	Invert   bool
 }
 
 func (s Setup) activeJobs() [][]Job {

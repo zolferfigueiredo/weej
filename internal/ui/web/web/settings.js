@@ -12,7 +12,7 @@ import {
   showValues,
   touched,
 } from "./boards.js";
-import { openAdd, openGear, renderDialog, showWizardLevel } from "./dialogs.js";
+import { openAdd, openGear, renderDialog } from "./dialogs.js";
 import { renderGeneral } from "./general.js";
 import {
   BUTTON_MENU_BASE,
@@ -59,10 +59,7 @@ function render() {
   else if (S.tab === "about") renderAbout();
   else renderGeneral();
 
-  if (S.dialog) {
-    renderDialog();
-    showWizardLevel();
-  }
+  if (S.dialog) renderDialog();
 
   if (focusedId) {
     const el = document.getElementById(focusedId);
@@ -534,9 +531,6 @@ function onChange(e) {
     case "dlg-speed":
       S.dialog.dev.speed = el.value;
       break;
-    case "dlg-invert":
-      S.dialog.dev.invert = el.checked;
-      break;
     case "dlg-lights":
       S.dialog.dev.lights = el.value === "off" ? "" : el.value;
       break;
@@ -695,8 +689,7 @@ function onMessage(msg) {
       const same =
         before &&
         ["device", "control", "stage", "count", "warning", "other", "index", "done"].every((k) => before[k] === msg[k]);
-      if (same) showWizardLevel();
-      else render();
+      if (!same) render();
       break;
     }
     case "ports":
