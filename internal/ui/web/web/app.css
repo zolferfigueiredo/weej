@@ -1344,9 +1344,8 @@ select.select,
   text-align: center;
 }
 
-/* --list-max is set by fitLists when the page would be taller than the window can grow. */
+/* fitLists sets each card's max-height. */
 .list-columns .card {
-  max-height: var(--list-max, none);
   overflow-y: auto;
 }
 

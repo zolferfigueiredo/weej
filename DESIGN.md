@@ -190,7 +190,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. An inspector card edits the control picked: its kind, finding its input, four arrows laid out as a keyboard's (up above left, down and right), Clear and remove.
 
 ### List (Boards tab, List)
-- Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions; a row takes the selection tint while its control moves or is pressed.
+- Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions, ten rows at most before the card scrolls; a row takes the selection tint while its control moves or is pressed.
 
 ### Calibration dialog
 - One control at a time: the step count, the instruction in subtitle type, a level bar in the accent that follows the control live, a sweep or press counter, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.

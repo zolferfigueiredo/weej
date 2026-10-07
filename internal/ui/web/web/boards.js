@@ -101,19 +101,32 @@ export function renderBoards() {
   });
 }
 
-// When the List view would make the page taller than the window can grow, its cards scroll
-// inside themselves instead, so the page never scrolls as a whole.
+const LIST_ROWS = 10;
+
+// Each List card shows LIST_ROWS rows and scrolls past them, and less when the page would
+// still be taller than the window can grow, so the page never scrolls as a whole.
 export function fitLists() {
   const columns = document.querySelector(".list-columns");
   if (!columns) return;
   const cards = [...columns.querySelectorAll(".card")];
   const scrolled = cards.map((c) => c.scrollTop);
-  columns.style.removeProperty("--list-max");
+  cards.forEach((c) => (c.style.maxHeight = ""));
+  const limits = cards.map((c) => {
+    const rows = c.querySelectorAll(":scope > .row");
+    if (rows.length <= LIST_ROWS) return Infinity;
+    const border = parseFloat(getComputedStyle(c).borderBottomWidth) || 0;
+    return Math.ceil(rows[LIST_ROWS - 1].getBoundingClientRect().bottom - c.getBoundingClientRect().top + border);
+  });
+  cards.forEach((c, i) => {
+    if (limits[i] < Infinity) c.style.maxHeight = `${limits[i]}px`;
+  });
   const room = roomHeight();
   const over = Math.ceil(pageHeight() - room);
   if (room > 0 && over > 0) {
-    const tallest = Math.max(...cards.map((c) => c.offsetHeight));
-    columns.style.setProperty("--list-max", `${Math.max(tallest - over, 160)}px`);
+    const cap = Math.max(Math.max(...cards.map((c) => c.offsetHeight)) - over, 160);
+    cards.forEach((c) => {
+      if (c.offsetHeight > cap) c.style.maxHeight = `${cap}px`;
+    });
   }
   cards.forEach((c, i) => (c.scrollTop = scrolled[i]));
 }
