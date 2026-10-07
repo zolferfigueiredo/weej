@@ -383,7 +383,7 @@ const MOCK_EN_STRINGS = {
   "tab.about": "About",
   "tab.app": "App settings",
   status: "Status",
-  port: "Port",
+  port: "Device",
   port_auto: "Automatic",
   port_auto_found: "Automatic ({port})",
   port_note: "Automatic finds your board by itself.",

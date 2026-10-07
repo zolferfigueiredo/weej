@@ -211,7 +211,7 @@ function renderGeneral() {
   const knobsHtml = cols.length
     ? cols
         .map((col, i) => {
-          const jobs = profile.jobs[i] || [];
+          const jobs = deviceJobs(profile)[i] || [];
           const needsCal = col === null || col === undefined || col === -1;
           return `
             <div class="row clickable knob-row" id="knob-row-${i}" role="button" tabindex="0" data-action="open-job-menu" data-knob="${i}">
@@ -438,8 +438,18 @@ function knobCount() {
   return knobColumns().length;
 }
 
+// Each device has its own knob jobs in every profile: jobs for the board, mixerJobs for the
+// mixer, as core.Profile keeps them.
+function deviceJobs(profile) {
+  const key = usesMixer() ? "mixerJobs" : "jobs";
+  return profile[key] || (profile[key] = []);
+}
+
 function padJobRows(setup) {
-  for (const p of setup.profiles) while (p.jobs.length < knobCount()) p.jobs.push([]);
+  for (const p of setup.profiles) {
+    const jobs = deviceJobs(p);
+    while (jobs.length < knobCount()) jobs.push([]);
+  }
 }
 
 const MIXER_ACTIONS = [
@@ -478,7 +488,8 @@ function editableButtonOrder() {
 
 // A row added with + reads -1 until a mixer button is pressed to fill it in.
 function renderMixerButtons() {
-  const order = buttonOrder();
+  const mixer = usesMixer();
+  const order = mixer ? buttonOrder() : [];
   const actions = activeProfile().buttons || {};
   const rows = order.length
     ? order
@@ -501,7 +512,7 @@ function renderMixerButtons() {
           <h2 class="group-title">${esc(t("mixer_buttons"))}</h2>
           <span class="spacer"></span>
           <span class="segmented">
-            <button class="btn btn-icon" type="button" data-action="add-button" title="${escAttr(t("add_button"))}" aria-label="${escAttr(t("add_button"))}">+</button>
+            <button class="btn btn-icon" type="button" data-action="add-button" title="${escAttr(t("add_button"))}" aria-label="${escAttr(t("add_button"))}"${mixer ? "" : " disabled"}>+</button>
             <button class="btn btn-icon" type="button" data-action="remove-button" title="${escAttr(t("remove_button"))}" aria-label="${escAttr(t("remove_button"))}"${order.length === 0 ? " disabled" : ""}>&minus;</button>
           </span>
         </div>
@@ -654,7 +665,7 @@ function renderAbout() {
 // whole menu, and Go hands every tick back as jobMenuToggle or jobMenuClear.
 function openJobMenu(knob, row) {
   const r = row.getBoundingClientRect();
-  const knobJobs = activeProfile().jobs[knob] || [];
+  const knobJobs = deviceJobs(activeProfile())[knob] || [];
   const item = (entry) => ({
     job: entry.job,
     title: entry.title,
@@ -704,7 +715,7 @@ function renderDialog() {
 // --- Mutations --------------------------------------------------------------
 
 function addProfile() {
-  draft.profiles.push({ name: "", jobs: [], shortcut: null, buttons: {} });
+  draft.profiles.push({ name: "", jobs: [], mixerJobs: [], shortcut: null, buttons: {} });
   padJobRows(draft);
   draft.profile = draft.profiles.length - 1;
   render();
@@ -727,7 +738,7 @@ let swallowClick = false;
 // Moves a knob's jobs to another knob in the profile shown, the knobs in between shifting by
 // one, as cards in a list do. Knobs keep their letters, inputs and calibration.
 function moveKnobJobs(from, to) {
-  const jobs = activeProfile().jobs;
+  const jobs = deviceJobs(activeProfile());
   while (jobs.length < knobCount()) jobs.push([]);
   const [moved] = jobs.splice(from, 1);
   jobs.splice(to, 0, moved);
@@ -839,9 +850,10 @@ function addKnob() {
 
 function removeKnobConfirmed() {
   editableKnobColumns().pop();
-  // A job row stays while the other input still has that knob.
-  const rows = Math.max(draft.columns.length, draft.mixerColumns ? draft.mixerColumns.length : 0);
-  for (const p of draft.profiles) if (p.jobs.length > rows) p.jobs.pop();
+  for (const p of draft.profiles) {
+    const jobs = deviceJobs(p);
+    if (jobs.length > knobCount()) jobs.pop();
+  }
 }
 
 function applyRecorded(field, shortcut) {
@@ -1123,7 +1135,8 @@ function onMessage(msg) {
       render();
       break;
     case "jobMenuToggle": {
-      const jobs = activeProfile().jobs[msg.knob] || (activeProfile().jobs[msg.knob] = []);
+      const knobs = deviceJobs(activeProfile());
+      const jobs = knobs[msg.knob] || (knobs[msg.knob] = []);
       const k = jobKey(msg.job);
       const idx = jobs.findIndex((j) => jobKey(j) === k);
       if (msg.checked && idx < 0) jobs.push(msg.job);
@@ -1132,11 +1145,12 @@ function onMessage(msg) {
       break;
     }
     case "jobMenuClear":
-      activeProfile().jobs[msg.knob] = [];
+      deviceJobs(activeProfile())[msg.knob] = [];
       render();
       break;
     case "appPicked": {
-      const jobs = activeProfile().jobs[msg.knob] || (activeProfile().jobs[msg.knob] = []);
+      const knobs = deviceJobs(activeProfile());
+      const jobs = knobs[msg.knob] || (knobs[msg.knob] = []);
       if (!hasJob(jobs, msg.entry.job)) jobs.push(msg.entry.job);
       if (!init.catalog.some((c) => jobKey(c.job) === jobKey(msg.entry.job))) init.catalog.push(msg.entry);
       render();

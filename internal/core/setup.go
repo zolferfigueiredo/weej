@@ -226,13 +226,19 @@ type Shortcut struct {
 }
 
 type Profile struct {
-	Name     string    `json:"name"`
-	Jobs     [][]Job   `json:"jobs"`
-	Shortcut *Shortcut `json:"shortcut,omitempty"`
+	Name string `json:"name"`
+	// Jobs are the board's knobs and MixerJobs the mixer's: each device has its own knobs.
+	// Nil MixerJobs means a profile saved before that split; DecodeSettings fills it in.
+	Jobs      [][]Job   `json:"jobs"`
+	MixerJobs [][]Job   `json:"mixerJobs"`
+	Shortcut  *Shortcut `json:"shortcut,omitempty"`
 	// Buttons is what each mixer button does in this profile. Nil means a profile saved before
 	// buttons were per profile; DecodeSettings fills it in.
 	Buttons ButtonMap `json:"buttons"`
 }
+
+// AllJobs is every job the profile uses, on either device.
+func (p Profile) AllJobs() [][]Job { return append(append([][]Job{}, p.Jobs...), p.MixerJobs...) }
 
 func (p Profile) JobsOf(knob int) []Job {
 	if knob < 0 || knob >= len(p.Jobs) {
@@ -386,7 +392,7 @@ func (s Setup) MenuOrder() []int {
 func (s Setup) Apps() []string {
 	set := map[string]struct{}{}
 	for _, p := range s.Profiles {
-		for _, row := range p.Jobs {
+		for _, row := range p.AllJobs() {
 			for _, j := range row {
 				if j.Kind == JobApp {
 					set[j.Exe] = struct{}{}

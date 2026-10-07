@@ -168,7 +168,7 @@ func TestEngineSkipsUnknownMixerValues(t *testing.T) {
 	setup := Setup{
 		Columns:      []int{0, 1},
 		MixerColumns: []int{0, 1},
-		Profiles:     []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}, {{Kind: JobMicrophone}}}}},
+		Profiles:     []Profile{{MixerJobs: [][]Job{{{Kind: JobMaster}}, {{Kind: JobMicrophone}}}}},
 		Speed:        SpeedSuperFast,
 	}.ForMixer()
 	e.Handle([]int{-1, 512}, setup, false)
@@ -198,7 +198,7 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 	setup := Setup{
 		Columns:      []int{0},
 		MixerColumns: []int{0},
-		Profiles:     []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}},
+		Profiles:     []Profile{{MixerJobs: [][]Job{{{Kind: JobMaster}}}}},
 		Speed:        SpeedSuperFast,
 	}.ForMixer()
 
@@ -220,7 +220,7 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 
 func TestEngineResetUnmutes(t *testing.T) {
 	e := NewEngine(&fakeApplier{})
-	setup := Setup{Columns: []int{0}, MixerColumns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}}.ForMixer()
+	setup := Setup{Columns: []int{0}, MixerColumns: []int{0}, Profiles: []Profile{{MixerJobs: [][]Job{{{Kind: JobMaster}}}}}}.ForMixer()
 	e.ToggleMute(0, setup)
 	e.Reset()
 	if !e.ToggleMute(0, setup) {
@@ -420,7 +420,7 @@ func TestEngineUnmuteAllRestoresWithoutAHUD(t *testing.T) {
 	setup := Setup{
 		Columns:      []int{0},
 		MixerColumns: []int{0},
-		Profiles:     []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}},
+		Profiles:     []Profile{{MixerJobs: [][]Job{{{Kind: JobMaster}}}}},
 		Speed:        SpeedSuperFast,
 	}.ForMixer()
 	e.Handle([]int{1023}, setup, false)
@@ -436,5 +436,38 @@ func TestEngineUnmuteAllRestoresWithoutAHUD(t *testing.T) {
 	}
 	if e.UnmuteAll(setup) != 0 {
 		t.Error("a second UnmuteAll found mutes left")
+	}
+}
+
+func TestEachDeviceHasItsOwnKnobJobs(t *testing.T) {
+	old, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[[{"kind":"master"}]]}],"columns":[0]}`), "Default")
+	p := old.Profiles[0]
+	if len(p.MixerJobs) != 1 || p.MixerJobs[0][0].Kind != JobMaster {
+		t.Fatalf("mixer jobs = %v, want a copy of the shared jobs", p.MixerJobs)
+	}
+	p.MixerJobs[0][0] = Job{Kind: JobMicrophone}
+	if p.Jobs[0][0].Kind != JobMaster {
+		t.Error("changing the mixer's jobs changed the board's")
+	}
+
+	s := Setup{
+		Columns:      []int{0},
+		MixerColumns: []int{40},
+		Profiles:     []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}, MixerJobs: [][]Job{{{Kind: JobMicrophone}}}}},
+	}
+	if got := s.Mapping()[0]; len(got) != 1 || got[0].Kind != JobMaster {
+		t.Errorf("board mapping = %v, want master", got)
+	}
+	if got := s.ForMixer().Mapping()[40]; len(got) != 1 || got[0].Kind != JobMicrophone {
+		t.Errorf("mixer mapping = %v, want the microphone", got)
+	}
+	if s.Profiles[0].Jobs[0][0].Kind != JobMaster {
+		t.Error("ForMixer changed the board's jobs")
+	}
+
+	data, _ := EncodeSettings(Settings{Setup: Setup{Profiles: []Profile{{Name: "B"}}}})
+	back, _ := DecodeSettings(data, "Default")
+	if back.Profiles[0].MixerJobs == nil {
+		t.Error("a saved profile came back unmigrated, want its empty mixer jobs kept")
 	}
 }

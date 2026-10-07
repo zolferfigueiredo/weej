@@ -134,7 +134,12 @@ func DecodeButtons(raw map[string]string) map[int]ButtonAction {
 }
 
 func normalizeProfile(p Profile) Profile {
-	jobs := p.Jobs
+	p.Jobs = normalizeJobs(p.Jobs)
+	p.MixerJobs = normalizeJobs(p.MixerJobs)
+	return p
+}
+
+func normalizeJobs(jobs [][]Job) [][]Job {
 	if jobs == nil {
 		jobs = [][]Job{}
 	}
@@ -143,8 +148,7 @@ func normalizeProfile(p Profile) Profile {
 			jobs[i] = []Job{}
 		}
 	}
-	p.Jobs = jobs
-	return p
+	return jobs
 }
 
 func EncodeSettings(s Settings) ([]byte, error) {
@@ -259,9 +263,16 @@ func DecodeSettings(data []byte, defaultProfileName string) (Settings, error) {
 	if v, ok := take[[]int](raw, "mixerButtonOrder"); ok && v != nil {
 		s.ButtonOrder = v
 	}
-	// Button functions were one set for every profile before they moved into the profile.
+	// Button functions were one set for every profile before they moved into the profile, and
+	// both devices shared the knob jobs before each got its own.
 	legacy, hasLegacy := take[map[string]string](raw, "mixerButtons")
 	for i := range s.Profiles {
+		if s.Profiles[i].MixerJobs == nil {
+			s.Profiles[i].MixerJobs = make([][]Job, len(s.Profiles[i].Jobs))
+			for k, row := range s.Profiles[i].Jobs {
+				s.Profiles[i].MixerJobs[k] = append([]Job{}, row...)
+			}
+		}
 		switch {
 		case s.Profiles[i].Buttons != nil:
 		case hasLegacy:

@@ -59,7 +59,7 @@ func (app *App) screenCount(setup core.Setup) int {
 
 func assignedAnywhere(setup core.Setup, kind core.JobKind) bool {
 	for _, p := range setup.Profiles {
-		for _, row := range p.Jobs {
+		for _, row := range p.AllJobs() {
 			for _, j := range row {
 				if j.Kind == kind {
 					return true

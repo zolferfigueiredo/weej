@@ -65,6 +65,9 @@ func (app *App) applyJob(job core.Job, s float64) {
 
 func (app *App) activeProfileAppExes() []string {
 	s := app.snapshotSettings()
+	if app.usesMixer() {
+		s.Setup = s.ForMixer()
+	}
 	if s.Active < 0 || s.Active >= len(s.Profiles) {
 		return nil
 	}

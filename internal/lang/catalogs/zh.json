@@ -110,7 +110,7 @@
   "ok": "好",
   "on_macos": "macOS 版:",
   "other": "其他…",
-  "port": "端口",
+  "port": "设备",
   "port_auto": "自动",
   "port_auto_found": "自动（{port}）",
   "port_busy": "{port} 正被另一个应用占用",

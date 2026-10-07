@@ -110,7 +110,7 @@
   "ok": "확인",
   "on_macos": "macOS용:",
   "other": "기타…",
-  "port": "포트",
+  "port": "장치",
   "port_auto": "자동",
   "port_auto_found": "자동 ({port})",
   "port_busy": "{port}이(가) 다른 앱에서 사용 중입니다",

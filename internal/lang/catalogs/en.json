@@ -111,7 +111,7 @@
   "ok": "OK",
   "on_macos": "On macOS:",
   "other": "Other…",
-  "port": "Port",
+  "port": "Device",
   "port_auto": "Automatic",
   "port_auto_found": "Automatic ({port})",
   "port_busy": "{port} is in use by another app",

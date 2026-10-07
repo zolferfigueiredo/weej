@@ -74,25 +74,27 @@ func mixerColumnsFromJSON(ptrs []*int) []int {
 	return columnsFromJSON(ptrs)
 }
 
+func padJobRows(rows [][]core.Job, knobs int) [][]core.Job {
+	out := make([][]core.Job, max(len(rows), knobs))
+	for j := range out {
+		out[j] = []core.Job{}
+		if j < len(rows) && rows[j] != nil {
+			out[j] = rows[j]
+		}
+	}
+	return out
+}
+
 func setupToJSON(s core.Setup) setupJSON {
 	columns := s.Columns
 	if columns == nil {
 		columns = []int{}
 	}
-	// One jobs row per knob, for the board's knobs and the mixer's: the page adds and removes
-	// knobs by index.
-	knobs := max(len(columns), len(s.ForMixer().Columns))
+	// One jobs row per knob on each device: the page adds and removes knobs by index.
 	profiles := make([]core.Profile, len(s.Profiles))
 	for i, p := range s.Profiles {
-		rows := max(len(p.Jobs), knobs)
-		jobs := make([][]core.Job, rows)
-		for j := range jobs {
-			jobs[j] = []core.Job{}
-			if j < len(p.Jobs) && p.Jobs[j] != nil {
-				jobs[j] = p.Jobs[j]
-			}
-		}
-		p.Jobs = jobs
+		p.Jobs = padJobRows(p.Jobs, len(columns))
+		p.MixerJobs = padJobRows(p.MixerJobs, len(s.ForMixer().Columns))
 		profiles[i] = p
 	}
 	return setupJSON{

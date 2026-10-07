@@ -110,7 +110,7 @@
   "ok": "OK",
   "on_macos": "macOS 版:",
   "other": "その他…",
-  "port": "ポート",
+  "port": "デバイス",
   "port_auto": "自動",
   "port_auto_found": "自動（{port}）",
   "port_busy": "{port} は別のアプリが使用中です",

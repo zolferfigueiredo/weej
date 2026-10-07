@@ -111,12 +111,12 @@ func (app *App) printStartupSummary() {
 	if s.Active < 0 || s.Active >= len(s.Profiles) {
 		return
 	}
-	active := s.Profiles[s.Active]
-	tr := app.trFunc()
-	app.log("profile " + active.Name)
 	if app.usesMixer() {
 		s.Setup = s.ForMixer()
 	}
+	active := s.Profiles[s.Active]
+	tr := app.trFunc()
+	app.log("profile " + active.Name)
 	for i, col := range s.Columns {
 		letter := core.Letter(i)
 		if col < 0 {
