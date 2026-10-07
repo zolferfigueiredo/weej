@@ -320,6 +320,14 @@ function renderGeneral() {
         ${importNote ? `<span class="group-note">${esc(importNote)}</span>` : ""}
       </div>`;
 
+  // A device that is Off shows only where to turn it back on.
+  if (usesMixer() ? !draft.mixerPort : draft.port === "off") {
+    document.getElementById("panel").innerHTML = `
+    <div class="tabpanel general-grid" role="tabpanel">
+      ${connectionGroup()}
+    </div>`;
+    return;
+  }
   if (usesSMC()) {
     renderSMCGeneral(profileGroup, importFoot);
     return;
