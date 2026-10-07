@@ -40,7 +40,6 @@ type setupJSON struct {
 	Port             string         `json:"port"`
 	MixerPort        string         `json:"mixerPort"`
 	MixerLights      string         `json:"mixerLights"`
-	MixerLEDs        bool           `json:"mixerLEDs"`
 	BaudRate         int            `json:"baudRate"`
 	BoardKinds       []string       `json:"boardKinds"`
 	BoardLayout      [][]int        `json:"boardLayout"`
@@ -118,7 +117,6 @@ func setupToJSON(s core.Setup) setupJSON {
 		Port:             s.Port,
 		MixerPort:        s.MixerPort,
 		MixerLights:      s.MixerLights,
-		MixerLEDs:        s.MixerLEDs,
 		BaudRate:         s.BaudRate(),
 		BoardKinds:       core.EncodeKinds(s.BoardKinds),
 		BoardLayout:      s.BoardLayout,
@@ -149,7 +147,6 @@ func setupFromJSON(j setupJSON) core.Setup {
 		Port:         j.Port,
 		MixerPort:    j.MixerPort,
 		MixerLights:  core.ParseLightPattern(j.MixerLights),
-		MixerLEDs:    j.MixerLEDs,
 		Baud:         j.BaudRate,
 		MixerColumns: mixerColumnsFromJSON(j.MixerColumns),
 		ButtonOrder:  j.MixerButtonOrder,

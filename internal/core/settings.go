@@ -49,7 +49,6 @@ type settingsJSON struct {
 	Port             string     `json:"port"`
 	MixerPort        string     `json:"mixerPort"`
 	MixerLights      string     `json:"mixerLights,omitempty"`
-	MixerLEDs        bool       `json:"mixerLEDs,omitempty"`
 	BaudRate         int        `json:"baudRate"`
 	BoardKinds       []string   `json:"boardKinds,omitempty"`
 	BoardLayout      [][]int    `json:"boardLayout,omitempty"`
@@ -228,7 +227,6 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		Port:             s.Port,
 		MixerPort:        s.MixerPort,
 		MixerLights:      s.MixerLights,
-		MixerLEDs:        s.MixerLEDs,
 		BaudRate:         s.BaudRate(),
 		BoardKinds:       EncodeKinds(s.BoardKinds),
 		BoardLayout:      s.BoardLayout,
@@ -320,9 +318,6 @@ func DecodeSettings(data []byte, defaultProfileName string) (Settings, error) {
 	}
 	if v, ok := take[string](raw, "mixerLights"); ok {
 		s.MixerLights = ParseLightPattern(v)
-	}
-	if v, ok := take[bool](raw, "mixerLEDs"); ok {
-		s.MixerLEDs = v
 	}
 	// The mixer was read in the board's place before both could run at once.
 	if IsMidiPort(s.Port) {

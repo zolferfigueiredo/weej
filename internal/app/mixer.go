@@ -111,7 +111,7 @@ func (app *App) unmuteAll() {
 	for id, actions := range setup.ActiveButtons() {
 		for _, a := range actions {
 			if _, ok := a.MuteKnob(); ok {
-				midiport.SetLED(id, false)
+				app.midiPort().SetLED(id, false)
 			}
 		}
 	}
@@ -149,7 +149,7 @@ func (app *App) onMixerButton(id int) {
 		app.log(fmt.Sprintf("Mixer button %s pressed: %s", mixerButtonName(id), strings.Join(names, ", ")))
 	}
 	for _, action := range actions {
-		app.runButtonAction(action, app.mixerEngine, setup.ForMixer(), func(on bool) { midiport.SetLED(id, on) })
+		app.runButtonAction(action, app.mixerEngine, setup.ForMixer(), func(on bool) { app.midiPort().SetLED(id, on) })
 	}
 
 	if win := app.settingsWin; win != nil {
@@ -243,14 +243,18 @@ func (app *App) runButtonAction(action core.ButtonAction, engine *core.Engine, d
 		app.changeLights(func(s *core.Setup) { s.MixerLights = "on" })
 	case core.ActionLightsOff:
 		app.changeLights(func(s *core.Setup) { s.MixerLights = "" })
-	case core.ActionToggleLEDs:
-		app.changeLights(func(s *core.Setup) { s.MixerLEDs = !s.MixerLEDs })
 	}
+}
+
+func (app *App) midiPort() *midiport.Port {
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	return app.midi
 }
 
 // applyLights runs the mixer's button light pattern, listening to the speakers only for the EQ.
 func (app *App) applyLights(s core.Setup) {
-	midiport.SetLights(s.MixerLights, s.MixerLEDs)
+	app.midiPort().SetLights(s.MixerLights)
 	eq := s.MixerLights == "eq" && s.MixerIsSMC()
 	app.mu.Lock()
 	if app.spectrum == nil {
@@ -282,7 +286,7 @@ func (app *App) changeLights(change func(*core.Setup)) {
 		}
 		app.applyLights(s.Setup)
 		if win := app.settingsWin; win != nil {
-			win.Send(map[string]any{"type": "mixerLights", "pattern": s.MixerLights, "leds": s.MixerLEDs})
+			win.Send(map[string]any{"type": "mixerLights", "pattern": s.MixerLights})
 		}
 	})
 }

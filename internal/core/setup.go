@@ -326,10 +326,8 @@ type Setup struct {
 	// the MIDI input the mixer is read from, empty for none; both can run at once.
 	Port      string
 	MixerPort string
-	// MixerLights is the pattern an SMC-Mixer's button lights run (lights.go), "" for none, and
-	// MixerLEDs whether the LEDs over its faders join in.
+	// MixerLights is the pattern an SMC-Mixer's button lights run (lights.go), "" for none.
 	MixerLights string
-	MixerLEDs   bool
 	// Baud is the serial speed; 0 means DefaultBaud.
 	Baud int
 	// MixerColumns is the mixer's own calibration, so the board's Columns survive a switch to

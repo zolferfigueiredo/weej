@@ -386,13 +386,7 @@ function renderSMCGeneral(profileGroup, importFoot) {
             </div>
             <div class="row-control"><select class="select" id="lights-select">${lightOptions}</select></div>
           </div>
-          <div class="row">
-            <div class="row-main">
-              <span class="row-title">${esc(t("lights_leds"))}</span>
-              <span class="row-desc">${esc(t("lights_leds_note"))}</span>
-            </div>
-            <div class="row-control"><input class="toggle" id="lights-leds" type="checkbox" role="switch"${draft.mixerLEDs ? " checked" : ""}${draft.mixerLights ? "" : " disabled"} /></div>
-          </div>`;
+`;
   const svg = smcSVG({
     name: (id) => smcControlName(id, t),
     label: controlLabel,
@@ -1030,7 +1024,6 @@ const BUTTON_GROUPS = [
       ["lights.previous", "action.previous_lights"],
       ["lights.on", "action.lights_on"],
       ["lights.off", "action.lights_off"],
-      ["lights.leds", "action.toggle_leds"],
     ],
   ],
 ];
@@ -1772,10 +1765,6 @@ function onChange(e) {
       break;
     case "lights-select":
       draft.mixerLights = el.value === "off" ? "" : el.value;
-      document.getElementById("lights-leds").disabled = !draft.mixerLights;
-      break;
-    case "lights-leds":
-      draft.mixerLEDs = el.checked;
       break;
     case "language-select":
       draft.language = el.value;
@@ -1836,7 +1825,6 @@ function onMessage(msg) {
       for (const s of [draft, saved]) {
         if (!s) continue;
         s.mixerLights = msg.pattern;
-        s.mixerLEDs = !!msg.leds;
       }
       render();
       break;

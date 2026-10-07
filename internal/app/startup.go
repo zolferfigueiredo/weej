@@ -168,6 +168,7 @@ func (app *App) startSerial() {
 			return
 		}
 		serialport.Run(ctx, serialport.Config{
+			Owner:      "board",
 			ForcedPort: port,
 			Baud:       s.BaudRate(),
 			OnLine:     app.onSerialLine,
@@ -198,14 +199,20 @@ func (app *App) startMixer() {
 		if device == "" {
 			return
 		}
-		midiport.Run(ctx, midiport.Config{
+		port := midiport.New(midiport.Config{
 			Device:   device,
+			ID:       "mixer",
 			OnValues: app.onMixerValues,
 			OnButton: app.onMixerButton,
 			OnStatus: func(connected, busy bool) { app.onMixerStatus(connected, busy, device) },
 			Lights:   core.IsSMCName(device),
 			Log:      app.log,
-		}, app.mixerReconnectCh)
+		})
+		port.SetLights(app.snapshotSettings().MixerLights)
+		app.mu.Lock()
+		app.midi = port
+		app.mu.Unlock()
+		port.Run(ctx, app.mixerReconnectCh)
 	}()
 }
 
