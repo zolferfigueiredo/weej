@@ -1216,7 +1216,10 @@ select.select,
   text-anchor: middle;
 }
 
-.smc .glyph-box,
+.smc .glyph.small {
+  font-size: 1.7px;
+}
+
 .smc .icon-line {
   fill: none;
   stroke: var(--text-secondary);

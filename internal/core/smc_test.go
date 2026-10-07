@@ -108,15 +108,6 @@ func TestSMCLEDMessages(t *testing.T) {
 	if _, ok := SMCButtonLED(MixerNoteButton(24), true, false); ok {
 		t.Error("Square 1 lit in CC mode, where it sends nothing")
 	}
-	if got := SMCStripBlink(2, 10); got != 0xE2|127<<16 {
-		t.Errorf("blink for a low fader = %#x, want a pitch bend to the top", got)
-	}
-	if got := SMCStripBlink(2, 100); got != 0xE2 {
-		t.Errorf("blink for a high fader = %#x, want a pitch bend to the bottom", got)
-	}
-	if got := SMCStripRestore(7, 3, 99); got != 0xE7|3<<8|99<<16 {
-		t.Errorf("restore = %#x, want the fader's own pitch bend", got)
-	}
 }
 
 func TestStripLightsStayOnBrieflyAfterAMove(t *testing.T) {
@@ -136,14 +127,11 @@ func TestStripLightsStayOnBrieflyAfterAMove(t *testing.T) {
 	}
 }
 
-func TestMixerStateKeepsTheFaderPitch(t *testing.T) {
+func TestMixerStateTellsTheColumnThatChanged(t *testing.T) {
 	m := NewMixerState()
-	if _, _, ok := m.Pitch(2); ok {
-		t.Error("a fader that never moved has a position")
-	}
 	m.Feed(0xE2 | 5<<8 | 70<<16)
-	if lsb, msb, ok := m.Pitch(2); !ok || lsb != 5 || msb != 70 || m.LastChanged() != 42 {
-		t.Errorf("pitch = %d, %d, %v, last %d, want 5, 70 on column 42", lsb, msb, ok, m.LastChanged())
+	if m.LastChanged() != 42 {
+		t.Errorf("fader 3 changed column %d, want 42", m.LastChanged())
 	}
 	m.Feed(note(16, 127))
 	if m.LastChanged() != -1 {

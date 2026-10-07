@@ -86,22 +86,6 @@ func SMCStripOf(column int) (int, bool) {
 	return 0, false
 }
 
-// The LED above a strip's fader blinks while the fader position the computer last sent differs
-// from where the fader is, and stops once they match (tried on a real unit, in DAW mode only;
-// meters, the knob ring and touch notes leave it alone). So a pitch bend far from the fader starts
-// it blinking, and the fader's own position stops it.
-func SMCStripBlink(strip, faderMSB int) uint32 {
-	far := 127
-	if faderMSB >= 64 {
-		far = 0
-	}
-	return uint32(0xE0|strip) | uint32(far)<<16
-}
-
-func SMCStripRestore(strip, lsb, msb int) uint32 {
-	return uint32(0xE0|strip) | uint32(lsb)<<8 | uint32(msb)<<16
-}
-
 // SMCButtonLED lights or clears a button's LED: by its note in DAW mode, or by its CC in CC mode,
 // which R and Square don't have.
 func SMCButtonLED(id int, on, daw bool) (uint32, bool) {

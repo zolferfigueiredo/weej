@@ -175,8 +175,14 @@ func send(msg uint32) {
 	}
 }
 
+// buttonLEDs is what SetLED last set each button's LED to, by id.
+var buttonLEDs [256]atomic.Bool
+
 // SetLED lights or clears a button's LED, the way the mode the mixer is in takes it.
 func SetLED(button int, on bool) {
+	if button >= 0 && button < len(buttonLEDs) {
+		buttonLEDs[button].Store(on)
+	}
 	if msg, ok := core.SMCButtonLED(button, on, mode.DAW()); ok {
 		send(msg)
 	}
@@ -187,7 +193,7 @@ type Config struct {
 	OnValues func(values []int)
 	OnButton func(id int)
 	OnStatus func(connected, busy bool)
-	// StripLights blinks an SMC-Mixer strip's LED while its fader or knob moves, in DAW mode.
+	// StripLights lights an SMC-Mixer strip's Square button while its fader or knob moves.
 	StripLights bool
 	Log         func(string)
 }
@@ -270,7 +276,7 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 	state := core.NewMixerState()
 	check := time.NewTicker(2 * time.Second)
 	defer check.Stop()
-	strips := &stripLEDs{cfg: cfg, state: state, start: time.Now()}
+	strips := &stripLEDs{cfg: cfg, start: time.Now()}
 	defer strips.allOff()
 
 	for {
@@ -315,21 +321,21 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 	}
 }
 
-// stripLEDs keeps each strip's LED blinking while the strip moves, by sending its fader channel a
-// position far from the fader, and stops it once the strip rests by sending the fader's own. With
-// the fader not heard from yet there is no position to stop it with, so it never starts.
+// stripLEDs lights a strip's Square button while the strip moves, in DAW mode: the LED over the
+// fader can only blink, and stops as soon as the fader moves.
 type stripLEDs struct {
 	cfg    Config
-	state  *core.MixerState
 	lights core.StripLights
 	start  time.Time
 	ticker *time.Ticker
 	tick   <-chan time.Time
-	// blink is the message keeping each strip blinking, 0 when none was sent.
-	blink [8]uint32
+	// lit is the strips whose Square this lit, to be put back as SetLED left it.
+	lit [8]bool
 }
 
 func (s *stripLEDs) now() float64 { return time.Since(s.start).Seconds() }
+
+func squareOf(strip int) int { return core.MixerNoteButton(24 + strip) }
 
 func (s *stripLEDs) moved(col int) {
 	strip, ok := core.SMCStripOf(col)
@@ -341,14 +347,12 @@ func (s *stripLEDs) moved(col int) {
 		s.ticker = time.NewTicker(50 * time.Millisecond)
 		s.tick = s.ticker.C
 	}
-	_, msb, ok := s.state.Pitch(strip)
-	if !ok || !mode.DAW() {
+	if s.lit[strip] || !mode.DAW() {
 		return
 	}
-	// The far side flips as the fader crosses the middle, or the LED would stop on the way.
-	if msg := core.SMCStripBlink(strip, msb); msg != s.blink[strip] {
+	if msg, ok := core.SMCButtonLED(squareOf(strip), true, true); ok {
 		send(msg)
-		s.blink[strip] = msg
+		s.lit[strip] = true
 	}
 }
 
@@ -363,12 +367,14 @@ func (s *stripLEDs) due() {
 }
 
 func (s *stripLEDs) off(strip int) {
-	if s.blink[strip] != 0 {
-		if lsb, msb, ok := s.state.Pitch(strip); ok {
-			send(core.SMCStripRestore(strip, lsb, msb))
-		}
-		s.blink[strip] = 0
+	if !s.lit[strip] {
+		return
 	}
+	id := squareOf(strip)
+	if msg, ok := core.SMCButtonLED(id, buttonLEDs[id].Load(), true); ok {
+		send(msg)
+	}
+	s.lit[strip] = false
 }
 
 func (s *stripLEDs) allOff() {
