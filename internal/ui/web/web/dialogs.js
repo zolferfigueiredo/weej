@@ -65,6 +65,17 @@ function portSelect(id, type, value, exceptId) {
   return `<button class="btn btn-icon btn-subtle" type="button" data-action="refresh-ports" title="${escAttr(t("refresh"))}" aria-label="${escAttr(t("refresh"))}">&#x21bb;</button><select class="select" id="${id}">${options}</select>`;
 }
 
+// Fills the open gear's port list in place when the ports arrive: drawing the dialog again would
+// close a list that is open in it, such as Button lights, and lose the pick.
+export function refreshGearPorts() {
+  const dlg = S.dialog;
+  const el = document.getElementById("dlg-port");
+  if (!dlg || dlg.kind !== "gear" || !el) return;
+  const tpl = document.createElement("template");
+  tpl.innerHTML = portSelect("dlg-port", dlg.dev.type, dlg.dev.port, dlg.dev.id);
+  el.innerHTML = tpl.content.querySelector("select").innerHTML;
+}
+
 function baudSelect(id, value) {
   const rates = (S.init.baudRates || [9600]).slice();
   const v = value || 9600;

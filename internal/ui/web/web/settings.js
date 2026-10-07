@@ -12,7 +12,7 @@ import {
   showValues,
   touched,
 } from "./boards.js";
-import { openAdd, openGear, renderDialog } from "./dialogs.js";
+import { openAdd, openGear, refreshGearPorts, renderDialog } from "./dialogs.js";
 import { renderGeneral } from "./general.js";
 import {
   BUTTON_MENU_BASE,
@@ -695,8 +695,9 @@ function onMessage(msg) {
     case "ports":
       S.ports = msg.ports || [];
       S.midiInputs = msg.midi || [];
-      if (S.dialog && (S.dialog.kind === "add" || S.dialog.kind === "gear")) {
-        if (S.dialog.kind === "add" && S.dialog.type === "smc" && !S.dialog.port) {
+      if (S.dialog && S.dialog.kind === "gear") refreshGearPorts();
+      if (S.dialog && S.dialog.kind === "add") {
+        if (S.dialog.type === "smc" && !S.dialog.port) {
           S.dialog.port = S.midiInputs.find((n) => n.toLowerCase().includes("smc-mixer")) || "";
         }
         render();
