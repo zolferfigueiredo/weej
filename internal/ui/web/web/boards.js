@@ -22,6 +22,7 @@ import {
   jobsOf,
   kindOf,
   profileLabel,
+  shownBoards,
   statusOf,
   valueAt,
 } from "./state.js";
@@ -55,42 +56,51 @@ export function statusText(d) {
 
 export function renderBoards() {
   const panel = document.getElementById("panel");
-  if (!devices().length) {
+  const d = currentBoard();
+  if (!d) {
     panel.innerHTML = `
     <div class="tabpanel" role="tabpanel">
       <div class="empty-state">
-        <p>${esc(t("boards.none"))}</p>
-        <button class="btn btn-primary" type="button" data-action="switch-tab" data-tab="general">${esc(t("boards.set_up"))}</button>
+        <p>${esc(t(devices().length ? "boards.none_connected" : "boards.none"))}</p>
+        ${devices().length ? "" : `<button class="btn btn-primary" type="button" data-action="switch-tab" data-tab="general">${esc(t("boards.set_up"))}</button>`}
       </div>
     </div>`;
     return;
   }
-  const d = currentBoard();
-  const tabs = devices()
+  const picks = shownBoards()
     .map(
-      (b) => `<span class="chip${b.id === d.id ? " on" : ""}">
-        <button class="subtab" type="button" role="tab" data-action="board-tab" data-board="${escAttr(b.id)}" aria-selected="${b.id === d.id}">${esc(clip(b.name, 24))}</button>
-        <button class="chip-gear" type="button" data-action="gear" data-board="${escAttr(b.id)}" title="${escAttr(t("boards.settings_of", { name: b.name }))}" aria-label="${escAttr(t("boards.settings_of", { name: b.name }))}">${GEAR_ICON}</button>
-      </span>`
+      (b) => `
+          <div class="row board-pick${b.id === d.id ? " on" : ""}">
+            <button class="pick-board" type="button" role="tab" data-action="board-tab" data-board="${escAttr(b.id)}" aria-selected="${b.id === d.id}">
+              <span class="row-title">${esc(clip(b.name, 30))}</span>
+              <span class="row-desc">${esc(t("device.type." + b.type))}</span>
+            </button>
+            <button class="btn btn-icon" type="button" data-action="gear" data-board="${escAttr(b.id)}" title="${escAttr(t("boards.settings_of", { name: b.name }))}" aria-label="${escAttr(t("boards.settings_of", { name: b.name }))}">${GEAR_ICON}</button>
+          </div>`
     )
     .join("");
   const view = d.view === "list" ? "list" : "draw";
   const viewSwitch = ["draw", "list"]
     .map((v) => `<button class="btn${v === view ? " on" : ""}" type="button" data-action="set-view" data-view="${v}" aria-pressed="${v === view}">${esc(t("view." + v))}</button>`)
     .join("");
-  const head = d.enabled ? `<div class="board-bar"><span class="segmented">${viewSwitch}</span></div>` : "";
-  let body;
-  if (!d.enabled) body = `<div class="empty-state"><p>${esc(t("boards.off"))}</p></div>`;
-  else if (view === "list") body = listView(d);
-  else body = drawView(d);
+  const body = view === "list" ? listView(d) : drawView(d);
   keepScroll(() => {
     panel.innerHTML = `
     <div class="tabpanel" role="tabpanel">
-      <div class="subtabs" role="tablist">${tabs}</div>
       <div class="general-grid">
-        ${profileCard(d)}
-        <div class="group">${head}</div>
+        <div class="general-col">
+          <div class="group"><div class="card" role="tablist">${picks}</div></div>
+        </div>
+        <div class="general-col">
+          ${profileCard(d)}
+          <div class="group-foot">
+            <button class="btn" type="button" data-action="import-profile">${esc(t("profile.import"))}</button>
+            <button class="btn" type="button" data-action="export-profile">${esc(t("profile.export"))}</button>
+            ${S.importNote ? `<span class="group-note">${esc(S.importNote)}</span>` : ""}
+          </div>
+        </div>
       </div>
+      <div class="board-bar"><span class="segmented">${viewSwitch}</span></div>
       ${body}
     </div>`;
     fitLists();

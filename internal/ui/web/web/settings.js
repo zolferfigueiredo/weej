@@ -411,8 +411,11 @@ function onClick(e) {
     case "reconnect":
       send({ type: "reconnect", device: target.dataset.board || (d && d.id) });
       break;
-    case "import-deej":
-      send({ type: "importDeej" });
+    case "import-profile":
+      if (d) send({ type: "importProfile", device: d.id });
+      break;
+    case "export-profile":
+      if (d) send({ type: "exportProfile", device: d.id, profile: activeProfile(d) });
       break;
     case "check-updates":
       send({ type: "checkUpdates" });
@@ -611,9 +614,19 @@ function onMessage(msg) {
       removeDevice(msg.device);
       render();
       break;
-    case "imported":
+    case "profileImported": {
+      const d = deviceById(msg.device);
+      if (d && msg.profile) {
+        d.profiles.push(msg.profile);
+        d.profile = d.profiles.length - 1;
+        S.board = d.id;
+      }
       S.importNote = msg.skipped && msg.skipped.length ? t("import_skipped", { items: msg.skipped.join(", ") }) : "";
-      S.board = msg.device;
+      render();
+      break;
+    }
+    case "exportFailed":
+      S.importNote = t("profile.export_failed");
       render();
       break;
     case "importFailed":

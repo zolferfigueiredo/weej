@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -106,8 +107,10 @@ func (app *App) onSettingsMessage(data []byte) {
 		app.loop.Invoke(func() { app.openJobMenu(data) })
 	case "pickApp":
 		app.loop.Invoke(func() { app.handleSettingsPickApp(data) })
-	case "importDeej":
-		app.loop.Invoke(app.handleSettingsImportDeej)
+	case "importProfile":
+		app.loop.Invoke(func() { app.handleImportProfile(probe.Device) })
+	case "exportProfile":
+		app.loop.Invoke(func() { app.handleExportProfile(probe.Device, data) })
 	case "setLanguage":
 		app.handleSettingsSetLanguage(data)
 	case "record":
@@ -363,14 +366,19 @@ func (app *App) handleSettingsPickApp(data []byte) {
 	}
 }
 
-// handleSettingsImportDeej adds a DIY board made from a deej config: its sliders in their order,
-// already found, and a profile with their jobs.
-func (app *App) handleSettingsImportDeej() {
-	initialDir := `C:\deej`
+// handleImportProfile reads a file Export wrote, or a deej config, as a new profile of a board.
+// Settings adds it to the board as an edit, which Apply saves.
+func (app *App) handleImportProfile(id string) {
+	d, ok := app.device(id)
+	if !ok {
+		return
+	}
+	initialDir := ""
 	if p := runningProcessPath("deej.exe"); p != "" {
 		initialDir = filepath.Dir(p)
 	}
-	path, ok := app.loop.OpenFile(app.tr("import_deej"), [][2]string{{"deej config (*.yaml)", "*.yaml"}}, initialDir)
+	title := strings.TrimSuffix(app.tr("profile.import"), "…")
+	path, ok := app.loop.OpenFile(title, [][2]string{{"WeeJ, deej", "*.json;*.yaml;*.yml"}}, initialDir)
 	if !ok {
 		return
 	}
@@ -379,36 +387,62 @@ func (app *App) handleSettingsImportDeej() {
 		app.sendImportFailed()
 		return
 	}
-	imp, err := core.ImportDeej(data)
+	p, ok := core.DecodeProfileFile(data, d)
+	var skipped []string
+	if !ok {
+		imp, err := core.ImportDeej(data)
+		if err != nil {
+			app.sendImportFailed()
+			return
+		}
+		p, skipped = core.DeejProfile(imp, d)
+	}
+	profile, err := core.EncodeProfile(p)
 	if err != nil {
 		app.sendImportFailed()
 		return
 	}
-
-	next := app.snapshotSettings()
-	d := core.NewDevice(core.NextDeviceID(next.Added), imp.Name, core.DeviceDIY, len(imp.Columns), 0, 0, imp.Name)
-	for i, col := range imp.Columns {
-		// deej reads a slider as it comes, and core.ImportDeej keeps WeeJ's old flip in Invert.
-		d.Controls[i].Input, d.Controls[i].Reverse = col, !imp.Invert
-	}
-	d.Profiles[0].Jobs = imp.Jobs
-	for len(d.Profiles[0].Jobs) < len(d.Controls) {
-		d.Profiles[0].Jobs = append(d.Profiles[0].Jobs, []core.Job{})
-	}
-	if imp.Baud > 0 {
-		d.Baud = imp.Baud
-	}
-	next.Added++
-	next.Devices = append(next.Devices, d)
-	app.applySettings(next)
-	saved := app.snapshotSettings()
-	if i := deviceIndex(saved, d.ID); i >= 0 {
-		app.sendDevice(saved.Devices[i])
-	}
 	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "imported", "device": d.ID, "skipped": imp.Skipped})
+		win.Send(map[string]any{"type": "profileImported", "device": id, "profile": json.RawMessage(profile), "skipped": skipped})
 	}
 }
+
+// handleExportProfile saves the profile Settings shows for a board to a file Import reads back.
+func (app *App) handleExportProfile(id string, data []byte) {
+	d, ok := app.device(id)
+	if !ok {
+		return
+	}
+	var msg struct {
+		Profile json.RawMessage `json:"profile"`
+	}
+	if json.Unmarshal(data, &msg) != nil {
+		return
+	}
+	p, ok := core.DecodeProfile(msg.Profile, d)
+	if !ok {
+		return
+	}
+	out, err := core.EncodeProfileFile(d.Type, p)
+	if err != nil {
+		return
+	}
+	title := strings.TrimSuffix(app.tr("profile.export"), "…")
+	name := fileNameSafe.ReplaceAllString(d.Name+" - "+p.Name, "_") + ".json"
+	path, ok := app.loop.SaveFile(title, [][2]string{{"WeeJ", "*.json"}}, name, "json")
+	if !ok {
+		return
+	}
+	if err := os.WriteFile(path, out, 0o644); err != nil {
+		app.log("Could not export the profile: " + err.Error())
+		if win := app.settingsWin; win != nil {
+			win.Send(map[string]any{"type": "exportFailed"})
+		}
+	}
+}
+
+// fileNameSafe matches what Windows refuses in a file name.
+var fileNameSafe = regexp.MustCompile(`[\\/:*?"<>|]`)
 
 func (app *App) sendImportFailed() {
 	if win := app.settingsWin; win != nil {

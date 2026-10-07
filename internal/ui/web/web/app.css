@@ -295,7 +295,7 @@ p {
   cursor: pointer;
 }
 
-.tabpanel.general-grid {
+.general-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
@@ -310,7 +310,7 @@ p {
 }
 
 @media (max-width: 760px) {
-  .tabpanel.general-grid {
+  .general-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -1282,51 +1282,25 @@ select.select,
   stroke-linejoin: round;
 }
 
-.subtabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* A board's chip: its name, which opens its tab, and its gear. */
-.chip {
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
-  color: var(--text-secondary);
-  border-radius: 999px;
-}
-
-.chip:hover {
+/* A board in the Boards tab's list: its name picks it, and its gear opens its settings. */
+.board-pick.on {
   background: var(--card-bg-hover);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.chip.on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-
-.subtab,
-.chip-gear {
+.pick-board {
   appearance: none;
   border: 0;
   background: none;
   color: inherit;
   font: inherit;
+  text-align: left;
   cursor: pointer;
-  border-radius: 999px;
-}
-
-.subtab {
-  padding: 5px 4px 5px 14px;
-}
-
-.chip-gear {
-  display: inline-flex;
-  align-items: center;
-  padding: 5px 10px 5px 6px;
+  padding: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .board-bar {
@@ -1334,7 +1308,6 @@ select.select,
   align-items: center;
   gap: 8px;
   min-height: 32px;
-  padding-top: 30px;
 }
 
 .empty-state {

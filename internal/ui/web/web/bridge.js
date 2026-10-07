@@ -305,7 +305,6 @@ const MOCK_EN_STRINGS = {
   finish: "Finish",
   hide_icon: "Hide tray icon",
   hide_icon_note: "Open WeeJ again to get back here.",
-  import_deej: "Import from deej...",
   import_done: "Your deej setup is now the profile â{name}â.",
   import_failed: "Couldn't read that deej config.",
   import_skipped: "Not imported: {items}",
@@ -730,8 +729,11 @@ function startSettingsMock(post, enStrings) {
           });
         }, 200);
         break;
-      case "importDeej":
+      case "importProfile": {
+        const d = find(msg.device);
+        if (d) post({ type: "profileImported", device: d.id, profile: { ...d.profiles[0], name: "deej", shortcut: undefined }, skipped: ["slider 7"] });
         break;
+      }
       case "setLanguage":
         post({ type: "strings", lang: msg.code, strings: mockMergedStrings(msg.code, enStrings) });
         break;
