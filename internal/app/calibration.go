@@ -11,7 +11,6 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/lang"
 	"github.com/zolferfigueiredo/weej/internal/ui/web"
-	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 )
 
 // calibrationTurnSeconds mirrors core's own private turnSeconds (20): it is
@@ -78,9 +77,7 @@ func (app *App) onCalibrationMessage(data []byte) {
 		app.refreshCalibration()
 	case "skip":
 		if cal := app.currentCalibrator(); cal != nil {
-			before := cal.StepKey()
 			cal.Skip()
-			app.soundIfStepChanged(before, cal.StepKey())
 		}
 		app.refreshCalibration()
 	case "finish":
@@ -114,9 +111,7 @@ func (app *App) finishCalibration() {
 		return
 	}
 	if cal.Mixer() && !cal.ButtonStage() {
-		before := cal.StepKey()
 		cal.StartButtons()
-		app.soundIfStepChanged(before, cal.StepKey())
 		app.refreshCalibration()
 		return
 	}
@@ -198,17 +193,9 @@ func (app *App) feedCalibrator(values []int, now float64) {
 		if cal == nil {
 			return
 		}
-		before := cal.StepKey()
 		cal.Feed(values, now)
-		app.soundIfStepChanged(before, cal.StepKey())
 		app.refreshCalibration()
 	})
-}
-
-func (app *App) soundIfStepChanged(before, after core.StepKey) {
-	if before != after {
-		winui.StepSound()
-	}
 }
 
 func (app *App) refreshCalibration() {

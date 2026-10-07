@@ -79,9 +79,7 @@ func (app *App) onMixerButton(cc int) {
 			if cal == nil {
 				return
 			}
-			before := cal.StepKey()
 			cal.PressButton(cc)
-			app.soundIfStepChanged(before, cal.StepKey())
 			app.refreshCalibration()
 		})
 		return

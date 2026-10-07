@@ -288,15 +288,11 @@ func TestMixerCalibrationCleansThenFindsButtons(t *testing.T) {
 	if len(c.Found()) != 1 {
 		t.Errorf("found %v, want knobs left alone during the button stage", c.Found())
 	}
-	before := c.StepKey()
 	c.PressButton(52)
 	c.PressButton(20)
 	c.PressButton(52)
 	if !reflect.DeepEqual(c.Buttons(), []int{52, 20}) || c.RepeatedButton() != 0 {
 		t.Errorf("buttons %v repeated %d, want [52 20] and button 1 pressed again", c.Buttons(), c.RepeatedButton())
-	}
-	if c.StepKey() == before {
-		t.Error("finding buttons did not change the step")
 	}
 }
 

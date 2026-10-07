@@ -159,21 +159,6 @@ func (c *Calibrator) Result() []int {
 	return result
 }
 
-type StepKey struct {
-	Knob    int
-	Phase   int
-	Full    bool
-	Buttons int
-}
-
-func (c *Calibrator) StepKey() StepKey {
-	buttons := -1
-	if c.buttonStage {
-		buttons = len(c.buttons)
-	}
-	return StepKey{c.Knob(), c.phase, c.full, buttons}
-}
-
 func (c *Calibrator) Feed(values []int, now float64) {
 	if c.full || c.buttonStage {
 		return
