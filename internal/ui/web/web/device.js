@@ -157,7 +157,7 @@ function dot(assigned, x, y) {
 }
 
 // opts: { name(id), label(id) -> { text, more, empty, title }, assigned(id), selected,
-// value(id), strips[8], lit(id) }
+// value(id), lit(id) }
 export function smcSVG(opts) {
   let out = "";
   for (let s = 0; s < 8; s++) {
@@ -166,7 +166,7 @@ export function smcSVG(opts) {
     const fv = opts.value(s);
     out += `<g transform="translate(${s * PITCH} 0)">`;
     out += controlG(opts, knob, "knob" + (kv < 0 ? " unknown" : ""), knobBody(kv, 0) + labelText(opts, knob, KNOB_LABEL_Y));
-    out += `<rect class="led${opts.strips[s] ? " on" : ""}" data-strip="${s}" x="${-LED.w / 2}" y="${LED.y}" width="${LED.w}" height="${LED.h}" rx="${LED.h / 2}"/>`;
+    out += `<rect class="led" x="${-LED.w / 2}" y="${LED.y}" width="${LED.w}" height="${LED.h}" rx="${LED.h / 2}"/>`;
     out += controlG(opts, s, "fader" + (fv < 0 ? " unknown" : ""), faderBody(fv, TRACK.top, TRACK.len) + labelText(opts, s, FADER_LABEL_Y));
     for (const b of STRIP_BUTTONS) {
       const id = 128 + b.first + s;
@@ -246,9 +246,4 @@ export function showValue(root, id, value) {
   if (cap) cap.setAttribute("transform", `translate(0 ${capY(Number(cap.dataset.top), Number(cap.dataset.len), value)})`);
   const pointer = g.querySelector(".pointer");
   if (pointer) pointer.setAttribute("transform", `rotate(${pointerAngle(value)})`);
-}
-
-export function smcShowStrip(root, strip, on) {
-  const led = root.querySelector(`.smc .led[data-strip="${strip}"]`);
-  if (led) led.classList.toggle("on", on);
 }

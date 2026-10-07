@@ -502,20 +502,16 @@ function mockBoard(init) {
   return init;
 }
 
-// Moves fader 3 for a moment after the page opens, its light on meanwhile, as the mixer would.
+// Moves fader 3 for a moment after the page opens.
 function startSMCDemo(post, frame) {
   const values = frame.slice();
   setTimeout(() => {
     post({ type: "knobMoved", device: "mixer", knob: 2 });
-    post({ type: "stripLight", strip: 2, on: true });
     let step = 0;
     const timer = setInterval(() => {
       values[42] = Math.round(512 + 400 * Math.sin(step / 5));
       post({ type: "values", device: "mixer", values: values.slice() });
-      if (++step > 30) {
-        clearInterval(timer);
-        setTimeout(() => post({ type: "stripLight", strip: 2, on: false }), 300);
-      }
+      if (++step > 30) clearInterval(timer);
     }, 50);
   }, 800);
 }

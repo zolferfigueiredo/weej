@@ -187,11 +187,9 @@ type Config struct {
 	OnValues func(values []int)
 	OnButton func(id int)
 	OnStatus func(connected, busy bool)
-	// StripLights lights an SMC-Mixer strip's LED while its fader or knob moves; OnStripLight
-	// hears each strip go on and off, in either mode, though only DAW mode lights the real one.
-	StripLights  bool
-	OnStripLight func(strip int, on bool)
-	Log          func(string)
+	// StripLights blinks an SMC-Mixer strip's LED while its fader or knob moves, in DAW mode.
+	StripLights bool
+	Log         func(string)
 }
 
 type dropReason int
@@ -338,9 +336,7 @@ func (s *stripLEDs) moved(col int) {
 	if !s.cfg.StripLights || !ok {
 		return
 	}
-	if s.lights.Move(strip, s.now()) && s.cfg.OnStripLight != nil {
-		s.cfg.OnStripLight(strip, true)
-	}
+	s.lights.Move(strip, s.now())
 	if s.ticker == nil {
 		s.ticker = time.NewTicker(50 * time.Millisecond)
 		s.tick = s.ticker.C
@@ -372,9 +368,6 @@ func (s *stripLEDs) off(strip int) {
 			send(core.SMCStripRestore(strip, lsb, msb))
 		}
 		s.blink[strip] = 0
-	}
-	if s.cfg.OnStripLight != nil {
-		s.cfg.OnStripLight(strip, false)
 	}
 }
 

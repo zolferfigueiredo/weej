@@ -76,12 +76,6 @@ func (app *App) showValues(mixer bool, live *liveFrames, values []int) {
 	}
 }
 
-func (app *App) onStripLight(strip int, on bool) {
-	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "stripLight", "strip": strip, "on": on})
-	}
-}
-
 // pointOutMovedKnobs lights up a knob's row in Settings while its control moves, so it is easy
 // to tell which knob is which.
 func (app *App) pointOutMovedKnobs(mixer bool, values []int, setup core.Setup) {

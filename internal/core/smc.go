@@ -150,14 +150,10 @@ type StripLights struct {
 
 const stripLightTail = 0.3
 
-// Move records a move and reports whether the strip just lit.
-func (l *StripLights) Move(strip int, now float64) bool {
+// Move lights the strip, or keeps it lit, from now.
+func (l *StripLights) Move(strip int, now float64) {
 	l.last[strip] = now
-	if l.lit[strip] {
-		return false
-	}
 	l.lit[strip] = true
-	return true
 }
 
 // Due puts out the strips that have been still for the whole tail, and lists them.

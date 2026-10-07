@@ -1195,11 +1195,6 @@ select.select,
   fill: var(--control-border);
 }
 
-.smc .led.on {
-  fill: #f03a17;
-  filter: drop-shadow(0 0 0.8px #f03a17);
-}
-
 .smc .label {
   font-size: 2.6px;
   fill: var(--text-secondary);

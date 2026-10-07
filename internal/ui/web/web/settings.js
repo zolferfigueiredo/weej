@@ -7,7 +7,6 @@ import {
   showValue,
   smcButtonIcon,
   smcControlName,
-  smcShowStrip,
   smcSVG,
 } from "./device.js";
 
@@ -38,7 +37,6 @@ let selected = 0; // the SMC-Mixer control the inspector shows: a fader or knob 
 let boardSelected = 0; // the board's control the inspector shows, by knob index
 let live = { board: [], mixer: [] }; // the last frame from each device
 let learning = null; // { knob, start }: the frame when the picked control began waiting for its input
-let stripLights = Array(8).fill(false);
 const litUntil = new Map(); // control id to when it stops showing as touched
 const controlTimers = new Map();
 
@@ -375,7 +373,6 @@ function renderSMCGeneral(profileGroup, importFoot) {
     assigned: (id) => buttonActions(id).length > 0,
     selected,
     value: (id) => (id < 16 ? valueAt(SMC_COLUMNS[id]) : -1),
-    strips: stripLights,
     lit: (id) => (litUntil.get(id) || 0) > Date.now(),
   });
   keepScroll(() => {
@@ -1826,11 +1823,6 @@ function onMessage(msg) {
     // Go-initiated: a device's last frame, about 20 times a second.
     case "values":
       showValues(msg.device, msg.values || []);
-      break;
-    // Go-initiated: a strip's light over its fader went on or off.
-    case "stripLight":
-      stripLights[msg.strip] = !!msg.on;
-      if (isDeviceTab()) smcShowStrip(document, msg.strip, !!msg.on);
       break;
     // Go-initiated: the board or the mixer connected, dropped or got blocked by another app.
     case "connection": {

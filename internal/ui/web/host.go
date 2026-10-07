@@ -156,6 +156,9 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 		w.work = workArea()
 	}
 	w.widthPx = dipToPx(opts.Width, w.scale)
+	if maxW := (w.work.Right - w.work.Left) - w.frameW; !popup && maxW > 0 && w.widthPx > maxW {
+		w.widthPx = maxW
+	}
 	w.minHeightPx = dipToPx(opts.MinHeight, w.scale)
 	w.maxHeightPx = dipToPx(opts.MaxHeight, w.scale)
 	w.applyTheme(!sys.AppsLight())
