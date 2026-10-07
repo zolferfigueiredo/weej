@@ -101,9 +101,9 @@ func DefaultMixerButtons() ButtonMap {
 }
 
 // ForMixer is the setup a mixer frame is handled with: Columns come from MixerColumns and every
-// profile's Jobs from its MixerJobs, so the mixer has its own knobs, and a fader's top is already
-// its highest value, so nothing is flipped. A mixer never calibrated reads its faders, then its
-// knobs.
+// profile's Jobs from its MixerJobs, so the mixer has its own knobs. A fader's top is already its
+// highest value, so only the mixer's own MixerInvert flips it. A mixer never calibrated reads its
+// faders, then its knobs.
 func (s Setup) ForMixer() Setup {
 	profiles := make([]Profile, len(s.Profiles))
 	for i, p := range s.Profiles {
@@ -123,7 +123,7 @@ func (s Setup) ForMixer() Setup {
 	} else {
 		s.Columns = append([]int{}, s.MixerColumns...)
 	}
-	s.Invert = true
+	s.Invert = !s.MixerInvert
 	return s
 }
 

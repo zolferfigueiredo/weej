@@ -278,7 +278,7 @@ function renderGeneral() {
               <span class="row-title">${esc(t("invert"))}</span>
               <span class="row-desc">${esc(t("invert_note"))}</span>
             </div>
-            <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft.invertKnobs ? " checked" : ""} /></div>
+            <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft[mixer ? "invertMixer" : "invertKnobs"] ? " checked" : ""} /></div>
           </div>
         </div>
       </div>`;
@@ -1035,7 +1035,7 @@ function onChange(e) {
       render();
       break;
     case "invert":
-      draft.invertKnobs = el.checked;
+      draft[usesMixer() ? "invertMixer" : "invertKnobs"] = el.checked;
       break;
     case "language-select":
       draft.language = el.value;

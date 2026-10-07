@@ -467,3 +467,18 @@ func TestEachDeviceHasItsOwnKnobJobs(t *testing.T) {
 		t.Error("a saved profile came back unmigrated, want its empty mixer jobs kept")
 	}
 }
+
+func TestInvertIsPerDevice(t *testing.T) {
+	s := Setup{Columns: []int{0}, Invert: false}
+	if !s.ForMixer().Invert {
+		t.Error("the board's flip leaked onto the mixer, want the mixer unflipped by default")
+	}
+	s.MixerInvert = true
+	if s.ForMixer().Invert {
+		t.Error("the mixer's own invert did not flip it")
+	}
+	data, _ := EncodeSettings(Settings{Setup: Setup{Profiles: []Profile{{Name: "A"}}, MixerInvert: true}})
+	if back, _ := DecodeSettings(data, "Default"); !back.MixerInvert || back.Invert {
+		t.Errorf("round trip invert = board %v, mixer %v, want false and true", back.Invert, back.MixerInvert)
+	}
+}

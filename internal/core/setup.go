@@ -307,12 +307,15 @@ func Letter(i int) string {
 }
 
 type Setup struct {
-	Columns      []int
-	Profiles     []Profile
-	Active       int
-	Next         *Shortcut
-	Previous     *Shortcut
+	Columns  []int
+	Profiles []Profile
+	Active   int
+	Next     *Shortcut
+	Previous *Shortcut
+	// Invert is the board's: its pots are often wired the other way round, so false flips them.
+	// MixerInvert is the mixer's own: false leaves a fader's top at its highest value.
 	Invert       bool
+	MixerInvert  bool
 	HideIcon     bool
 	ShowProfiles bool
 	Icon         IconStyle

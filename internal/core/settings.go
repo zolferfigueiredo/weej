@@ -40,6 +40,7 @@ type settingsJSON struct {
 	NextProfile      *Shortcut  `json:"nextProfile"`
 	PreviousProfile  *Shortcut  `json:"previousProfile"`
 	InvertKnobs      bool       `json:"invertKnobs"`
+	InvertMixer      bool       `json:"invertMixer"`
 	HideTrayIcon     bool       `json:"hideTrayIcon"`
 	ShowProfileList  bool       `json:"showProfileList"`
 	TrayIcon         string     `json:"trayIcon"`
@@ -168,6 +169,7 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		NextProfile:      s.Next,
 		PreviousProfile:  s.Previous,
 		InvertKnobs:      s.Invert,
+		InvertMixer:      s.MixerInvert,
 		HideTrayIcon:     s.HideIcon,
 		ShowProfileList:  s.ShowProfiles,
 		TrayIcon:         string(s.Icon),
@@ -238,6 +240,9 @@ func DecodeSettings(data []byte, defaultProfileName string) (Settings, error) {
 	}
 	if v, ok := take[bool](raw, "invertKnobs"); ok {
 		s.Invert = v
+	}
+	if v, ok := take[bool](raw, "invertMixer"); ok {
+		s.MixerInvert = v
 	}
 	if v, ok := take[bool](raw, "hideTrayIcon"); ok {
 		s.HideIcon = v

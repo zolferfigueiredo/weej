@@ -32,6 +32,7 @@ type setupJSON struct {
 	NextProfile      *core.Shortcut `json:"nextProfile"`
 	PreviousProfile  *core.Shortcut `json:"previousProfile"`
 	InvertKnobs      bool           `json:"invertKnobs"`
+	InvertMixer      bool           `json:"invertMixer"`
 	HideTrayIcon     bool           `json:"hideTrayIcon"`
 	ShowProfileList  bool           `json:"showProfileList"`
 	TrayIcon         string         `json:"trayIcon"`
@@ -104,6 +105,7 @@ func setupToJSON(s core.Setup) setupJSON {
 		NextProfile:      s.Next,
 		PreviousProfile:  s.Previous,
 		InvertKnobs:      s.Invert,
+		InvertMixer:      s.MixerInvert,
 		HideTrayIcon:     s.HideIcon,
 		ShowProfileList:  s.ShowProfiles,
 		TrayIcon:         string(s.Icon),
@@ -129,6 +131,7 @@ func setupFromJSON(j setupJSON) core.Setup {
 		Next:         j.NextProfile,
 		Previous:     j.PreviousProfile,
 		Invert:       j.InvertKnobs,
+		MixerInvert:  j.InvertMixer,
 		HideIcon:     j.HideTrayIcon,
 		ShowProfiles: j.ShowProfileList,
 		Icon:         core.ParseIconStyle(j.TrayIcon),
