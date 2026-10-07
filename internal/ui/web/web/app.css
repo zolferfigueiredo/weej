@@ -1235,3 +1235,70 @@ select.select,
 .smc .dot {
   fill: var(--accent);
 }
+
+/* --- The board: its controls drawn in rows, and editing the one picked --- */
+
+.board-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+}
+
+.edit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+}
+
+.segmented .btn.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.waiting-note {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.inspector-empty {
+  padding: 12px;
+  color: var(--text-secondary);
+}
+
+.smc .waiting .face,
+.smc .waiting .well {
+  stroke: var(--accent);
+  stroke-dasharray: 1 0.8;
+}
+
+.smc .add {
+  cursor: pointer;
+}
+
+.smc .add:focus,
+.smc .add:focus-visible {
+  outline: none;
+}
+
+.smc .add-face {
+  fill: transparent;
+  stroke: var(--text-disabled);
+  stroke-width: 0.3;
+  stroke-dasharray: 1 0.8;
+}
+
+.smc .add:hover .add-face,
+.smc .add:focus-visible .add-face {
+  fill: var(--card-bg-hover);
+  stroke: var(--accent);
+}
+
+.smc .add-plus {
+  stroke: var(--text-secondary);
+  stroke-width: 0.45;
+  stroke-linecap: round;
+}

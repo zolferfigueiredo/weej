@@ -112,71 +112,73 @@ function fitLabel(text, max) {
   return chars.join("").trimEnd() + "…";
 }
 
-function capY(value) {
+// Where a fader's cap sits on a track that starts at top and runs len down; mid-track until known.
+function capY(top, len, value) {
   const v = value < 0 ? 0.5 : value / 1023;
-  return TRACK.top + (1 - v) * TRACK.len;
+  return top + (1 - v) * len;
 }
 
 function pointerAngle(value) {
   return -135 + (270 * Math.max(0, value)) / 1023;
 }
 
-// opts: { name(id), label(id) -> { text, more, empty, title }, assigned(id), selected, values[16],
-// strips[8], lit(id) }
-export function smcSVG(opts) {
-  const classes = (id, extra) => {
-    let c = "ctl" + (extra ? " " + extra : "");
-    if (id === opts.selected) c += " selected";
-    if (opts.lit(id)) c += " lit";
-    return c;
-  };
-  const control = (id, extra, body) => {
-    const label = opts.label(id);
-    const title = label.title ? `${opts.name(id)}: ${label.title}` : opts.name(id);
-    return `<g class="${classes(id, extra)}" id="ctl-${id}" data-action="select-control" data-control="${id}" role="button" tabindex="0" aria-label="${esc(title)}"${id === opts.selected ? ' aria-current="true"' : ""}><title>${esc(title)}</title>${body}</g>`;
-  };
-  const labelText = (id, y) => {
-    const l = opts.label(id);
-    const more = l.more ? ` +${l.more}` : "";
-    const text = fitLabel(l.text, LABEL_MAX - (more ? labelWidth(more) : 0)) + more;
-    return `<text class="label${l.empty ? " empty" : ""}" y="${y}">${esc(text)}</text>`;
-  };
+function controlG(opts, id, extra, body, transform) {
+  const label = opts.label(id);
+  const name = opts.name(id);
+  const title = label.title ? `${name}: ${label.title}` : name;
+  let c = "ctl" + (extra ? " " + extra : "");
+  if (id === opts.selected) c += " selected";
+  if (opts.lit(id)) c += " lit";
+  return `<g class="${c}" id="ctl-${id}" data-action="select-control" data-control="${id}" role="button" tabindex="0" aria-label="${esc(title)}"${id === opts.selected ? ' aria-current="true"' : ""}${transform ? ` transform="${transform}"` : ""}><title>${esc(title)}</title>${body}</g>`;
+}
 
+function labelText(opts, id, y) {
+  const l = opts.label(id);
+  const more = l.more ? ` +${l.more}` : "";
+  const text = fitLabel(l.text, LABEL_MAX - (more ? labelWidth(more) : 0)) + more;
+  return `<text class="label${l.empty ? " empty" : ""}" y="${y}">${esc(text)}</text>`;
+}
+
+function knobBody(value, y) {
+  return `<g transform="translate(0 ${y})"><circle class="face" r="${KNOB_R}"/><line class="pointer" x1="0" y1="-1.7" x2="0" y2="-3.9" transform="rotate(${pointerAngle(value)})"/></g>`;
+}
+
+function faderBody(value, top, len) {
+  return (
+    `<rect class="well" x="-4.2" y="${top - 2.6}" width="8.4" height="${len + 5.2}" rx="1.4"/>` +
+    `<rect class="track" x="${-TRACK.w / 2}" y="${top}" width="${TRACK.w}" height="${len}" rx="${TRACK.w / 2}"/>` +
+    `<g class="cap" data-top="${top}" data-len="${len}" transform="translate(0 ${capY(top, len, value)})"><rect x="${-CAP.w / 2}" y="${-CAP.h / 2}" width="${CAP.w}" height="${CAP.h}" rx="0.7"/><line x1="${-CAP.w / 2 + 0.8}" x2="${CAP.w / 2 - 0.8}"/></g>`
+  );
+}
+
+function dot(assigned, x, y) {
+  return assigned ? `<circle class="dot" cx="${x}" cy="${y}" r="0.55"/>` : "";
+}
+
+// opts: { name(id), label(id) -> { text, more, empty, title }, assigned(id), selected,
+// value(id), strips[8], lit(id) }
+export function smcSVG(opts) {
   let out = "";
   for (let s = 0; s < 8; s++) {
-    const x = s * PITCH;
     const knob = 8 + s;
-    const kv = opts.values[knob];
-    out += `<g transform="translate(${x} 0)">`;
-    out += control(
-      knob,
-      "knob" + (kv < 0 ? " unknown" : ""),
-      `<circle class="face" r="${KNOB_R}"/>` +
-        `<line class="pointer" x1="0" y1="-1.7" x2="0" y2="-3.9" transform="rotate(${pointerAngle(kv)})"/>` +
-        labelText(knob, KNOB_LABEL_Y)
-    );
+    const kv = opts.value(knob);
+    const fv = opts.value(s);
+    out += `<g transform="translate(${s * PITCH} 0)">`;
+    out += controlG(opts, knob, "knob" + (kv < 0 ? " unknown" : ""), knobBody(kv, 0) + labelText(opts, knob, KNOB_LABEL_Y));
     out += `<rect class="led${opts.strips[s] ? " on" : ""}" data-strip="${s}" x="${-LED.w / 2}" y="${LED.y}" width="${LED.w}" height="${LED.h}" rx="${LED.h / 2}"/>`;
-    const fv = opts.values[s];
-    out += control(
-      s,
-      "fader" + (fv < 0 ? " unknown" : ""),
-      `<rect class="well" x="-4.2" y="${TRACK.top - 2.6}" width="8.4" height="${TRACK.len + 5.2}" rx="1.4"/>` +
-        `<rect class="track" x="${-TRACK.w / 2}" y="${TRACK.top}" width="${TRACK.w}" height="${TRACK.len}" rx="${TRACK.w / 2}"/>` +
-        `<g class="cap" transform="translate(0 ${capY(fv)})"><rect x="${-CAP.w / 2}" y="${-CAP.h / 2}" width="${CAP.w}" height="${CAP.h}" rx="0.7"/><line x1="${-CAP.w / 2 + 0.8}" x2="${CAP.w / 2 - 0.8}"/></g>` +
-        labelText(s, FADER_LABEL_Y)
-    );
+    out += controlG(opts, s, "fader" + (fv < 0 ? " unknown" : ""), faderBody(fv, TRACK.top, TRACK.len) + labelText(opts, s, FADER_LABEL_Y));
     for (const b of STRIP_BUTTONS) {
       const id = 128 + b.first + s;
       const half = BUTTON.size / 2;
       const glyph = b.glyph
         ? `<text class="glyph" y="0.95">${b.glyph}</text>`
         : `<rect class="glyph-box" x="-0.9" y="-0.9" width="1.8" height="1.8" rx="0.35"/>`;
-      out += control(
+      out += controlG(
+        opts,
         id,
         "button",
-        `<g transform="translate(${BUTTON.x} ${b.y})"><rect class="face" x="${-half}" y="${-half}" width="${BUTTON.size}" height="${BUTTON.size}" rx="0.8"/>${glyph}` +
-          (opts.assigned(id) ? `<circle class="dot" cx="${half - 0.9}" cy="${-half + 0.9}" r="0.55"/>` : "") +
-          `</g>`
+        `<rect class="face" x="${-half}" y="${-half}" width="${BUTTON.size}" height="${BUTTON.size}" rx="0.8"/>${glyph}${dot(opts.assigned(id), half - 0.9, -half + 0.9)}`,
+        `translate(${BUTTON.x} ${b.y})`
       );
     }
     out += `</g>`;
@@ -185,24 +187,64 @@ export function smcSVG(opts) {
     const id = 128 + b.note;
     const hw = BOTTOM.w / 2;
     const hh = BOTTOM.h / 2;
-    out += control(
+    out += controlG(
+      opts,
       id,
       "button",
-      `<g transform="translate(${BOTTOM.x0 + i * BOTTOM.pitch} ${BOTTOM.y})"><rect class="face" x="${-hw}" y="${-hh}" width="${BOTTOM.w}" height="${BOTTOM.h}" rx="0.8"/>${ICONS[b.icon]}` +
-        (opts.assigned(id) ? `<circle class="dot" cx="${hw - 0.9}" cy="${-hh + 0.9}" r="0.55"/>` : "") +
-        `</g>`
+      `<rect class="face" x="${-hw}" y="${-hh}" width="${BOTTOM.w}" height="${BOTTOM.h}" rx="0.8"/>${ICONS[b.icon]}${dot(opts.assigned(id), hw - 0.9, -hh + 0.9)}`,
+      `translate(${BOTTOM.x0 + i * BOTTOM.pitch} ${BOTTOM.y})`
     );
   });
   return `<svg class="smc" viewBox="-8.8 -7.7 150 69.8" role="group">${out}</svg>`;
 }
 
-// Moves a drawn fader's cap or knob's pointer without drawing the mixer again.
-export function smcShowValue(root, id, value) {
-  const g = root.querySelector(`.smc .ctl[data-control="${id}"]`);
+// A board is drawn in rows of cells, each as tall as its tallest control; at least as big as the
+// SMC-Mixer, so a small board isn't drawn huge, centred in that.
+const CELL = 16;
+const ROW_GAP = 4;
+const KIND_H = { knob: 16, fader: 41, button: 14 };
+const BOARD_FADER = { top: 2.6, len: 30 };
+
+// opts: as smcSVG's, and layout (rows of knob indices), kind(k), waiting(k), addLabel
+export function boardSVG(opts) {
+  const rows = opts.layout.length ? opts.layout : [[]];
+  const heights = rows.map((row) => Math.max(KIND_H.button, ...row.map((k) => KIND_H[opts.kind(k)])));
+  const contentH = heights.reduce((a, h) => a + h, 0) + ROW_GAP * (rows.length - 1);
+  const width = Math.max(150, Math.max(...rows.map((row) => row.length + 1)) * CELL + 8);
+  const height = Math.max(69.8, contentH + 8);
+  let y = (height - contentH) / 2;
+  let out = "";
+  rows.forEach((row, r) => {
+    const x0 = (width - (row.length + 1) * CELL) / 2 + CELL / 2;
+    row.forEach((k, i) => {
+      const kind = opts.kind(k);
+      const v = opts.value(k);
+      let body;
+      if (kind === "fader") {
+        body = faderBody(v, BOARD_FADER.top, BOARD_FADER.len) + labelText(opts, k, BOARD_FADER.top + BOARD_FADER.len + 6.2);
+      } else if (kind === "button") {
+        body = `<rect class="face" x="-3.5" y="0.6" width="7" height="7" rx="1"/>${dot(opts.assigned(k), 2.6, 1.5)}` + labelText(opts, k, 11.7);
+      } else {
+        body = knobBody(v, KNOB_R + 0.6) + labelText(opts, k, 13.7);
+      }
+      const extra = kind + (v < 0 && kind !== "button" ? " unknown" : "") + (opts.waiting(k) ? " waiting" : "");
+      out += controlG(opts, k, extra, body, `translate(${x0 + i * CELL} ${y})`);
+    });
+    out += `<g class="add" data-action="add-control" data-row="${r}" role="button" tabindex="0" aria-label="${esc(opts.addLabel)}" transform="translate(${x0 + row.length * CELL} ${y})"><title>${esc(opts.addLabel)}</title><rect class="add-face" x="-4.5" y="0.6" width="9" height="9" rx="1.5"/><path class="add-plus" d="M-1.8 5.1h3.6M0 3.3v3.6"/></g>`;
+    y += heights[r] + ROW_GAP;
+  });
+  return `<svg class="smc board" viewBox="0 0 ${width} ${height}" role="group">${out}</svg>`;
+}
+
+// Moves a drawn fader's cap or knob's pointer without drawing it all again.
+export function showValue(root, id, value) {
+  const g = root.getElementById(`ctl-${id}`);
   if (!g) return;
-  g.classList.toggle("unknown", value < 0);
-  if (id < 8) g.querySelector(".cap").setAttribute("transform", `translate(0 ${capY(value)})`);
-  else g.querySelector(".pointer").setAttribute("transform", `rotate(${pointerAngle(value)})`);
+  g.classList.toggle("unknown", value < 0 && !g.classList.contains("button"));
+  const cap = g.querySelector(".cap");
+  if (cap) cap.setAttribute("transform", `translate(0 ${capY(Number(cap.dataset.top), Number(cap.dataset.len), value)})`);
+  const pointer = g.querySelector(".pointer");
+  if (pointer) pointer.setAttribute("transform", `rotate(${pointerAngle(value)})`);
 }
 
 export function smcShowStrip(root, strip, on) {

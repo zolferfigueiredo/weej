@@ -39,6 +39,8 @@ type setupJSON struct {
 	Speed            string         `json:"speed"`
 	Port             string         `json:"port"`
 	BaudRate         int            `json:"baudRate"`
+	BoardKinds       []string       `json:"boardKinds"`
+	BoardLayout      [][]int        `json:"boardLayout"`
 	MixerColumns     []*int         `json:"mixerColumns"`
 	MixerButtonOrder []int          `json:"mixerButtonOrder"`
 	Language         string         `json:"language"`
@@ -112,6 +114,8 @@ func setupToJSON(s core.Setup) setupJSON {
 		Speed:            string(s.Speed),
 		Port:             s.Port,
 		BaudRate:         s.BaudRate(),
+		BoardKinds:       core.EncodeKinds(s.BoardKinds),
+		BoardLayout:      s.BoardLayout,
 		MixerColumns:     core.EncodeMixerColumns(s.MixerColumns),
 		MixerButtonOrder: s.ButtonOrder,
 	}
@@ -140,6 +144,8 @@ func setupFromJSON(j setupJSON) core.Setup {
 		Baud:         j.BaudRate,
 		MixerColumns: mixerColumnsFromJSON(j.MixerColumns),
 		ButtonOrder:  j.MixerButtonOrder,
+		BoardKinds:   core.DecodeKinds(j.BoardKinds),
+		BoardLayout:  core.CleanLayout(j.BoardLayout, len(j.Columns)),
 	}
 }
 
@@ -263,7 +269,7 @@ func (app *App) sendSettingsInit() {
 	payload["forcedPort"] = app.forcedPort
 	payload["baudRates"] = core.BaudRates
 	payload["mixerButtonDefaults"] = core.SMCButtonOrder()
-	payload["controls"] = app.lastControls()
+	payload["values"] = app.lastValues()
 	payload["ctrlName"] = app.ctrlLabelName()
 	win.Send(payload)
 }

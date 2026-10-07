@@ -235,6 +235,8 @@ type Profile struct {
 	// Buttons is what each mixer button does in this profile. Nil means a profile saved before
 	// buttons were per profile; DecodeSettings fills it in.
 	Buttons ButtonMap `json:"buttons"`
+	// BoardButtons is what each of the board's buttons does in this profile, by knob index.
+	BoardButtons ButtonMap `json:"boardButtons,omitempty"`
 }
 
 // AllJobs is every job the profile uses, on either device.
@@ -331,6 +333,10 @@ type Setup struct {
 	MixerColumns []int
 	// ButtonOrder is the mixer buttons Calibrate found, by id: Button 1 first. Nil means never.
 	ButtonOrder []int
+	// BoardKinds is what each of the board's knobs is (board.go), and BoardLayout how Settings
+	// draws them: rows of knob indices, left to right. Nil draws one row of knobs.
+	BoardKinds  []ControlKind
+	BoardLayout [][]int
 }
 
 func (s Setup) activeJobs() [][]Job {
@@ -359,7 +365,19 @@ func mapping(columns []int, jobs [][]Job) map[int][]Job {
 	return result
 }
 
-func (s Setup) Mapping() map[int][]Job { return mapping(s.Columns, s.activeJobs()) }
+// Mapping leaves the board's buttons out: a button only presses, whatever jobs it kept.
+func (s Setup) Mapping() map[int][]Job {
+	jobs := s.activeJobs()
+	if s.BoardKinds != nil {
+		jobs = append([][]Job(nil), jobs...)
+		for i := range jobs {
+			if s.Kind(i) == KindButton {
+				jobs[i] = nil
+			}
+		}
+	}
+	return mapping(s.Columns, jobs)
+}
 
 func (s Setup) ActiveButtons() ButtonMap {
 	switch {

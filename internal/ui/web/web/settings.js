@@ -1,12 +1,13 @@
 import { connect, send, t } from "./bridge.js";
 import {
   SMC_COLUMNS,
+  boardSVG,
   isSMCPort,
   isStripControl,
+  showValue,
   smcButtonIcon,
   smcControlName,
   smcShowStrip,
-  smcShowValue,
   smcSVG,
 } from "./device.js";
 
@@ -33,7 +34,9 @@ let midiInputs = []; // MIDI input names; a "midi:<name>" port reads that mixer
 let connection = { connected: false, busy: false, port: "" };
 let calibrating = false; // set on the click, so the button greys out before the window opens
 let selected = 0; // the SMC-Mixer control the inspector shows: a fader or knob 0-15, or a button id
-let controlValues = Array(16).fill(-1); // each SMC-Mixer fader and knob, 0..1023, -1 until it moves
+let boardSelected = 0; // the board's control the inspector shows, by knob index
+let liveValues = []; // the last frame from whatever is connected
+let learning = null; // { knob, start }: the frame when the picked control began waiting for its input
 let stripLights = Array(8).fill(false);
 const litUntil = new Map(); // control id to when it stops showing as touched
 const controlTimers = new Map();
@@ -321,6 +324,10 @@ function renderGeneral() {
     renderSMCGeneral(profileGroup, importFoot);
     return;
   }
+  if (usesBoard()) {
+    renderBoardGeneral(profileGroup, importFoot);
+    return;
+  }
 
   // Two columns whose rows line up: connection and profile, invert and calibrate, then the knobs
   // and the buttons.
@@ -365,7 +372,7 @@ function renderSMCGeneral(profileGroup, importFoot) {
     label: controlLabel,
     assigned: (id) => buttonActions(id).length > 0,
     selected,
-    values: controlValues,
+    value: (id) => (id < 16 ? valueAt(SMC_COLUMNS[id]) : -1),
     strips: stripLights,
     lit: (id) => (litUntil.get(id) || 0) > Date.now(),
   });
@@ -389,7 +396,13 @@ function renderSMCGeneral(profileGroup, importFoot) {
 // The label under a fader or knob: its first job and how many more it has. A screen's short
 // name says which screen but not whether brightness or contrast, so those keep their title.
 function controlLabel(id) {
-  if (!isStripControl(id)) return { title: buttonActions(id).map(actionLabel).join(", ") };
+  if (isButtonControl(id)) {
+    const actions = buttonActions(id);
+    const title = actions.map(actionLabel).join(", ");
+    if (usesSMC()) return { title };
+    if (!actions.length) return { text: t("job.empty"), empty: true };
+    return { text: actionLabel(actions[0]), more: actions.length - 1, title };
+  }
   const jobs = deviceJobs(activeProfile())[id] || [];
   if (!jobs.length) return { text: t("job.empty"), empty: true };
   const titleOf = (job) => (jobEntryFor(job) || {}).title || job.exe || job.kind;
@@ -445,8 +458,8 @@ function actionPicks(cc) {
     return action ? html + `<div class="pick-param">${paramControl(cc, action)}</div>` : html;
   };
   const group = (title, items) => `<div class="pick-head">${esc(title)}</div>` + items.map(row).join("");
-  const mutes = (from) =>
-    Array.from({ length: 8 }, (_, i) => [`mute:${from + i}`, t("action.mute", { name: controlName(from + i) })]);
+  const mute = (k) => [`mute:${k}`, t("action.mute", { name: controlName(k) })];
+  const mutes = (from) => Array.from({ length: 8 }, (_, i) => mute(from + i));
   const groups = BUTTON_GROUPS.map(([key, items]) => {
     const list = items.map(([value, k]) => [value, t(k)]);
     if (key === "action.group.weej") {
@@ -454,7 +467,10 @@ function actionPicks(cc) {
     }
     return group(t(key), list);
   });
-  return groups.join("") + group(t("action.group.fkeys"), FKEYS) + group(t("mixer.faders"), mutes(0)) + group(t("knobs"), mutes(8));
+  const muteGroups = usesBoard()
+    ? group(t("knobs"), draft.columns.map((_, k) => k).filter((k) => kindOf(k) !== "button").map(mute))
+    : group(t("mixer.faders"), mutes(0)) + group(t("knobs"), mutes(8));
+  return groups.join("") + group(t("action.group.fkeys"), FKEYS) + muteGroups;
 }
 
 function onPick(el) {
@@ -462,7 +478,7 @@ function onPick(el) {
     const entry = init.catalog.find((c) => jobKey(c.job) === el.dataset.job);
     if (!entry) return;
     const knobs = deviceJobs(activeProfile());
-    const jobs = knobs[selected] || (knobs[selected] = []);
+    const jobs = knobs[picked()] || (knobs[picked()] = []);
     const idx = jobs.findIndex((j) => jobKey(j) === el.dataset.job);
     if (el.checked && idx < 0) jobs.push(entry.job);
     if (!el.checked && idx >= 0) jobs.splice(idx, 1);
@@ -470,16 +486,23 @@ function onPick(el) {
     return;
   }
   const value = el.dataset.value;
-  onButtonMenuToggle(selected, value, el.checked);
+  const id = picked();
+  onButtonMenuToggle(id, value, el.checked);
   // A website or keys to press need setting right away, so their box takes over.
-  if (el.checked && value === "url:") document.getElementById(`url-${selected}`)?.focus();
-  if (el.checked && value === "keys:") startRecording(`button:${selected}`);
+  if (el.checked && value === "url:") document.getElementById(`url-${id}`)?.focus();
+  if (el.checked && value === "keys:") startRecording(`button:${id}`);
 }
 
 function selectControl(id) {
-  if (id === selected) return;
-  selected = id;
+  if (id === picked()) return;
+  if (usesBoard()) boardSelected = id;
+  else selected = id;
   render();
+}
+
+// The picked control has no input yet, so the next one moved on the board becomes it.
+function waitingForInput() {
+  return usesBoard() && boardSelected < draft.columns.length && draft.columns[boardSelected] === -1;
 }
 
 // Moving or pressing a control on the mixer lights it, and picks it unless an address is being
@@ -488,7 +511,7 @@ function onControlTouched(id) {
   if (activeTab !== "general" || !document.getElementById(`ctl-${id}`)) return;
   const el = document.activeElement;
   const typing = el && (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && el.type === "text"));
-  if (id !== selected && !recording && !typing) {
+  if (id !== picked() && !recording && !typing && !waitingForInput()) {
     if (el && el.closest && el.closest(".inspector")) el.blur();
     selectControl(id);
   }
@@ -506,28 +529,246 @@ function lightControl(id) {
   );
 }
 
-function showControls(values) {
-  values.slice(0, 16).forEach((v, id) => {
-    if (controlValues[id] === v) return;
-    controlValues[id] = v;
-    if (activeTab === "general") smcShowValue(document, id, v);
+function valueAt(col) {
+  const v = liveValues[col];
+  return v === undefined || col < 0 ? -1 : v;
+}
+
+// Moves the drawn faders and knobs to a new frame, and finds the input of a control waiting for one.
+function showValues(values) {
+  const before = liveValues;
+  liveValues = values;
+  if (activeTab !== "general" || !draft) return;
+  const columns = usesSMC() ? SMC_COLUMNS : usesBoard() ? draft.columns : [];
+  columns.forEach((col, id) => {
+    if (col >= 0 && before[col] !== values[col]) showValue(document, id, valueAt(col));
   });
+  if (usesBoard()) learnInput(before);
+}
+
+// A control waiting for its input takes the first unused one that swings a good way, so a pot's
+// jitter or a brush against another control doesn't count.
+const LEARN_SWING = 300;
+
+function learnInput(before) {
+  if (!waitingForInput()) {
+    learning = null;
+    return;
+  }
+  if (!learning || learning.knob !== boardSelected) {
+    learning = { knob: boardSelected, start: before.length ? before : liveValues };
+    return;
+  }
+  for (let col = 0; col < liveValues.length; col++) {
+    if (draft.columns.includes(col) || learning.start[col] === undefined) continue;
+    if (Math.abs(liveValues[col] - learning.start[col]) >= LEARN_SWING) {
+      const k = boardSelected;
+      draft.columns[k] = col;
+      learning = null;
+      render();
+      lightControl(k);
+      return;
+    }
+  }
+}
+
+// --- Board --------------------------------------------------------------------
+
+// The board drawn in its rows, with what the control picked on it does beside it. A knob, fader
+// or button added with + waits for its input until it moves on the board.
+function renderBoardGeneral(profileGroup, importFoot) {
+  if (boardSelected >= draft.columns.length) boardSelected = Math.max(0, draft.columns.length - 1);
+  const svg = boardSVG({
+    layout: boardLayout(),
+    kind: kindOf,
+    name: boardName,
+    label: controlLabel,
+    assigned: (k) => buttonActions(k).length > 0,
+    waiting: (k) => draft.columns[k] === -1,
+    selected: draft.columns.length ? boardSelected : -1,
+    value: (k) => valueAt(draft.columns[k]),
+    lit: (id) => (litUntil.get(id) || 0) > Date.now(),
+    addLabel: t("board.add"),
+  });
+  const calibrate = `<button class="btn" type="button" data-action="calibrate"${calibrating ? " disabled" : ""}>${esc(t("calibrate"))}</button>`;
+  const invertRow = `
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("invert"))}</span>
+              <span class="row-desc">${esc(t("invert_note"))}</span>
+            </div>
+            <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft.invertKnobs ? " checked" : ""} /></div>
+          </div>`;
+  keepScroll(() => {
+    document.getElementById("panel").innerHTML = `
+    <div class="tabpanel general-grid" role="tabpanel">
+      ${connectionGroup(invertRow)}${profileGroup}
+      <div class="device-row">
+        <div class="group">
+          <div class="group-head"><h2 class="group-title">${esc(t("board.title"))}</h2><span class="spacer"></span>${calibrate}</div>
+          <div class="card device-card">${svg}</div>
+        </div>
+        ${boardInspector()}
+        <div class="group-foot device-foot"><span class="group-note">${esc(t("board.hint"))}</span></div>
+      </div>
+      ${importFoot}
+    </div>`;
+  });
+}
+
+function boardInspector() {
+  const k = boardSelected;
+  if (!draft.columns.length) {
+    return `
+        <div class="group inspector">
+          <div class="group-head"><h2 class="group-title">${esc(t("board.title"))}</h2></div>
+          <div class="card inspector-card"><p class="inspector-empty">${esc(t("board.empty"))}</p></div>
+        </div>`;
+  }
+  const kind = kindOf(k);
+  const button = kind === "button";
+  const empty = button ? !buttonActions(k).length : !(deviceJobs(activeProfile())[k] || []).length;
+  const kinds = ["knob", "fader", "button"]
+    .map((kd) => `<button class="btn${kd === kind ? " on" : ""}" type="button" data-action="set-kind" data-kind="${kd}" aria-pressed="${kd === kind}">${esc(t("board.kind_" + kd))}</button>`)
+    .join("");
+  const col = draft.columns[k];
+  const input =
+    col >= 0
+      ? `<span class="row-desc">${esc(t("board.input", { n: String(col + 1) }))}</span><button class="btn btn-icon btn-subtle" type="button" data-action="find-input" title="${escAttr(t("board.find_again"))}" aria-label="${escAttr(t("board.find_again"))}">&#x21bb;</button>`
+      : `<span class="waiting-note">${esc(t("board.waiting"))}</span>`;
+  const moves = [
+    ["left", "&#x2190;"],
+    ["right", "&#x2192;"],
+    ["up", "&#x2191;"],
+    ["down", "&#x2193;"],
+  ]
+    .map(([dir, arrow]) => `<button class="btn btn-icon" type="button" data-action="move-control" data-dir="${dir}" title="${escAttr(t("board." + dir))}" aria-label="${escAttr(t("board." + dir))}"${canMove(k, dir) ? "" : " disabled"}>${arrow}</button>`)
+    .join("");
+  return `
+        <div class="group inspector">
+          <div class="group-head">
+            <h2 class="group-title">${esc(boardName(k))}</h2>
+            <span class="spacer"></span>
+            <button class="btn" type="button" data-action="clear-control"${empty ? " disabled" : ""}>${esc(t("clear"))}</button>
+          </div>
+          <div class="card board-edit">
+            <div class="edit-row"><span class="segmented">${kinds}</span><span class="spacer"></span><button class="btn btn-icon" type="button" data-action="remove-control" title="${escAttr(t("remove"))}" aria-label="${escAttr(t("remove"))}">&minus;</button></div>
+            <div class="edit-row">${input}<span class="spacer"></span><span class="segmented">${moves}</span></div>
+          </div>
+          <div class="card inspector-card" data-keep-scroll="board-${k}">${button ? actionPicks(k) : jobPicks(k)}</div>
+        </div>`;
+}
+
+// The saved layout made drawable, as core.CleanLayout does: one row of every knob when there is
+// none, and any knob it misses on the last row.
+function boardLayout() {
+  const n = draft.columns.length;
+  const seen = new Set();
+  const rows = (draft.boardLayout || [Array.from({ length: n }, (_, i) => i)])
+    .map((row) => row.filter((i) => i >= 0 && i < n && !seen.has(i) && seen.add(i)))
+    .filter((row) => row.length);
+  const missing = Array.from({ length: n }, (_, i) => i).filter((i) => !seen.has(i));
+  if (missing.length) {
+    if (!rows.length) rows.push([]);
+    rows[rows.length - 1].push(...missing);
+  }
+  return rows;
+}
+
+function editableLayout() {
+  draft.boardLayout = boardLayout();
+  return draft.boardLayout;
+}
+
+function setKind(k, kind) {
+  draft.boardKinds = draft.columns.map((_, i) => (i === k ? kind : kindOf(i)));
+}
+
+function addBoardControl(row) {
+  const layout = editableLayout();
+  const k = draft.columns.length;
+  const last = layout[row] && layout[row][layout[row].length - 1];
+  const kind = last === undefined ? "knob" : kindOf(last);
+  draft.columns.push(-1);
+  setKind(k, kind);
+  if (!layout[row]) layout[row] = [];
+  layout[row].push(k);
+  padJobRows(draft);
+  boardSelected = k;
+  render();
+}
+
+function canMove(k, dir) {
+  const layout = boardLayout();
+  const r = layout.findIndex((row) => row.includes(k));
+  if (r < 0) return false;
+  const i = layout[r].indexOf(k);
+  if (dir === "left") return i > 0;
+  if (dir === "right") return i < layout[r].length - 1;
+  // Moving past the first or last row starts a new one, unless the control is alone in its row.
+  if (dir === "up") return r > 0 || layout[r].length > 1;
+  return r < layout.length - 1 || layout[r].length > 1;
+}
+
+function moveControl(k, dir) {
+  if (!canMove(k, dir)) return;
+  const layout = editableLayout();
+  const r = layout.findIndex((row) => row.includes(k));
+  const i = layout[r].indexOf(k);
+  if (dir === "left" || dir === "right") {
+    const j = i + (dir === "left" ? -1 : 1);
+    [layout[r][i], layout[r][j]] = [layout[r][j], layout[r][i]];
+  } else {
+    const to = r + (dir === "up" ? -1 : 1);
+    layout[r].splice(i, 1);
+    if (to < 0) layout.unshift([k]);
+    else if (to >= layout.length) layout.push([k]);
+    else layout[to].splice(Math.min(i, layout[to].length), 0, k);
+    draft.boardLayout = layout.filter((row) => row.length);
+  }
+  render();
+}
+
+// Takes control k off the board, as removing a knob does: its input, place, jobs and button
+// actions go, and every later control moves down one, its mutes with it.
+function removeBoardControl(k) {
+  const shift = (i) => (i > k ? i - 1 : i);
+  draft.boardLayout = boardLayout()
+    .map((row) => row.filter((i) => i !== k).map(shift))
+    .filter((row) => row.length);
+  draft.columns.splice(k, 1);
+  if (draft.boardKinds) draft.boardKinds.splice(k, 1);
+  const muteOf = (a) => (a.startsWith("mute:") ? parseInt(a.slice(5), 10) : -1);
+  for (const p of draft.profiles) {
+    if (p.jobs) p.jobs.splice(k, 1);
+    if (!p.boardButtons) continue;
+    const buttons = {};
+    for (const [key, actions] of Object.entries(p.boardButtons)) {
+      const id = parseInt(key, 10);
+      if (id === k) continue;
+      const kept = actions.filter((a) => muteOf(a) !== k).map((a) => (muteOf(a) > k ? `mute:${muteOf(a) - 1}` : a));
+      if (kept.length) buttons[shift(id)] = kept;
+    }
+    p.boardButtons = buttons;
+  }
+  boardSelected = Math.max(0, Math.min(boardSelected, draft.columns.length - 1));
 }
 
 // The drawn controls take Enter and Space as buttons do, and the arrow keys walk between them.
 function onControlKeydown(e) {
-  const ctl = e.target.closest && e.target.closest(".smc .ctl");
+  const ctl = e.target.closest && e.target.closest(".smc .ctl, .smc .add");
   if (!ctl) return;
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
     e.stopPropagation();
-    selectControl(parseInt(ctl.dataset.control, 10));
+    if (ctl.classList.contains("add")) addBoardControl(parseInt(ctl.dataset.row, 10));
+    else selectControl(parseInt(ctl.dataset.control, 10));
     return;
   }
   const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
   if (!step) return;
   e.preventDefault();
-  const all = [...document.querySelectorAll(".smc .ctl")];
+  const all = [...document.querySelectorAll(".smc .ctl, .smc .add")];
   const next = all[all.indexOf(ctl) + step];
   if (next) next.focus();
 }
@@ -645,6 +886,30 @@ function usesSMC() {
   return isSMCPort(init.forcedPort || draft.port);
 }
 
+function usesBoard() {
+  return !usesMixer();
+}
+
+// The control the inspector shows, on whichever device is drawn.
+function picked() {
+  return usesBoard() ? boardSelected : selected;
+}
+
+function kindOf(k) {
+  return (draft.boardKinds || [])[k] || "knob";
+}
+
+function isButtonControl(id) {
+  return usesBoard() ? kindOf(id) === "button" : !isStripControl(id);
+}
+
+function boardName(k) {
+  const letter = letterFor(k);
+  if (kindOf(k) === "fader") return t("board.fader", { letter });
+  if (kindOf(k) === "button") return t("board.button", { letter });
+  return t("knob", { letter });
+}
+
 // The knobs of whatever is connected, as Go's activeColumns picks them; only how many matters
 // here. The SMC-Mixer's are fixed.
 function knobColumns() {
@@ -735,9 +1000,10 @@ function profileLabel(i) {
   return p && p.name ? p.name : t("profile_n", { n: String(i + 1) });
 }
 
-// A mute names its control: the SMC-Mixer's fader or knob, or another mixer's knob letter.
+// A mute names its control: the SMC-Mixer's fader or knob, the board's, or another mixer's knob.
 function controlName(knob) {
-  return usesSMC() ? smcControlName(knob, t) : t("knob", { letter: letterFor(knob) });
+  if (usesSMC()) return smcControlName(knob, t);
+  return usesBoard() ? boardName(knob) : t("knob", { letter: letterFor(knob) });
 }
 
 function actionLabel(action) {
@@ -750,15 +1016,21 @@ function actionLabel(action) {
   return kind;
 }
 
+// The board's buttons keep their actions apart from the mixer's, as core.Profile does.
+function buttonsKey() {
+  return usesBoard() ? "boardButtons" : "buttons";
+}
+
 function buttonActions(cc) {
-  return (activeProfile().buttons || {})[cc] || [];
+  return (activeProfile()[buttonsKey()] || {})[cc] || [];
 }
 
 function setButtonActions(cc, actions) {
   const profile = activeProfile();
-  profile.buttons = profile.buttons || {};
-  if (actions.length) profile.buttons[cc] = actions;
-  else delete profile.buttons[cc];
+  const key = buttonsKey();
+  profile[key] = profile[key] || {};
+  if (actions.length) profile[key][cc] = actions;
+  else delete profile[key][cc];
 }
 
 // Puts action in place of whatever the button had of the same kind, so each kind is there once.
@@ -1057,6 +1329,9 @@ function renderDialog() {
     const name = activeProfile().name;
     title = name ? t("remove_named", { name }) : t("remove_this_profile");
     body = t("remove_profile_info");
+  } else if (dialog.kind === "removeControl") {
+    title = t("remove_named", { name: boardName(boardSelected) });
+    body = t("remove_knob_info");
   } else {
     title = t("remove_knob_q", { letter: letterFor(knobCount() - 1) });
     body = t("remove_knob_info");
@@ -1334,6 +1609,7 @@ function onClick(e) {
     case "confirm-dialog":
       if (dialog && dialog.kind === "removeProfile") removeProfileConfirmed();
       else if (dialog && dialog.kind === "removeKnob") removeKnobConfirmed();
+      else if (dialog && dialog.kind === "removeControl") removeBoardControl(boardSelected);
       dialog = null;
       render();
       break;
@@ -1361,12 +1637,30 @@ function onClick(e) {
       selectControl(parseInt(target.dataset.control, 10));
       break;
     case "clear-control":
-      if (isStripControl(selected)) deviceJobs(activeProfile())[selected] = [];
-      else setButtonActions(selected, []);
+      if (isButtonControl(picked())) setButtonActions(picked(), []);
+      else deviceJobs(activeProfile())[picked()] = [];
       render();
       break;
     case "pick-control-app":
-      send({ type: "pickApp", knob: selected });
+      send({ type: "pickApp", knob: picked() });
+      break;
+    case "add-control":
+      addBoardControl(parseInt(target.dataset.row, 10));
+      break;
+    case "set-kind":
+      setKind(boardSelected, target.dataset.kind);
+      render();
+      break;
+    case "move-control":
+      moveControl(boardSelected, target.dataset.dir);
+      break;
+    case "find-input":
+      draft.columns[boardSelected] = -1;
+      render();
+      break;
+    case "remove-control":
+      dialog = { kind: "removeControl" };
+      render();
       break;
     case "add-button":
       addButton();
@@ -1470,7 +1764,7 @@ function onMessage(msg) {
       activeTab = msg.tab || "general";
       connection = msg.connection || connection;
       calibrating = !!msg.calibrating;
-      showControls(msg.controls || []);
+      liveValues = msg.values || [];
       if (activeTab === "general") send({ type: "listPorts" });
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
       saved = clone(draft);
@@ -1516,12 +1810,16 @@ function onMessage(msg) {
       break;
     // Go-initiated: a knob's control moved, so its row lights up the same way.
     case "knobMoved":
-      if (usesSMC()) onControlTouched(msg.knob);
+      if (usesSMC() || usesBoard()) onControlTouched(msg.knob);
       else lightRow(document.getElementById(`knob-row-${msg.knob}`));
       break;
-    // Go-initiated: where the SMC-Mixer's faders and knobs are, about 20 times a second.
-    case "controls":
-      showControls(msg.values || []);
+    // Go-initiated: a button on the board was pressed.
+    case "boardButton":
+      if (usesBoard()) onControlTouched(msg.knob);
+      break;
+    // Go-initiated: the last frame from whatever is connected, about 20 times a second.
+    case "values":
+      showValues(msg.values || []);
       break;
     // Go-initiated: a strip's light over its fader went on or off.
     case "stripLight":

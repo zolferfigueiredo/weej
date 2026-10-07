@@ -36,41 +36,33 @@ func (app *App) activeColumns(s core.Setup) []int {
 }
 
 func (app *App) onMixerValues(values []int) {
-	setup := app.snapshotSettings().ForMixer()
-	app.handleValues(values, setup)
-	app.showControls(values, setup.Columns)
+	app.handleValues(values, app.snapshotSettings().ForMixer())
+	app.showValues(values)
 }
 
-// showControls keeps where each knob is for the mixer Settings draws, and hands it over at most
-// 20 times a second, the last position always among them.
-func (app *App) showControls(values, columns []int) {
-	controls := make([]int, len(columns))
-	for i, col := range columns {
-		controls[i] = -1
-		if col >= 0 && col < len(values) {
-			controls[i] = values[col]
-		}
-	}
-	app.controlsMu.Lock()
-	defer app.controlsMu.Unlock()
-	app.controls = controls
-	if app.controlsTimer == nil && app.settingsWin != nil {
-		app.controlsTimer = time.AfterFunc(50*time.Millisecond, func() {
-			app.controlsMu.Lock()
-			controls := app.controls
-			app.controlsTimer = nil
-			app.controlsMu.Unlock()
+// showValues keeps the last frame for the controls Settings draws, and hands it over at most 20
+// times a second, the last frame always among them.
+func (app *App) showValues(values []int) {
+	app.liveMu.Lock()
+	defer app.liveMu.Unlock()
+	app.live = values
+	if app.liveTimer == nil && app.settingsWin != nil {
+		app.liveTimer = time.AfterFunc(50*time.Millisecond, func() {
+			app.liveMu.Lock()
+			values := app.live
+			app.liveTimer = nil
+			app.liveMu.Unlock()
 			if win := app.settingsWin; win != nil {
-				win.Send(map[string]any{"type": "controls", "values": controls})
+				win.Send(map[string]any{"type": "values", "values": values})
 			}
 		})
 	}
 }
 
-func (app *App) lastControls() []int {
-	app.controlsMu.Lock()
-	defer app.controlsMu.Unlock()
-	return app.controls
+func (app *App) lastValues() []int {
+	app.liveMu.Lock()
+	defer app.liveMu.Unlock()
+	return app.live
 }
 
 func (app *App) onStripLight(strip int, on bool) {
@@ -102,7 +94,11 @@ func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
 // muted one could no longer be unmuted from its button.
 func (app *App) unmuteAll() {
 	setup := app.snapshotSettings().Setup
-	if app.engine.UnmuteAll(setup.ForMixer()) == 0 || !app.usesMixer() {
+	if !app.usesMixer() {
+		app.engine.UnmuteAll(setup)
+		return
+	}
+	if app.engine.UnmuteAll(setup.ForMixer()) == 0 {
 		return
 	}
 	for id, actions := range setup.ActiveButtons() {
@@ -146,7 +142,7 @@ func (app *App) onMixerButton(id int) {
 		app.log(fmt.Sprintf("Mixer button %s pressed: %s", mixerButtonName(id), strings.Join(names, ", ")))
 	}
 	for _, action := range actions {
-		app.runButtonAction(id, action, setup)
+		app.runButtonAction(action, setup.ForMixer(), func(on bool) { midiport.SetLED(id, on) })
 	}
 
 	if win := app.settingsWin; win != nil {
@@ -154,12 +150,30 @@ func (app *App) onMixerButton(id int) {
 	}
 }
 
-func (app *App) runButtonAction(id int, action core.ButtonAction, setup core.Setup) {
+func (app *App) onBoardButton(knob int, setup core.Setup) {
+	actions := setup.ActiveBoardButtons()[knob]
+	names := make([]string, len(actions))
+	for i, a := range actions {
+		names[i] = string(a)
+	}
+	app.log(fmt.Sprintf("Board button %s pressed: %s", core.Letter(knob), strings.Join(names, ", ")))
+	for _, action := range actions {
+		app.runButtonAction(action, setup, nil)
+	}
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "boardButton", "knob": knob})
+	}
+}
+
+// runButtonAction does one of a button's actions. A mute acts on device, the board's or the
+// mixer's setup, whichever the button is on, and led shows the mute on the button if it has one.
+func (app *App) runButtonAction(action core.ButtonAction, device core.Setup, led func(on bool)) {
 	if knob, ok := action.MuteKnob(); ok {
-		mixer := setup.ForMixer()
-		if knob < len(mixer.Columns) && mixer.Columns[knob] >= 0 {
-			muted := app.engine.ToggleMute(mixer.Columns[knob], mixer)
-			midiport.SetLED(id, muted)
+		if knob < len(device.Columns) && device.Columns[knob] >= 0 {
+			muted := app.engine.ToggleMute(device.Columns[knob], device)
+			if led != nil {
+				led(muted)
+			}
 		}
 	}
 	if path, ok := action.OpenApp(); ok && !winui.FocusApp(core.ExeName(path)) {

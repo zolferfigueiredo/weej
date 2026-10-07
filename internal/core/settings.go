@@ -48,6 +48,8 @@ type settingsJSON struct {
 	Speed            string     `json:"speed"`
 	Port             string     `json:"port"`
 	BaudRate         int        `json:"baudRate"`
+	BoardKinds       []string   `json:"boardKinds,omitempty"`
+	BoardLayout      [][]int    `json:"boardLayout,omitempty"`
 	MixerColumns     []*int     `json:"mixerColumns"`
 	MixerButtonOrder []int      `json:"mixerButtonOrder"`
 	Language         string     `json:"language"`
@@ -90,6 +92,28 @@ func EncodeMixerColumns(cols []int) []*int {
 		return nil
 	}
 	return columnsToJSON(cols)
+}
+
+func EncodeKinds(kinds []ControlKind) []string {
+	if kinds == nil {
+		return nil
+	}
+	out := make([]string, len(kinds))
+	for i, k := range kinds {
+		out[i] = string(k)
+	}
+	return out
+}
+
+func DecodeKinds(kinds []string) []ControlKind {
+	if kinds == nil {
+		return nil
+	}
+	out := make([]ControlKind, len(kinds))
+	for i, k := range kinds {
+		out[i] = ParseControlKind(k)
+	}
+	return out
 }
 
 // ButtonMap is a profile's button functions by button id; a button may do several things at once.
@@ -200,6 +224,8 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		Speed:            string(s.Speed),
 		Port:             s.Port,
 		BaudRate:         s.BaudRate(),
+		BoardKinds:       EncodeKinds(s.BoardKinds),
+		BoardLayout:      s.BoardLayout,
 		MixerColumns:     EncodeMixerColumns(s.MixerColumns),
 		MixerButtonOrder: s.ButtonOrder,
 		Language:         s.Language,
@@ -285,6 +311,12 @@ func DecodeSettings(data []byte, defaultProfileName string) (Settings, error) {
 	}
 	if v, ok := take[int](raw, "baudRate"); ok && v > 0 {
 		s.Baud = v
+	}
+	if v, ok := take[[]string](raw, "boardKinds"); ok {
+		s.BoardKinds = DecodeKinds(v)
+	}
+	if v, ok := take[[][]int](raw, "boardLayout"); ok {
+		s.BoardLayout = CleanLayout(v, len(s.Columns))
 	}
 	if v, ok := take[[]*int](raw, "mixerColumns"); ok && v != nil {
 		s.MixerColumns = columnsFromJSON(v)

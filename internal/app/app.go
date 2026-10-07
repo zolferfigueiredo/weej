@@ -107,9 +107,11 @@ type App struct {
 	moves        core.MoveWatcher
 	shutdownOnce sync.Once
 
-	controlsMu    sync.Mutex
-	controls      []int
-	controlsTimer *time.Timer
+	movesBoard core.ButtonWatcher
+
+	liveMu    sync.Mutex
+	live      []int
+	liveTimer *time.Timer
 }
 
 func Main(args []string) int {

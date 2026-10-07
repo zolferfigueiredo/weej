@@ -182,7 +182,18 @@ func (app *App) startSerial() {
 }
 
 func (app *App) onSerialLine(values []int) {
-	app.handleValues(values, app.snapshotSettings().Setup)
+	setup := app.snapshotSettings().Setup
+	app.handleValues(values, setup)
+	app.showValues(values)
+	if app.isCalibrating() {
+		return
+	}
+	app.movesMu.Lock()
+	pressed := app.movesBoard.Pressed(values, setup.BoardButtonInputs(), time.Since(app.startTime).Seconds())
+	app.movesMu.Unlock()
+	for _, knob := range pressed {
+		app.onBoardButton(knob, setup)
+	}
 }
 
 func (app *App) handleValues(values []int, setup core.Setup) {
@@ -204,6 +215,9 @@ func (app *App) onSerialStatus(status serialport.Status) {
 		app.pushConnection()
 		if !status.Connected {
 			app.engine.Reset()
+			app.movesMu.Lock()
+			app.movesBoard.Reset()
+			app.movesMu.Unlock()
 			return
 		}
 		app.mu.Lock()

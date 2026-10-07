@@ -3,6 +3,7 @@ package core
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -271,5 +272,87 @@ func TestSMCSettingsSurviveTheMove(t *testing.T) {
 	back, _ := DecodeSettings(data, "Default")
 	if !reflect.DeepEqual(back.Setup, s.Setup) {
 		t.Errorf("round trip changed the setup:\n%+v\n%+v", back.Setup, s.Setup)
+	}
+}
+
+func TestBoardLayoutsStayDrawable(t *testing.T) {
+	if got := CleanLayout(nil, 3); got != nil {
+		t.Errorf("no layout = %v, want nil: one row of knobs", got)
+	}
+	got := CleanLayout([][]int{{2, 9, 0}, {}, {0, 4}}, 5)
+	if !reflect.DeepEqual(got, [][]int{{2, 0}, {4, 1, 3}}) {
+		t.Errorf("layout = %v, want bad and repeated knobs gone and the missing ones on the last row", got)
+	}
+}
+
+func TestBoardButtonsOnlyPress(t *testing.T) {
+	s := Setup{
+		Columns:    []int{0, 1, -1},
+		BoardKinds: []ControlKind{KindKnob, KindButton, KindButton},
+		Profiles:   []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}, {{Kind: JobMicrophone}}, {}}}},
+	}
+	if m := s.Mapping(); len(m) != 1 || m[0][0].Kind != JobMaster {
+		t.Errorf("mapping = %v, want only the knob: a button's old jobs never run", m)
+	}
+	if got := s.BoardButtonInputs(); !reflect.DeepEqual(got, map[int]int{1: 1}) {
+		t.Errorf("buttons = %v, want knob 1 on input 1; knob 2 has no input yet", got)
+	}
+	if s.Kind(7) != KindKnob || ParseControlKind("dial") != KindKnob {
+		t.Error("an unknown control should read as a knob")
+	}
+	if f := s.ForMixer(); f.BoardKinds != nil {
+		t.Error("the mixer took the board's kinds")
+	}
+}
+
+func TestButtonWatcherFindsPressesEitherWay(t *testing.T) {
+	var w ButtonWatcher
+	inputs := map[int]int{4: 0, 5: 1}
+	press := func(a, b int, now float64) []int { return w.Pressed([]int{a, b}, inputs, now) }
+	if got := press(0, 1023, 0); got != nil {
+		t.Fatalf("first frame pressed %v, want it read as rest", got)
+	}
+	if got := press(1023, 1023, 1); !reflect.DeepEqual(got, []int{4}) {
+		t.Errorf("pulled-down button pressed %v, want knob 4", got)
+	}
+	if got := press(0, 1023, 1.01); got != nil {
+		t.Errorf("release pressed %v", got)
+	}
+	if got := press(1023, 1023, 1.02); got != nil {
+		t.Errorf("a bounce right after pressed %v, want nothing", got)
+	}
+	press(0, 1023, 1.03)
+	if got := press(1023, 0, 2); !reflect.DeepEqual(got, []int{4, 5}) {
+		t.Errorf("pressed %v, want both, the pulled-up one going to 0", got)
+	}
+	if got := press(1023-150, 150, 2.1); got != nil {
+		t.Errorf("still held pressed %v", got)
+	}
+	w.Reset()
+	if got := press(1023, 0, 3); got != nil {
+		t.Errorf("after Reset pressed %v, want the new rest learned", got)
+	}
+}
+
+func TestBoardSettingsSurviveSaving(t *testing.T) {
+	s := DefaultSettings("Default")
+	s.Columns = []int{0, 2, 1}
+	s.BoardKinds = []ControlKind{KindKnob, KindFader, KindButton}
+	s.BoardLayout = [][]int{{1, 0}, {2}}
+	s.Profiles[0].BoardButtons = ButtonMap{2: {MuteAction(1), ActionPlayPause}}
+	data, err := EncodeSettings(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, _ := DecodeSettings(data, "Default")
+	if !reflect.DeepEqual(back.BoardKinds, s.BoardKinds) || !reflect.DeepEqual(back.BoardLayout, s.BoardLayout) {
+		t.Errorf("kinds %v layout %v, want %v and %v", back.BoardKinds, back.BoardLayout, s.BoardKinds, s.BoardLayout)
+	}
+	if !reflect.DeepEqual(back.Profiles[0].BoardButtons, s.Profiles[0].BoardButtons) {
+		t.Errorf("board buttons = %v", back.Profiles[0].BoardButtons)
+	}
+	plain, _ := EncodeSettings(DefaultSettings("Default"))
+	if strings.Contains(string(plain), "board") {
+		t.Error("a setup without a board layout saved one")
 	}
 }

@@ -477,20 +477,37 @@ function mockSMC(init) {
   p.buttons[222] = ["media.playpause"];
   p.buttons[227] = ["settings", "url:https://weej.zolfer.com"];
   init.connection = { connected: true, busy: false, port: "SMC-Mixer" };
-  init.controls = [1023, 600, 300, -1, -1, 800, 150, -1, 512, -1, -1, -1, -1, -1, -1, -1];
+  // A mixer frame: CC-mode columns, faders on 40-47 and knobs on 30-37.
+  init.values = Array(144).fill(-1);
+  [1023, 600, 300, -1, -1, 800, 150, -1].forEach((v, i) => (init.values[40 + i] = v));
+  init.values[30] = 512;
+  return init;
+}
+
+// A board with a row of knobs over a row of faders and a button, the button not found yet.
+function mockBoard(init) {
+  const setup = init.setup;
+  setup.columns = [0, 3, 2, 4, 1, -1];
+  setup.boardKinds = ["knob", "knob", "knob", "fader", "fader", "button"];
+  setup.boardLayout = [[0, 1, 2], [3, 4, 5]];
+  for (const p of setup.profiles) while (p.jobs.length < 6) p.jobs.push([]);
+  setup.profiles[0].jobs[3] = [{ kind: "microphone" }];
+  setup.profiles[0].boardButtons = { 5: ["media.playpause"] };
+  init.connection = { connected: true, busy: false, port: "COM6" };
+  init.values = [500, 120, 800, 1023, 300, 0];
   return init;
 }
 
 // Moves fader 3 for a moment after the page opens, its light on meanwhile, as the mixer would.
-function startSMCDemo(post, controls) {
-  const values = controls.slice();
+function startSMCDemo(post, frame) {
+  const values = frame.slice();
   setTimeout(() => {
     post({ type: "knobMoved", knob: 2 });
     post({ type: "stripLight", strip: 2, on: true });
     let step = 0;
     const timer = setInterval(() => {
-      values[2] = Math.round(512 + 400 * Math.sin(step / 5));
-      post({ type: "controls", values: values.slice() });
+      values[42] = Math.round(512 + 400 * Math.sin(step / 5));
+      post({ type: "values", values: values.slice() });
       if (++step > 30) {
         clearInterval(timer);
         setTimeout(() => post({ type: "stripLight", strip: 2, on: false }), 300);
@@ -595,11 +612,14 @@ function startSettingsMock(post, enStrings) {
       case "ready":
         loadMockStrings(enStrings).then((strings) => {
           draft = mockSettingsInit(strings);
-          if (new URLSearchParams(location.search).get("device") === "smc") {
+          const device = new URLSearchParams(location.search).get("device");
+          if (device === "smc") {
             mockSMC(draft);
-            startSMCDemo(post, draft.controls);
+            startSMCDemo(post, draft.values);
           }
+          if (device === "board") mockBoard(draft);
           post(draft);
+          window.weejMock = { post };
         });
         break;
       case "save":

@@ -205,6 +205,7 @@ func (s Setup) ForMixer() Setup {
 		s.Columns = append([]int{}, s.MixerColumns...)
 	}
 	s.Invert = !s.MixerInvert
+	s.BoardKinds, s.BoardLayout = nil, nil
 	return s
 }
 
