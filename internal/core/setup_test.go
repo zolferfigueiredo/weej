@@ -209,7 +209,7 @@ func stringsRepeat(s string, n int) string {
 }
 
 func TestSteppingThroughProfilesWrapsRound(t *testing.T) {
-	s := Setup{Profiles: []Profile{{Name: "A"}, {Name: "B"}, {Name: "C"}}}
+	s := Device{Profiles: []DeviceProfile{{Name: "A"}, {Name: "B"}, {Name: "C"}}}
 	if s.Stepped(1) != 1 || s.Stepped(-1) != 2 {
 		t.Errorf("Stepped from 0: +1=%d -1=%d", s.Stepped(1), s.Stepped(-1))
 	}
@@ -219,24 +219,9 @@ func TestSteppingThroughProfilesWrapsRound(t *testing.T) {
 	}
 }
 
-func TestProfilesAndShortcutsSurviveSaving(t *testing.T) {
-	games := []Profile{{
-		Name:     "Games",
-		Jobs:     testJobs,
-		Shortcut: &Shortcut{VK: 0x31, Mods: ModControl | ModAlt, Key: "1"},
-	}}
-	data, err := json.Marshal(games)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var back []Profile
-	if err := json.Unmarshal(data, &back); err != nil {
-		t.Fatal(err)
-	}
-	if len(back) != 1 || back[0].Name != "Games" || back[0].Shortcut == nil || *back[0].Shortcut != *games[0].Shortcut {
-		t.Errorf("round trip = %+v, want %+v", back, games)
-	}
-	if got := Label(*games[0].Shortcut, "Ctrl"); got != "Ctrl+Alt+1" {
+func TestShortcutLabels(t *testing.T) {
+	games := Shortcut{VK: 0x31, Mods: ModControl | ModAlt, Key: "1"}
+	if got := Label(games, "Ctrl"); got != "Ctrl+Alt+1" {
 		t.Errorf("Label() = %q, want Ctrl+Alt+1", got)
 	}
 	f1 := Shortcut{VK: 0x70, Mods: ModControl, Key: "f1"}
@@ -252,99 +237,6 @@ func TestKnownAudioAppsAreListedOnce(t *testing.T) {
 			t.Errorf("duplicate known app exe %q", a.Exe)
 		}
 		seen[a.Exe] = true
-	}
-}
-
-func TestDecodeSettingsDefaultsAndFallbacks(t *testing.T) {
-	s, err := DecodeSettings(nil, "Default")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(s.Profiles) != 1 || s.Profiles[0].Name != "Default" {
-		t.Errorf("default profiles = %+v", s.Profiles)
-	}
-	if !s.ShowProfiles || s.Icon != IconMixer || s.Speed != SpeedSlow || s.UpdateEvery != 604800 || !s.ShowDataInMenu {
-		t.Errorf("defaults not applied: %+v", s)
-	}
-
-	s2, err := DecodeSettings([]byte(`{"profile": 99, "trayIcon": "bogus", "speed": "bogus", "updateEvery": 12345}`), "Default")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if s2.Active != 0 {
-		t.Errorf("Active = %d, want clamped to 0", s2.Active)
-	}
-	if s2.Icon != IconMixer {
-		t.Errorf("Icon = %v, want fallback to mixer", s2.Icon)
-	}
-	if s2.Speed != SpeedSlow {
-		t.Errorf("Speed = %v, want fallback to slow", s2.Speed)
-	}
-	if s2.UpdateEvery != 604800 {
-		t.Errorf("UpdateEvery = %d, want fallback to 604800", s2.UpdateEvery)
-	}
-}
-
-func TestEncodeSettingsColumnsNull(t *testing.T) {
-	s := DefaultSettings("Default")
-	s.Columns = []int{0, -1, 2}
-	data, err := EncodeSettings(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		t.Fatal(err)
-	}
-	cols, ok := raw["columns"].([]interface{})
-	if !ok || len(cols) != 3 || cols[0] != float64(0) || cols[1] != nil || cols[2] != float64(2) {
-		t.Errorf("columns = %v, want [0, null, 2]", raw["columns"])
-	}
-}
-
-func TestSettingsSurviveRoundTrip(t *testing.T) {
-	s := DefaultSettings("Default")
-	s.Columns = []int{0, -1, 2}
-	s.Profiles = []Profile{{Name: "Desk", Jobs: [][]Job{{{Kind: JobMaster}}, {}, {{Kind: JobBrightness, Screen: 0}}}}}
-	s.Active = 0
-	s.Invert = true
-	s.Language = "en"
-
-	data, err := EncodeSettings(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	back, err := DecodeSettings(data, "Default")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if back.Invert != s.Invert || back.Language != s.Language || len(back.Profiles) != 1 || back.Profiles[0].Name != "Desk" {
-		t.Errorf("round trip = %+v, want %+v", back, s)
-	}
-	for i, c := range s.Columns {
-		if back.Columns[i] != c {
-			t.Errorf("Columns[%d] = %d, want %d", i, back.Columns[i], c)
-		}
-	}
-}
-
-func TestPortAndBaudSurviveSaving(t *testing.T) {
-	s := DefaultSettings("Default")
-	s.Port = "COM6"
-	s.Baud = 115200
-	data, err := EncodeSettings(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	back, _ := DecodeSettings(data, "Default")
-	if back.Port != "COM6" || back.BaudRate() != 115200 {
-		t.Errorf("round trip = %q at %d, want COM6 at 115200", back.Port, back.BaudRate())
-	}
-
-	// Older settings files have neither key: automatic port at deej's default speed.
-	old, _ := DecodeSettings([]byte(`{"profiles":[{"name":"Default","jobs":[]}]}`), "Default")
-	if old.Port != "" || old.BaudRate() != DefaultBaud {
-		t.Errorf("old file = %q at %d, want automatic at %d", old.Port, old.BaudRate(), DefaultBaud)
 	}
 }
 

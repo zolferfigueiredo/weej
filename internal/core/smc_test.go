@@ -2,8 +2,6 @@ package core
 
 import (
 	"reflect"
-	"slices"
-	"strings"
 	"testing"
 )
 
@@ -63,16 +61,10 @@ func TestSMCControlsAreFixed(t *testing.T) {
 		t.Error("another mixer read as an SMC-Mixer")
 	}
 
-	s := Setup{MixerPort: "SMC-Mixer", Columns: []int{0, 1}, MixerColumns: []int{31, 40}, ButtonOrder: []int{144}}
-	if got := s.ForMixer().Columns; !reflect.DeepEqual(got, smcColumns) {
-		t.Errorf("columns = %v, want faders then knobs whatever was calibrated", got)
-	}
-	if got := s.MixerButtonOrder(); !reflect.DeepEqual(got, SMCButtonOrder()) {
-		t.Errorf("button order = %v, want every button", got)
-	}
-	s.MixerPort = "nanoKONTROL2"
-	if got := s.ForMixer().Columns; !reflect.DeepEqual(got, []int{31, 40}) {
-		t.Errorf("another mixer's columns = %v, want its calibration", got)
+	for i, c := range SMCControls() {
+		if c.Input != smcColumns[i] {
+			t.Errorf("control %d reads column %d, want %d", i, c.Input, smcColumns[i])
+		}
 	}
 }
 
@@ -130,128 +122,6 @@ func TestSMCButtonReleasedInBothModes(t *testing.T) {
 	}
 }
 
-func TestMigrateSMCMovesCCButtonsToTheirIDs(t *testing.T) {
-	s := Setup{Profiles: []Profile{{Buttons: ButtonMap{
-		20:                  {ActionStop},
-		MixerNoteButton(16): {ActionMuteMic, ActionStop},
-		59:                  {ActionNextProfile},
-		MixerNoteButton(0):  {ActionLockPC},
-	}}}, ButtonOrder: []int{20, MixerNoteButton(16), 52}}
-	MigrateSMC(&s)
-	want := ButtonMap{
-		MixerNoteButton(16): {ActionMuteMic, ActionStop},
-		MixerNoteButton(96): {ActionNextProfile},
-		MixerNoteButton(0):  {ActionLockPC},
-	}
-	if !reflect.DeepEqual(s.Profiles[0].Buttons, want) {
-		t.Errorf("buttons = %v, want %v", s.Profiles[0].Buttons, want)
-	}
-	if !reflect.DeepEqual(s.ButtonOrder, []int{MixerNoteButton(16), MixerNoteButton(94)}) {
-		t.Errorf("another mixer's order = %v, want its CCs as ids", s.ButtonOrder)
-	}
-}
-
-func TestMigrateSMCKeepsJobsOnTheirControl(t *testing.T) {
-	master := []Job{{Kind: JobMaster}}
-	mic := []Job{{Kind: JobMicrophone}}
-	s := Setup{
-		MixerPort:    "SMC-Mixer",
-		MixerColumns: []int{31, 40, -1},
-		ButtonOrder:  []int{144},
-		Profiles: []Profile{{
-			MixerJobs: [][]Job{master, mic, {{Kind: JobZoom}}},
-			Buttons:   ButtonMap{144: {MuteAction(0), ActionStop}, 145: {MuteAction(1)}, 146: {MuteAction(2)}},
-		}},
-	}
-	MigrateSMC(&s)
-	p := s.Profiles[0]
-	if len(p.MixerJobs) != 16 || !reflect.DeepEqual(p.MixerJobs[9], master) || !reflect.DeepEqual(p.MixerJobs[0], mic) {
-		t.Errorf("mixer jobs = %v, want master on knob 2 (control 9) and the mic on fader 1", p.MixerJobs)
-	}
-	for i, row := range p.MixerJobs {
-		if i != 0 && i != 9 && len(row) != 0 {
-			t.Errorf("control %d = %v, want empty", i, row)
-		}
-	}
-	want := ButtonMap{144: {MuteAction(9), ActionStop}, 145: {MuteAction(0)}}
-	if !reflect.DeepEqual(p.Buttons, want) {
-		t.Errorf("buttons = %v, want the mutes following their controls", p.Buttons)
-	}
-	if s.MixerColumns != nil || s.ButtonOrder != nil {
-		t.Errorf("calibration left: columns %v, order %v", s.MixerColumns, s.ButtonOrder)
-	}
-	again := s
-	again.Profiles = []Profile{{MixerJobs: p.MixerJobs, Buttons: ButtonMap{}}}
-	for id, a := range p.Buttons {
-		again.Profiles[0].Buttons[id] = slices.Clone(a)
-	}
-	MigrateSMC(&again)
-	if !reflect.DeepEqual(again.Profiles[0].Buttons, want) || !reflect.DeepEqual(again.Profiles[0].MixerJobs, p.MixerJobs) {
-		t.Error("a second run changed something")
-	}
-}
-
-// Shaped like a real SMC-Mixer user's file: three profiles, the board's knobs kept for later,
-// a calibration in the default order and buttons saved in DAW mode.
-const smcSettingsFixture = `{
-  "columns": [0, 3, 2, 4, 1],
-  "profiles": [
-    {"name": "Desk",
-     "jobs": [[{"kind": "master"}], [], [], [], []],
-     "mixerJobs": [[{"kind": "master"}], [{"kind": "brightness", "screen": 0}], [{"kind": "brightness", "screen": 1}],
-       [{"kind": "app", "exe": "game.exe"}, {"kind": "otherApps"}], [{"kind": "app", "exe": "browser.exe"}],
-       [{"kind": "microphone"}], [{"kind": "nightLight"}], [{"kind": "externalKeyboard"}], [{"kind": "zoom"}],
-       [{"kind": "contrast", "screen": 0}], [{"kind": "contrast", "screen": 1}], [], [], [], [], []],
-     "buttons": {"144": ["mute:0"], "145": ["mute:1"], "151": ["mute:7"], "174": ["profile.previous"],
-       "175": ["profile.next"], "219": ["media.previous"], "222": ["media.playpause"], "227": ["settings"]}},
-    {"name": "Empty", "jobs": [[], [], [], [], []], "mixerJobs": [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []],
-     "buttons": {"174": ["profile.previous"], "175": ["profile.next"]}},
-    {"name": "Board", "jobs": [[{"kind": "zoom"}], [], [], [], []], "mixerJobs": [[], [], [], [], [], [], [], [], [], [], [], [], [], [], [], []],
-     "buttons": {"174": ["profile.previous"], "175": ["profile.next"]}}
-  ],
-  "profile": 0,
-  "invertKnobs": false,
-  "invertMixer": false,
-  "port": "midi:SMC-Mixer",
-  "baudRate": 9600,
-  "mixerColumns": [40, 41, 42, 43, 44, 45, 46, 47, 30, 31, 32, 33, 34, 35, 36, 37],
-  "mixerButtonOrder": [144, 136, 128, 152, 145, 137, 129, 153, 146, 138, 130, 154, 147, 139, 131, 155, 148, 140, 132, 156,
-    149, 141, 133, 157, 150, 142, 134, 158, 151, 143, 135, 159, 222, 221, 223, 219, 220, 174, 175, 224, 225, 226, 227],
-  "language": "en"
-}`
-
-func TestSMCSettingsSurviveTheMove(t *testing.T) {
-	s, _ := DecodeSettings([]byte(smcSettingsFixture), "Default")
-	if s.Port != PortOff || s.MixerPort != "SMC-Mixer" {
-		t.Errorf("ports = %q, %q, want the board off and the mixer kept", s.Port, s.MixerPort)
-	}
-	if s.MixerColumns != nil || s.ButtonOrder != nil {
-		t.Errorf("calibration kept: %v, %v", s.MixerColumns, s.ButtonOrder)
-	}
-	if !reflect.DeepEqual(s.Columns, []int{0, 3, 2, 4, 1}) {
-		t.Errorf("board columns = %v", s.Columns)
-	}
-	desk := s.Profiles[0]
-	if len(desk.MixerJobs) != 16 || desk.MixerJobs[3][1].Kind != JobOtherApps || desk.MixerJobs[10][0].Screen != 1 {
-		t.Errorf("desk mixer jobs moved: %v", desk.MixerJobs)
-	}
-	if len(desk.Buttons) != 8 || desk.Buttons[151][0] != MuteAction(7) || desk.Buttons[227][0] != ActionOpenSettings {
-		t.Errorf("desk buttons = %v", desk.Buttons)
-	}
-	if got := s.ForMixer().Mapping()[30]; len(got) != 1 || got[0].Kind != JobZoom {
-		t.Errorf("knob 1 = %v, want zoom", got)
-	}
-
-	data, err := EncodeSettings(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	back, _ := DecodeSettings(data, "Default")
-	if !reflect.DeepEqual(back.Setup, s.Setup) {
-		t.Errorf("round trip changed the setup:\n%+v\n%+v", back.Setup, s.Setup)
-	}
-}
-
 func TestBoardLayoutsStayDrawable(t *testing.T) {
 	if got := CleanLayout(nil, 3); got != nil {
 		t.Errorf("no layout = %v, want nil: one row of knobs", got)
@@ -259,26 +129,6 @@ func TestBoardLayoutsStayDrawable(t *testing.T) {
 	got := CleanLayout([][]int{{2, 9, 0}, {}, {0, 4}}, 5)
 	if !reflect.DeepEqual(got, [][]int{{2, 0}, {4, 1, 3}}) {
 		t.Errorf("layout = %v, want bad and repeated knobs gone and the missing ones on the last row", got)
-	}
-}
-
-func TestBoardButtonsOnlyPress(t *testing.T) {
-	s := Setup{
-		Columns:    []int{0, 1, -1},
-		BoardKinds: []ControlKind{KindKnob, KindButton, KindButton},
-		Profiles:   []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}, {{Kind: JobMicrophone}}, {}}}},
-	}
-	if m := s.Mapping(); len(m) != 1 || m[0][0].Kind != JobMaster {
-		t.Errorf("mapping = %v, want only the knob: a button's old jobs never run", m)
-	}
-	if got := s.BoardButtonInputs(); !reflect.DeepEqual(got, map[int]int{1: 1}) {
-		t.Errorf("buttons = %v, want knob 1 on input 1; knob 2 has no input yet", got)
-	}
-	if s.Kind(7) != KindKnob || ParseControlKind("dial") != KindKnob {
-		t.Error("an unknown control should read as a knob")
-	}
-	if f := s.ForMixer(); f.BoardKinds != nil {
-		t.Error("the mixer took the board's kinds")
 	}
 }
 
@@ -308,28 +158,5 @@ func TestButtonWatcherFindsPressesEitherWay(t *testing.T) {
 	w.Reset()
 	if got := press(1023, 0, 3); got != nil {
 		t.Errorf("after Reset pressed %v, want the new rest learned", got)
-	}
-}
-
-func TestBoardSettingsSurviveSaving(t *testing.T) {
-	s := DefaultSettings("Default")
-	s.Columns = []int{0, 2, 1}
-	s.BoardKinds = []ControlKind{KindKnob, KindFader, KindButton}
-	s.BoardLayout = [][]int{{1, 0}, {2}}
-	s.Profiles[0].BoardButtons = ButtonMap{2: {MuteAction(1), ActionPlayPause}}
-	data, err := EncodeSettings(s)
-	if err != nil {
-		t.Fatal(err)
-	}
-	back, _ := DecodeSettings(data, "Default")
-	if !reflect.DeepEqual(back.BoardKinds, s.BoardKinds) || !reflect.DeepEqual(back.BoardLayout, s.BoardLayout) {
-		t.Errorf("kinds %v layout %v, want %v and %v", back.BoardKinds, back.BoardLayout, s.BoardKinds, s.BoardLayout)
-	}
-	if !reflect.DeepEqual(back.Profiles[0].BoardButtons, s.Profiles[0].BoardButtons) {
-		t.Errorf("board buttons = %v", back.Profiles[0].BoardButtons)
-	}
-	plain, _ := EncodeSettings(DefaultSettings("Default"))
-	if strings.Contains(string(plain), "board") {
-		t.Error("a setup without a board layout saved one")
 	}
 }

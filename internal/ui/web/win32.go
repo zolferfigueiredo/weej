@@ -417,8 +417,10 @@ func wndProcDispatch(hwnd uintptr, message uint32, wparam, lparam uintptr) uintp
 		}
 	case wmMinMaxInfo:
 		if w != nil && w.opts.Resizable {
-			// MINMAXINFO.ptMinTrackSize follows three POINTs.
-			minSize := [2]int32{dipToPx(minResizeW, w.scale) + w.frameW, dipToPx(minResizeH, w.scale) + w.frameH}
+			// MINMAXINFO.ptMinTrackSize follows three POINTs. It can't be dragged shorter
+			// than the page, so nothing on it is cut off.
+			minH := max(dipToPx(minResizeH, w.scale), w.neededPx)
+			minSize := [2]int32{dipToPx(minResizeW, w.scale) + w.frameW, minH + w.frameH}
 			procRtlMoveMemory.Call(lparam+24, uintptr(unsafe.Pointer(&minSize)), unsafe.Sizeof(minSize))
 			return 0
 		}

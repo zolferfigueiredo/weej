@@ -47,19 +47,19 @@ func sectionName(s core.Section) string {
 	}
 }
 
-func (app *App) screenCount(setup core.Setup) int {
+func (app *App) screenCount(devices []core.Device) int {
 	externals := 0
 	for _, m := range display.Monitors() {
 		if m.Screen+1 > externals {
 			externals = m.Screen + 1
 		}
 	}
-	return core.ScreenCount(externals, setup)
+	return core.ScreenCount(externals, devices)
 }
 
-func assignedAnywhere(setup core.Setup, kind core.JobKind) bool {
-	for _, p := range setup.Profiles {
-		for _, row := range p.AllJobs() {
+func assignedAnywhere(devices []core.Device, kind core.JobKind) bool {
+	for _, p := range allProfiles(devices) {
+		for _, row := range p.Jobs {
 			for _, j := range row {
 				if j.Kind == kind {
 					return true
@@ -70,7 +70,7 @@ func assignedAnywhere(setup core.Setup, kind core.JobKind) bool {
 	return false
 }
 
-func (app *App) buildCatalog(setup core.Setup) []catalogEntry {
+func (app *App) buildCatalog(devices []core.Device) []catalogEntry {
 	tr := app.trFunc()
 	ink := app.glyphInk()
 	glyphIcon := func(kind draw.GlyphKind) string { return pngDataURL(draw.Glyph(kind, 32, ink)) }
@@ -90,10 +90,10 @@ func (app *App) buildCatalog(setup core.Setup) []catalogEntry {
 	add(core.Job{Kind: core.JobMicrophone}, draw.GlyphMic)
 	add(core.Job{Kind: core.JobSystemSounds}, draw.GlyphSpeaker)
 
-	if display.HasBuiltinBrightness() || assignedAnywhere(setup, core.JobBuiltinBrightness) {
+	if display.HasBuiltinBrightness() || assignedAnywhere(devices, core.JobBuiltinBrightness) {
 		add(core.Job{Kind: core.JobBuiltinBrightness}, draw.GlyphSun)
 	}
-	n := app.screenCount(setup)
+	n := app.screenCount(devices)
 	for i := 0; i < n; i++ {
 		add(core.Job{Kind: core.JobBrightness, Screen: i}, draw.GlyphSun)
 	}
@@ -109,7 +109,7 @@ func (app *App) buildCatalog(setup core.Setup) []catalogEntry {
 
 	type named struct{ exe, name string }
 	var apps []named
-	for _, exe := range app.discoverApps(setup) {
+	for _, exe := range app.discoverApps(devices) {
 		apps = append(apps, named{exe: exe, name: app.resolveApp(exe)})
 	}
 	sort.Slice(apps, func(i, j int) bool { return strings.ToLower(apps[i].name) < strings.ToLower(apps[j].name) })
@@ -126,10 +126,12 @@ func (app *App) buildCatalog(setup core.Setup) []catalogEntry {
 	return out
 }
 
-func (app *App) discoverApps(setup core.Setup) []string {
+func (app *App) discoverApps(devices []core.Device) []string {
 	set := map[string]struct{}{}
-	for _, exe := range setup.Apps() {
-		set[exe] = struct{}{}
+	for _, d := range devices {
+		for _, exe := range d.Apps() {
+			set[exe] = struct{}{}
+		}
 	}
 	for _, k := range core.KnownApps {
 		if app.resolveAppPath(k.Exe) != "" {
@@ -247,7 +249,7 @@ func (app *App) iconPreviews() map[string]string {
 	return out
 }
 
-func (app *App) shortcutLabels(setup core.Setup) map[string]string {
+func (app *App) shortcutLabels(s core.Settings) map[string]string {
 	labels := map[string]string{}
 	ctrlName := app.ctrlLabelName()
 	add := func(s *core.Shortcut) {
@@ -260,14 +262,16 @@ func (app *App) shortcutLabels(setup core.Setup) map[string]string {
 		}
 		labels[string(data)] = core.Label(*s, ctrlName)
 	}
-	add(setup.Next)
-	add(setup.Previous)
-	for _, p := range setup.Profiles {
-		add(p.Shortcut)
-		for _, actions := range p.Buttons {
-			for _, a := range actions {
-				if s, ok := a.Keys(); ok {
-					add(&s)
+	for _, d := range s.Devices {
+		add(d.Next)
+		add(d.Previous)
+		for _, p := range d.Profiles {
+			add(p.Shortcut)
+			for _, actions := range p.Buttons {
+				for _, a := range actions {
+					if keys, ok := a.Keys(); ok {
+						add(&keys)
+					}
 				}
 			}
 		}
@@ -287,3 +291,11 @@ func pngDataURL(img *image.NRGBA) string {
 }
 
 func appIconDataURL(px int) string { return pngDataURL(draw.AppIcon(px)) }
+
+func allProfiles(devices []core.Device) []core.DeviceProfile {
+	var out []core.DeviceProfile
+	for _, d := range devices {
+		out = append(out, d.Profiles...)
+	}
+	return out
+}

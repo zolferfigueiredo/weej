@@ -6,22 +6,6 @@ import (
 	"strings"
 )
 
-const midiPortPrefix = "midi:"
-
-func MidiPort(device string) string { return midiPortPrefix + device }
-
-func IsMidiPort(port string) bool { return strings.HasPrefix(port, midiPortPrefix) }
-
-func MidiDevice(port string) string { return strings.TrimPrefix(port, midiPortPrefix) }
-
-// A mixer frame has one column per CC number, so a control's column is its CC and any number of
-// controls fits, then one per pitch-bend channel. Read off a real M-VAVE SMC-Mixer on channel 1:
-//   - CC mode: faders 1-8 send CC 40-47 and the rotary knobs CC 30-37, absolute 0..127, and
-//     buttons send CC 127 on press and 0 on release.
-//   - DAW (Mackie) mode: faders send pitch bend on channels 1-8, the rotary knobs CC 16-23 as
-//     steps (1 up, 65 down), and buttons notes: R 0-7, S 8-15, M 16-23, Square 24-31, the
-//     bottom row 46, 47 and 91-99.
-//
 // DAW mode's faders and knobs land on the CC-mode columns of the same control, so one
 // calibration covers both modes.
 const MixerColumns = 128 + 16
@@ -67,6 +51,9 @@ const (
 	ActionPreviousProfile ButtonAction = "profile.previous"
 	ActionOpenSettings    ButtonAction = "settings"
 	ActionNextLights      ButtonAction = "lights.next"
+	ActionPreviousLights  ButtonAction = "lights.previous"
+	ActionLightsOn        ButtonAction = "lights.on"
+	ActionLightsOff       ButtonAction = "lights.off"
 
 	// These carry a setting after the prefix; settings.js keys its controls off the same prefixes.
 	muteActionPrefix    = "mute:"
@@ -159,7 +146,8 @@ func (a ButtonAction) Valid() bool {
 	case ActionNone, ActionPlayPause, ActionPlay, ActionPause, ActionStop, ActionPreviousTrack,
 		ActionNextTrack, ActionVolumeUp, ActionVolumeDown, ActionMuteAll, ActionMuteMic,
 		ActionNightLight, ActionScreensOff, ActionLockPC, ActionSleepPC, ActionNextProfile,
-		ActionPreviousProfile, ActionOpenSettings, ActionNextLights:
+		ActionPreviousProfile, ActionOpenSettings, ActionNextLights, ActionPreviousLights,
+		ActionLightsOn, ActionLightsOff:
 		return true
 	}
 	_, mute := a.MuteKnob()
@@ -180,49 +168,14 @@ func DefaultMixerButtons() ButtonMap {
 	return m
 }
 
-// ForMixer is the setup a mixer frame is handled with: Columns come from MixerColumns and every
-// profile's Jobs from its MixerJobs, so the mixer has its own knobs. A fader's top is already its
-// highest value, so only the mixer's own MixerInvert flips it. A mixer never calibrated reads its
-// faders, then its knobs, and an SMC-Mixer always does.
-func (s Setup) ForMixer() Setup {
-	profiles := make([]Profile, len(s.Profiles))
-	for i, p := range s.Profiles {
-		p.Jobs = p.MixerJobs
-		profiles[i] = p
-	}
-	s.Profiles = profiles
-	if s.MixerIsSMC() {
-		s.Columns = append([]int{}, smcColumns...)
-	} else if s.MixerColumns == nil {
-		cols := make([]int, len(s.Columns))
-		for i := range cols {
-			cols[i] = -1
-			if i < len(defaultMixerControls) {
-				cols[i] = defaultMixerControls[i]
-			}
-		}
-		s.Columns = cols
-	} else {
-		s.Columns = append([]int{}, s.MixerColumns...)
-	}
-	s.Invert = !s.MixerInvert
-	s.BoardKinds, s.BoardLayout = nil, nil
-	return s
-}
-
-// MixerButtonOrder is the order Settings lists the mixer's buttons in: Calibrate's, or the
-// SMC-Mixer's own.
-func (s Setup) MixerButtonOrder() []int {
-	if s.ButtonOrder != nil && !s.MixerIsSMC() {
-		return s.ButtonOrder
-	}
-	return SMCButtonOrder()
-}
-
 // MixerState turns MIDI short messages into a frame of 0..1023 values. A control that has not
 // moved yet reads -1, since its position is unknown until the mixer sends it.
 type MixerState struct {
 	values []int
+	// The last pitch bend each fader sent, as it came: what stops the LED over it blinking.
+	pitch   [8][2]int
+	pitchOK [8]bool
+	last    int
 }
 
 func NewMixerState() *MixerState {
@@ -230,8 +183,24 @@ func NewMixerState() *MixerState {
 	for i := range v {
 		v[i] = -1
 	}
-	return &MixerState{values: v}
+	return &MixerState{values: v, last: -1}
 }
+
+// Pitch is the last pitch bend fader strip sent, if it has sent one.
+func (m *MixerState) Pitch(strip int) (lsb, msb int, ok bool) {
+	return m.pitch[strip][0], m.pitch[strip][1], m.pitchOK[strip]
+}
+
+// SetPitch takes a fader's position from before, for its LED; its value stays unknown until it
+// moves.
+func (m *MixerState) SetPitch(strip, lsb, msb int) {
+	if strip >= 0 && strip < len(m.pitch) {
+		m.pitch[strip], m.pitchOK[strip] = [2]int{lsb & 0x7F, msb & 0x7F}, true
+	}
+}
+
+// LastChanged is the column the last Feed changed, or -1.
+func (m *MixerState) LastChanged() int { return m.last }
 
 // A step is never 0 or 127, and a CC-mode button on the same number never sends anything else.
 func isVPotStep(cc, value int) bool {
@@ -242,6 +211,7 @@ func isVPotStep(cc, value int) bool {
 // changed, and the id of a button that was just pressed, or -1: a button has the same id in
 // either mode (SMCButtonID).
 func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
+	m.last = -1
 	status := int(msg & 0xFF)
 	data1 := int(msg>>8) & 0x7F
 	data2 := int(msg>>16) & 0x7F
@@ -257,6 +227,8 @@ func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 		col := pitchBendColumn + channel
 		if channel < 8 {
 			col = faderFirstCC + channel
+			m.pitch[channel] = [2]int{data1, data2}
+			m.pitchOK[channel] = true
 		}
 		// The SMC-Mixer only sends the top 7 bits, so its fader tops out at 127<<7, not 16383.
 		return m.set(col, min(((data1|data2<<7)*1023+8128)/16256, 1023)), -1
@@ -292,6 +264,7 @@ func (m *MixerState) set(col, value int) bool {
 		return false
 	}
 	m.values[col] = value
+	m.last = col
 	return true
 }
 
@@ -314,7 +287,7 @@ func (w *MoveWatcher) Moved(values []int) []int {
 	var moved []int
 	for col, v := range values {
 		a := w.anchor[col]
-		if v < 0 || (a >= 0 && absInt(v-a) < moveThreshold) {
+		if v < 0 || (a >= 0 && abs(v-a) < moveThreshold) {
 			continue
 		}
 		w.anchor[col] = v

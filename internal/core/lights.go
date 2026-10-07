@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-// LightPatterns are what an SMC-Mixer's button lights can show, by the name settings save. "eq"
-// follows the computer's sound (EQFrame) and "clock" the time (ClockFrame); LightFrame draws the
-// rest.
+// LightPatterns are what an SMC-Mixer's button lights can show, by the name settings save. The
+// EQ ones follow the computer's sound (EQ, EQFrame) and "clock" the time (ClockFrame);
+// LightFrame draws the rest.
 var LightPatterns = []string{
-	"off", "on", "random", "eq", "fire", "chase", "bounce", "wave", "sparkle", "blink", "rain", "matrix",
+	"off", "on", "random", "eq", "eq2", "eqgame", "fire", "chase", "bounce", "wave", "sparkle", "blink", "rain", "matrix",
 	"snake", "fill", "explode", "checker", "rise", "zigzag", "orbit", "heartbeat", "stars", "bars",
 	"ball", "comet", "helix", "breathe", "clock",
 }
@@ -30,6 +30,15 @@ func NextLightPattern(cur string) string {
 		i = 0
 	}
 	return ParseLightPattern(LightPatterns[(i+1)%len(LightPatterns)])
+}
+
+// PreviousLightPattern is the pattern before cur, from "" back to the last.
+func PreviousLightPattern(cur string) string {
+	i := slices.Index(LightPatterns, cur)
+	if cur == "" || i < 0 {
+		i = 0
+	}
+	return ParseLightPattern(LightPatterns[(i-1+len(LightPatterns))%len(LightPatterns)])
 }
 
 // Animated is whether a pattern changes over time.
@@ -104,7 +113,7 @@ const randomEvery = 6
 func RandomPattern(t float64) string {
 	var pool []string
 	for _, p := range LightPatterns {
-		if Animated(p) && p != "random" && p != "eq" && p != "clock" {
+		if Animated(p) && p != "random" && !IsEQ(p) && p != "clock" {
 			pool = append(pool, p)
 		}
 	}

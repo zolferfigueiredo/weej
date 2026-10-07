@@ -305,7 +305,6 @@ p {
   }
 }
 
-/* The knob and button lists scroll on their own, so the page itself stays put. */
 .button-param {
   display: flex;
   align-items: center;
@@ -322,11 +321,6 @@ p {
   color: var(--text-secondary);
 }
 
-.list-group > .card {
-  max-height: var(--list-max, 420px);
-  overflow-y: auto;
-}
-
 .row.lit,
 .row.lit:hover {
   background: var(--selection);
@@ -334,13 +328,6 @@ p {
 
 .row.clickable:hover {
   background: var(--card-bg-hover);
-}
-
-.row-icon {
-  width: 20px;
-  height: 20px;
-  flex: none;
-  border-radius: var(--radius-sm);
 }
 
 .row-main {
@@ -456,20 +443,6 @@ p {
   justify-content: center;
   font-size: var(--fs-body);
   line-height: 1;
-}
-
-.btn-link {
-  border: none;
-  background: none;
-  color: var(--accent);
-  padding: 0;
-  cursor: pointer;
-  font-size: inherit;
-  text-align: left;
-}
-
-.btn-link:hover {
-  text-decoration: underline;
 }
 
 /* --- Inputs / Select --- */
@@ -702,7 +675,7 @@ button.popover-item {
   }
 }
 
-/* --- Standalone window layouts (calibration / language / update) --- */
+/* --- Standalone window layouts (language / update) --- */
 
 .center-page {
   min-height: 100vh;
@@ -728,17 +701,6 @@ button.popover-item {
   max-width: 320px;
   color: var(--text-secondary);
   font-size: var(--fs-body);
-}
-
-.progress-line {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-caption);
-  color: var(--text-secondary);
-  min-height: 16px;
-}
-
-.progress-line.warning {
-  color: var(--warning);
 }
 
 .button-row {
@@ -821,14 +783,6 @@ button.popover-item {
   }
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-}
-
 /* --- Compact layout, matching TheeJ's Settings --- */
 
 .app {
@@ -907,6 +861,7 @@ button.popover-item {
 .btn-icon {
   width: 26px;
   height: 26px;
+  padding: 0;
 }
 
 .segmented {
@@ -927,44 +882,6 @@ button.popover-item {
 .select-inline {
   width: auto;
   max-width: 200px;
-}
-
-/* Knob reorder: the grip on each knob row, and the row lifted while it is dragged. */
-.knob-grip {
-  flex: none;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  margin: -6px -4px -6px -6px;
-  padding: 0 6px;
-  color: var(--text-secondary);
-  cursor: grab;
-  touch-action: none;
-  user-select: none;
-}
-
-.knob-grip svg {
-  width: 8px;
-  height: 14px;
-  fill: currentColor;
-}
-
-.card.reordering .knob-row {
-  transition: transform var(--motion) var(--ease);
-  user-select: none;
-}
-
-.card.reordering .knob-row.dragging {
-  position: relative;
-  z-index: 1;
-  transition: none;
-  background: var(--card-bg-hover);
-  box-shadow: var(--shadow-flyout);
-}
-
-.card.reordering,
-.card.reordering * {
-  cursor: grabbing;
 }
 
 .job-list {
@@ -1329,4 +1246,230 @@ select.select,
   stroke: var(--text-secondary);
   stroke-width: 0.45;
   stroke-linecap: round;
+}
+
+/* --- Boards ---------------------------------------------------------------- */
+
+.status-ok,
+.board-status.status-ok {
+  color: var(--success);
+}
+
+.row-desc.muted,
+.board-status.muted,
+.row-title.disabled {
+  color: var(--text-disabled);
+}
+
+.board-status.warning {
+  color: var(--danger);
+}
+
+.board-row {
+  gap: 14px;
+}
+
+.board-status {
+  font-size: var(--fs-body);
+  white-space: nowrap;
+}
+
+.link-button {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.gear {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+
+.subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.subtab {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 5px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.subtab:hover {
+  background: var(--card-bg-hover);
+}
+
+.subtab[aria-selected="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.board-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding-top: 30px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 16px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* --list-max is set by fitLists when the page would be taller than the window can grow. */
+.list-columns .card {
+  max-height: var(--list-max, none);
+  overflow-y: auto;
+}
+
+.list-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 20px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .list-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.setup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.setup-title {
+  font: 600 var(--fs-subtitle) / 1.3 var(--font);
+  margin: 0;
+}
+
+.setup-counts .btn {
+  min-width: 44px;
+}
+
+.tray-preview {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.about {
+  align-items: center;
+  text-align: center;
+  padding-top: 4px;
+  gap: 0;
+}
+
+.about-icon {
+  border-radius: 14px;
+}
+
+.about-name {
+  font: 600 16px var(--font-display);
+  margin: 12px 0 0;
+}
+
+.about-check {
+  margin-top: 14px;
+}
+
+.about-line {
+  margin-top: 6px;
+}
+
+.dialog-wide {
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+}
+
+.dialog-body.form {
+  overflow-y: auto;
+  margin: 0 -8px;
+  color: var(--text);
+}
+
+.dialog-body.form .row {
+  padding: 8px;
+}
+
+.dialog-actions .spacer {
+  flex: 1;
+}
+
+.btn.btn-danger:not(.btn-primary) {
+  color: var(--danger);
+}
+
+.input-count {
+  width: 72px;
+}
+
+.level {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--control-border);
+  overflow: hidden;
+  margin: 10px 0;
+}
+
+.level-fill {
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 80ms linear;
+}
+
+.wizard-step,
+.wizard-text,
+.wizard-count,
+.wizard-note,
+.wizard-warning {
+  margin: 6px 0;
+}
+
+.wizard-text {
+  font-size: var(--fs-subtitle);
+  color: var(--text);
+}
+
+.wizard-note {
+  color: var(--text-secondary);
+}
+
+.wizard-warning {
+  color: var(--warning);
 }

@@ -3,7 +3,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -49,15 +48,16 @@ type App struct {
 
 	startTime time.Time
 
-	mu          sync.Mutex
-	settings    core.Settings
-	connected   bool
-	busy        bool
-	currentPort string
-	calibrating bool
+	mu       sync.Mutex
+	settings core.Settings
 
-	engine *core.Engine
-	audio  *audio.Audio
+	// runners reads each board that is on, by its ID; bindings is what each registered hotkey
+	// does (core.HotkeyBindings), by its id; wizard is the board being calibrated.
+	runners  map[string]*runner
+	bindings []core.HotkeyBinding
+	wizard   *wizardRun
+
+	audio *audio.Audio
 	// spectrum is the sound the button lights' EQ follows, while loopback listens for it.
 	spectrum *core.Spectrum
 	loopback *audio.Loopback
@@ -66,10 +66,6 @@ type App struct {
 
 	nightlight NightLight
 	zoom       Zoom
-
-	reconnectCh  chan struct{}
-	cancelSerial context.CancelFunc
-	serialDone   chan struct{}
 
 	tray *winui.Tray
 	hud  *winui.HUD
@@ -92,38 +88,13 @@ type App struct {
 	jobMenuAnchor   web.Rect
 	jobMenuHiddenAt time.Time
 
-	calibWin      *web.Window
-	calibrator    *core.Calibrator
-	calibOnlyNew  bool
-	calibTickStop func()
-
 	updateWin   *web.Window
 	checking    bool
 	installing  bool
 	installStep updater.Step
 	lastRelease updater.Release
 
-	firstConnectDone bool
-	lastTerminalLine time.Time
-
-	movesMu      sync.Mutex
-	moves        core.MoveWatcher
 	shutdownOnce sync.Once
-
-	movesBoard core.ButtonWatcher
-	mixerMoves core.MoveWatcher
-
-	boardLive, mixerLive liveFrames
-
-	// The mixer runs beside the board, with an engine and a connection of its own.
-	mixerEngine      *core.Engine
-	mixerConnected   bool
-	mixerBusy        bool
-	mixerPortName    string
-	mixerReconnectCh chan struct{}
-	cancelMixer      context.CancelFunc
-	mixerDone        chan struct{}
-	mixerFirstDone   bool
 }
 
 func Main(args []string) int {
@@ -175,8 +146,6 @@ func Main(args []string) int {
 		testNotifications: flags.testNotifications,
 		log:               lg.Log,
 		startTime:         time.Now(),
-		reconnectCh:       make(chan struct{}, 1),
-		mixerReconnectCh:  make(chan struct{}, 1),
 		appName:           map[string]string{},
 		appPath:           map[string]string{},
 		appIcon:           map[string]string{},

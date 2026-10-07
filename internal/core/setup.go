@@ -225,28 +225,10 @@ type Shortcut struct {
 	Key  string `json:"key"`
 }
 
+// Profile is a board's jobs by column, as the Engine reads them (Device.EngineSetup).
 type Profile struct {
-	Name string `json:"name"`
-	// Jobs are the board's knobs and MixerJobs the mixer's: each device has its own knobs.
-	// Nil MixerJobs means a profile saved before that split; DecodeSettings fills it in.
-	Jobs      [][]Job   `json:"jobs"`
-	MixerJobs [][]Job   `json:"mixerJobs"`
-	Shortcut  *Shortcut `json:"shortcut,omitempty"`
-	// Buttons is what each mixer button does in this profile. Nil means a profile saved before
-	// buttons were per profile; DecodeSettings fills it in.
-	Buttons ButtonMap `json:"buttons"`
-	// BoardButtons is what each of the board's buttons does in this profile, by knob index.
-	BoardButtons ButtonMap `json:"boardButtons,omitempty"`
-}
-
-// AllJobs is every job the profile uses, on either device.
-func (p Profile) AllJobs() [][]Job { return append(append([][]Job{}, p.Jobs...), p.MixerJobs...) }
-
-func (p Profile) JobsOf(knob int) []Job {
-	if knob < 0 || knob >= len(p.Jobs) {
-		return nil
-	}
-	return p.Jobs[knob]
+	Name string
+	Jobs [][]Job
 }
 
 type Speed string
@@ -308,38 +290,14 @@ func Letter(i int) string {
 	return s
 }
 
+// Setup is one board as the Engine reads it (Device.EngineSetup): a column per control, -1 for
+// one with no jobs to run, and Invert the Engine's own, which flips unless set.
 type Setup struct {
 	Columns  []int
 	Profiles []Profile
 	Active   int
-	Next     *Shortcut
-	Previous *Shortcut
-	// Invert is the board's: its pots are often wired the other way round, so false flips them.
-	// MixerInvert is the mixer's own: false leaves a fader's top at its highest value.
-	Invert       bool
-	MixerInvert  bool
-	HideIcon     bool
-	ShowProfiles bool
-	Icon         IconStyle
-	Speed        Speed
-	// Port is the board's: a COM port, empty to find it automatically, or PortOff. MixerPort is
-	// the MIDI input the mixer is read from, empty for none; both can run at once.
-	Port      string
-	MixerPort string
-	// MixerLights is the pattern an SMC-Mixer's button lights run (lights.go), "" for none.
-	MixerLights string
-	// Baud is the serial speed; 0 means DefaultBaud.
-	Baud int
-	// MixerColumns is the mixer's own calibration, so the board's Columns survive a switch to
-	// the mixer and back. Nil means never calibrated. An SMC-Mixer has neither: its controls are
-	// fixed (smc.go).
-	MixerColumns []int
-	// ButtonOrder is the mixer buttons Calibrate found, by id: Button 1 first. Nil means never.
-	ButtonOrder []int
-	// BoardKinds is what each of the board's knobs is (board.go), and BoardLayout how Settings
-	// draws them: rows of knob indices, left to right. Nil draws one row of knobs.
-	BoardKinds  []ControlKind
-	BoardLayout [][]int
+	Speed    Speed
+	Invert   bool
 }
 
 func (s Setup) activeJobs() [][]Job {
@@ -368,29 +326,7 @@ func mapping(columns []int, jobs [][]Job) map[int][]Job {
 	return result
 }
 
-// Mapping leaves the board's buttons out: a button only presses, whatever jobs it kept.
-func (s Setup) Mapping() map[int][]Job {
-	jobs := s.activeJobs()
-	if s.BoardKinds != nil {
-		jobs = append([][]Job(nil), jobs...)
-		for i := range jobs {
-			if s.Kind(i) == KindButton {
-				jobs[i] = nil
-			}
-		}
-	}
-	return mapping(s.Columns, jobs)
-}
-
-func (s Setup) ActiveButtons() ButtonMap {
-	switch {
-	case s.Active >= 0 && s.Active < len(s.Profiles):
-		return s.Profiles[s.Active].Buttons
-	case len(s.Profiles) > 0:
-		return s.Profiles[0].Buttons
-	}
-	return nil
-}
+func (s Setup) Mapping() map[int][]Job { return mapping(s.Columns, s.activeJobs()) }
 
 func lastIndexOf(columns []int, col int) int {
 	for i := len(columns) - 1; i >= 0; i-- {
@@ -414,33 +350,6 @@ func (s Setup) MenuOrder() []int {
 	return keys
 }
 
-func (s Setup) Apps() []string {
-	set := map[string]struct{}{}
-	for _, p := range s.Profiles {
-		for _, row := range p.AllJobs() {
-			for _, j := range row {
-				if j.Kind == JobApp {
-					set[j.Exe] = struct{}{}
-				}
-			}
-		}
-	}
-	out := make([]string, 0, len(set))
-	for e := range set {
-		out = append(out, e)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func (s Setup) Stepped(by int) int {
-	n := len(s.Profiles)
-	if n == 0 {
-		return 0
-	}
-	return ((s.Active+by)%n + n) % n
-}
-
 func Percent(s float64) int {
 	v := int(s*100 + 0.5)
 	if v < 0 {
@@ -460,18 +369,8 @@ func Clipped(name string, limit int) string {
 	return strings.TrimRight(string(r[:limit-1]), " \t\n") + "…"
 }
 
-// PortOff keeps WeeJ off the serial ports: finding a board opens each, which restarts an Arduino.
-const PortOff = "off"
-
 // DefaultBaud is what deej's sketch (and so most boards) passes to Serial.begin().
 const DefaultBaud = 9600
 
 // BaudRates are the speeds offered in Settings; a board's sketch has to use the same one.
 var BaudRates = []int{9600, 19200, 38400, 57600, 115200}
-
-func (s Setup) BaudRate() int {
-	if s.Baud <= 0 {
-		return DefaultBaud
-	}
-	return s.Baud
-}

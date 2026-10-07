@@ -70,7 +70,7 @@ jobs:
       - name: No em or en dashes in user-facing text
         run: |
           dirs=()
-          for d in internal/lang/catalogs internal/app/web; do
+          for d in internal/lang/catalogs internal/ui/web/web; do
             [ -d "$d" ] && dirs+=("$d")
           done
           if [ "${#dirs[@]}" -eq 0 ]; then

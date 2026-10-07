@@ -19,7 +19,7 @@ func TestExternalsLeftToRightWithoutTheBuiltIn(t *testing.T) {
 }
 
 func TestScreenCountIsTheScreensThere(t *testing.T) {
-	empty := Setup{Profiles: []Profile{{Name: "Default"}}}
+	empty := []Device{NewDevice("d1", "Desk", DeviceDIY, 1, 0, 0, "Default")}
 	for _, externals := range []int{0, 1, 2, 4} {
 		if got := ScreenCount(externals, empty); got != externals {
 			t.Errorf("ScreenCount(%d, no jobs) = %d, want %d", externals, got, externals)
@@ -27,7 +27,7 @@ func TestScreenCountIsTheScreensThere(t *testing.T) {
 	}
 
 	// A job for screen 3 keeps it listed while only one screen is plugged in.
-	withScreen3 := Setup{Profiles: []Profile{{Name: "Default", Jobs: [][]Job{{{Kind: JobContrast, Screen: 2}}}}}}
+	withScreen3 := []Device{{Profiles: []DeviceProfile{{Name: "Default", Jobs: [][]Job{{{Kind: JobContrast, Screen: 2}}}}}}}
 	if got := ScreenCount(1, withScreen3); got != 3 {
 		t.Errorf("ScreenCount(1, screen 3 in use) = %d, want 3", got)
 	}
