@@ -236,13 +236,21 @@ func (app *App) runButtonAction(action core.ButtonAction, engine *core.Engine, d
 	case core.ActionOpenSettings:
 		app.loop.Invoke(func() { app.openSettings("") })
 	case core.ActionNextLights:
-		app.loop.Invoke(app.nextLights)
+		app.changeLights(func(s *core.Setup) { s.MixerLights = core.NextLightPattern(s.MixerLights) })
+	case core.ActionPreviousLights:
+		app.changeLights(func(s *core.Setup) { s.MixerLights = core.PreviousLightPattern(s.MixerLights) })
+	case core.ActionLightsOn:
+		app.changeLights(func(s *core.Setup) { s.MixerLights = "on" })
+	case core.ActionLightsOff:
+		app.changeLights(func(s *core.Setup) { s.MixerLights = "" })
+	case core.ActionToggleLEDs:
+		app.changeLights(func(s *core.Setup) { s.MixerLEDs = !s.MixerLEDs })
 	}
 }
 
 // applyLights runs the mixer's button light pattern, listening to the speakers only for the EQ.
 func (app *App) applyLights(s core.Setup) {
-	midiport.SetLights(s.MixerLights)
+	midiport.SetLights(s.MixerLights, s.MixerLEDs)
 	eq := s.MixerLights == "eq" && s.MixerIsSMC()
 	app.mu.Lock()
 	if app.spectrum == nil {
@@ -264,15 +272,17 @@ func (app *App) applyLights(s core.Setup) {
 	}
 }
 
-// nextLights steps the button lights to their next pattern and saves it, as Settings would.
-func (app *App) nextLights() {
-	s := app.snapshotSettings()
-	s.MixerLights = core.NextLightPattern(s.MixerLights)
-	if err := app.persistSettings(s); err != nil {
-		return
-	}
-	app.applyLights(s.Setup)
-	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "mixerLights", "pattern": s.MixerLights})
-	}
+// changeLights changes the button lights from a button and saves them, as Settings would.
+func (app *App) changeLights(change func(*core.Setup)) {
+	app.loop.Invoke(func() {
+		s := app.snapshotSettings()
+		change(&s.Setup)
+		if err := app.persistSettings(s); err != nil {
+			return
+		}
+		app.applyLights(s.Setup)
+		if win := app.settingsWin; win != nil {
+			win.Send(map[string]any{"type": "mixerLights", "pattern": s.MixerLights, "leds": s.MixerLEDs})
+		}
+	})
 }

@@ -32,6 +32,25 @@ func NextLightPattern(cur string) string {
 	return ParseLightPattern(LightPatterns[(i+1)%len(LightPatterns)])
 }
 
+// PreviousLightPattern is the pattern before cur, from "" back to the last.
+func PreviousLightPattern(cur string) string {
+	i := slices.Index(LightPatterns, cur)
+	if cur == "" || i < 0 {
+		i = 0
+	}
+	return ParseLightPattern(LightPatterns[(i-1+len(LightPatterns))%len(LightPatterns)])
+}
+
+// StripLEDs is which fader LEDs a frame lights: each sits above its column, so it goes with the
+// column's top button, M.
+func StripLEDs(frame []int) [gridCols]bool {
+	var on [gridCols]bool
+	for col := range gridCols {
+		on[col] = slices.Contains(frame, MixerNoteButton(lightRows[0]+col))
+	}
+	return on
+}
+
 // Animated is whether a pattern changes over time.
 func Animated(pattern string) bool { return pattern != "" && pattern != "off" && pattern != "on" }
 

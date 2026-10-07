@@ -179,6 +179,7 @@ var (
 	// muteLEDs is what SetLED last asked of each button's light, by id.
 	muteLEDs     [256]atomic.Bool
 	lightPattern atomic.Value
+	lightLEDs    atomic.Bool
 	spectrum     atomic.Pointer[core.Spectrum]
 	lightsPoke   = make(chan struct{}, 1)
 )
@@ -201,9 +202,11 @@ func SetLED(button int, on bool) {
 // SetSpectrum is the sound the "eq" pattern follows.
 func SetSpectrum(s *core.Spectrum) { spectrum.Store(s) }
 
-// SetLights picks the pattern an SMC-Mixer's button lights run (core.LightPatterns).
-func SetLights(pattern string) {
+// SetLights picks the pattern an SMC-Mixer's button lights run (core.LightPatterns), and whether
+// the LEDs over its faders join in.
+func SetLights(pattern string, leds bool) {
 	lightPattern.Store(core.ParseLightPattern(pattern))
+	lightLEDs.Store(leds)
 	pokeLights()
 }
 
@@ -295,7 +298,7 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 	state := core.NewMixerState()
 	check := time.NewTicker(2 * time.Second)
 	defer check.Stop()
-	lights := newButtonLights(cfg.Lights)
+	lights := newButtonLights(cfg.Lights, state)
 	var guard core.LightGuard
 	lights.update()
 	defer lights.clear()
@@ -328,6 +331,9 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 				}
 				c, pressed := state.Feed(m)
 				changed = changed || c
+				if c {
+					lights.moved(state.LastChanged())
+				}
 				if pressed >= 0 {
 					lights.hold(pressed, true)
 					if cfg.OnButton != nil {
@@ -361,6 +367,7 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 // sent fader moves nobody made after a few dozen at once.
 type buttonLights struct {
 	patterns bool
+	state    *core.MixerState
 	pattern  string
 	start    time.Time
 	ticker   *time.Ticker
@@ -377,12 +384,20 @@ type buttonLights struct {
 	start0, last time.Time
 	pace         *time.Ticker
 	paced        <-chan time.Time
+	// knobUntil is when each strip's LED stops blinking for its knob, and blink the message
+	// keeping each blinking, 0 when none was sent.
+	knobUntil [8]time.Time
+	blink     [8]uint32
 }
 
-const lightsBurst = 4
+const (
+	lightsBurst = 4
+	// knobTail keeps a fader's LED blinking a moment after its knob stops, so it doesn't flicker.
+	knobTail = 300 * time.Millisecond
+)
 
-func newButtonLights(patterns bool) *buttonLights {
-	l := &buttonLights{patterns: patterns, start0: time.Now()}
+func newButtonLights(patterns bool, state *core.MixerState) *buttonLights {
+	l := &buttonLights{patterns: patterns, state: state, start0: time.Now()}
 	if patterns {
 		for _, id := range core.SMCStripButtons() {
 			l.strip[id] = true
@@ -398,24 +413,46 @@ func (l *buttonLights) hold(id int, down bool) {
 	}
 }
 
+// moved hears a column change: a knob blinks the LED over its fader, and a fader puts that LED
+// out on the mixer itself, so it is sent again if still wanted.
+func (l *buttonLights) moved(col int) {
+	if !l.patterns {
+		return
+	}
+	switch {
+	case col >= 30 && col < 38:
+		l.knobUntil[col-30] = time.Now().Add(knobTail)
+		l.update()
+	case col >= 40 && col < 48:
+		l.blink[col-40] = 0
+	}
+}
+
 func (l *buttonLights) update() {
-	pattern := ""
+	pattern, leds := "", false
 	if l.patterns {
 		pattern, _ = lightPattern.Load().(string)
+		leds = lightLEDs.Load()
 	}
+	now := time.Now()
 	if pattern != l.pattern {
-		l.pattern, l.start = pattern, time.Now()
-		if l.ticker != nil {
+		l.pattern, l.start = pattern, now
+	}
+	knobs := false
+	for _, until := range l.knobUntil {
+		knobs = knobs || now.Before(until)
+	}
+	if tick := core.Animated(pattern) || knobs || leds && pattern != ""; tick != (l.ticker != nil) {
+		if tick {
+			l.ticker = time.NewTicker(40 * time.Millisecond)
+			l.tick = l.ticker.C
+		} else {
 			l.ticker.Stop()
 			l.ticker, l.tick = nil, nil
 		}
-		if core.Animated(pattern) {
-			l.ticker = time.NewTicker(40 * time.Millisecond)
-			l.tick = l.ticker.C
-		}
 	}
 	if daw := mode.DAW(); daw != l.daw {
-		l.daw, l.want, l.sent = daw, [256]int8{}, [256]int8{}
+		l.daw, l.want, l.sent, l.blink = daw, [256]int8{}, [256]int8{}, [8]uint32{}
 	}
 	frame := core.LightFrame(pattern, time.Since(l.start).Seconds())
 	switch pattern {
@@ -439,6 +476,35 @@ func (l *buttonLights) update() {
 		}
 	}
 	l.flush()
+
+	var stripLEDs [8]bool
+	if leds {
+		stripLEDs = core.StripLEDs(frame)
+	}
+	for strip := range stripLEDs {
+		l.setLED(strip, stripLEDs[strip] || now.Before(l.knobUntil[strip]))
+	}
+}
+
+// setLED starts or stops a fader's LED blinking, once that fader has said where it is. A blinking
+// LED counts as a light change for the fader drift guard, since it flashes on its own.
+func (l *buttonLights) setLED(strip int, on bool) {
+	lsb, msb, ok := l.state.Pitch(strip)
+	if !ok || !l.daw {
+		return
+	}
+	switch {
+	case on:
+		if msg := core.SMCStripBlink(strip, msb); msg != l.blink[strip] {
+			send(msg)
+			l.blink[strip] = msg
+		}
+		l.last = time.Now()
+	case l.blink[strip] != 0:
+		send(core.SMCStripRestore(strip, lsb, msb))
+		l.blink[strip] = 0
+		l.last = time.Now()
+	}
 }
 
 // flush sends up to lightsBurst of the lights that differ from what was sent, taking turns, and
@@ -476,6 +542,9 @@ func (l *buttonLights) clear() {
 		if t != nil {
 			t.Stop()
 		}
+	}
+	for strip := range l.blink {
+		l.setLED(strip, false)
 	}
 	n := 0
 	for id, state := range l.sent {

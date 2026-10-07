@@ -149,3 +149,32 @@ func TestSpectrumJumpsTheBandThatGetsLouder(t *testing.T) {
 		t.Errorf("silence two seconds later gives %.2f, want nothing", bands)
 	}
 }
+
+func TestPreviousLightPatternAndStripLEDs(t *testing.T) {
+	if PreviousLightPattern("") != "clock" || PreviousLightPattern("on") != "" || PreviousLightPattern("random") != "on" {
+		t.Error("Previous doesn't step back through the patterns")
+	}
+	leds := StripLEDs(EQFrame([8]float64{1, 0.5, 0, 0, 0, 0, 0, 1}))
+	if leds != [8]bool{true, false, false, false, false, false, false, true} {
+		t.Errorf("a full column's LED is the only one on, got %v", leds)
+	}
+}
+
+func TestMixerStateKeepsTheFaderPitch(t *testing.T) {
+	m := NewMixerState()
+	if _, _, ok := m.Pitch(2); ok {
+		t.Error("a fader that never moved has a position")
+	}
+	m.Feed(0xE2 | 5<<8 | 70<<16)
+	if lsb, msb, ok := m.Pitch(2); !ok || lsb != 5 || msb != 70 || m.LastChanged() != 42 {
+		t.Errorf("pitch = %d, %d, %v, last %d, want 5, 70 on column 42", lsb, msb, ok, m.LastChanged())
+	}
+	m.Feed(0x90 | 16<<8 | 127<<16)
+	if m.LastChanged() != -1 {
+		t.Errorf("a press changed column %d", m.LastChanged())
+	}
+	m.Feed(0xB0 | 16<<8 | 1<<16)
+	if m.LastChanged() != 30 {
+		t.Errorf("knob 1's step changed column %d, want 30", m.LastChanged())
+	}
+}
