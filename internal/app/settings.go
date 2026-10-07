@@ -44,7 +44,7 @@ func (app *App) openSettings(tab string) {
 	app.mu.Unlock()
 
 	w, err := web.Open(app.loop.Invoke, "settings", web.Options{
-		Title: app.tr("settings"), Width: 1400, Height: 800, Resizable: true,
+		Title: app.tr("settings"), Width: 1000, Height: 800, Resizable: true,
 		OnClose: func() {
 			app.mu.Lock()
 			app.settingsWin = nil

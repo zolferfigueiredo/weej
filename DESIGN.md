@@ -136,7 +136,7 @@ Restrained by the brief, not by default: a single accent carries every call to a
 
 Each window stacks its children top to bottom with a consistent gap: `.app` (Settings) or `.center-page` (the other two). Settings is the one window that can be resized and maximized. Until the user does either, the page reports its own rendered height to the host after every change and the host resizes the window's client area to match, capped to the work area; once sized by hand or maximized, it keeps its size and the page scrolls. Its one breakpoint, at 760px, folds the side-by-side layouts (General's two columns, a board's rows, List's three cards) into a single column.
 
-Settings uses a persistent two-button footer (`position: sticky; bottom: 0`) so Close/Apply stay reachable regardless of tab content length. The two single-purpose windows center their content both axes, with a fixed 320px measure for body copy so translated strings with longer average length (German, Russian, Polish) still read comfortably.
+Settings fills its window, and its two-button footer sits at the bottom of it (`position: sticky; bottom: 0`), so Close/Apply stay in the same place whatever the tab's length. The two single-purpose windows center their content both axes, with a fixed 320px measure for body copy so translated strings with longer average length (German, Russian, Polish) still read comfortably.
 
 ## Elevation & Depth
 
@@ -196,7 +196,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - First the 0% and the 100% readings, each an instruction in subtitle type with Next as the primary button. Then one control at a time: the step count, the instruction, a press counter for a button, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.
 
 ### Tabs (Settings' Pivot)
-- Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab has a second row of tabs, one per board, and a segmented Draw | List switch.
+- Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab has a second row of pill chips, one per board with its gear inside, and a segmented Draw | List switch at the left of the board's bar.
 
 ### Dialog (confirm sheets, a board's settings, Add board, calibration)
 - Centered over the Scrim color (`rgba(0, 0, 0, 0.35)`, the one color in the system not tied to light/dark since a dimming layer reads the same over either), Card Surface, the system's one shadow, title (subtitle type) + body (secondary text) + right-aligned Cancel/destructive-action button pair.

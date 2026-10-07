@@ -180,7 +180,10 @@ p {
   margin: 0;
 }
 
+/* Settings fills its window, so Close and Apply sit at the bottom however short a tab is;
+   pageHeight measures it without this. */
 .app {
+  min-height: 100vh;
   padding: 20px 24px 24px;
   display: flex;
   flex-direction: column;
@@ -297,6 +300,13 @@ p {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
   gap: 14px 20px;
+}
+
+.general-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
 }
 
 @media (max-width: 760px) {
@@ -915,7 +925,7 @@ button.popover-item {
 }
 
 .footer {
-  margin: 4px -20px 0;
+  margin: auto -20px 0;
   padding: 10px 20px;
 }
 
@@ -956,6 +966,7 @@ select.select,
 .inspector-card {
   flex: 1 1 auto;
   height: 0;
+  min-height: 240px;
   overflow-y: auto;
   padding-bottom: 6px;
 }
@@ -1305,25 +1316,45 @@ select.select,
   gap: 6px;
 }
 
-.subtab {
-  appearance: none;
+/* A board's chip: its name, which opens its tab, and its gear. */
+.chip {
+  display: inline-flex;
+  align-items: center;
   border: 1px solid var(--border);
   background: var(--card-bg);
   color: var(--text-secondary);
   border-radius: 999px;
-  padding: 5px 14px;
-  font: inherit;
-  cursor: pointer;
 }
 
-.subtab:hover {
+.chip:hover {
   background: var(--card-bg-hover);
 }
 
-.subtab[aria-selected="true"] {
+.chip.on {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-text);
+}
+
+.subtab,
+.chip-gear {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+.subtab {
+  padding: 5px 4px 5px 14px;
+}
+
+.chip-gear {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px 5px 6px;
 }
 
 .board-bar {

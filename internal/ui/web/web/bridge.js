@@ -148,12 +148,16 @@ export function pageHeight() {
   const de = document.documentElement;
   const scrollbar = de.clientWidth < window.innerWidth;
   if (scrollbar) de.style.overflow = "hidden";
+  // Settings stretches to fill its window, which would keep the window from ever shrinking.
+  const fills = rootEl.classList.contains("app");
+  if (fills) rootEl.style.minHeight = "0";
   const body = getComputedStyle(document.body);
   const css =
     rootEl.getBoundingClientRect().bottom +
     window.scrollY +
     parseFloat(body.paddingBottom || "0") +
     parseFloat(body.marginBottom || "0");
+  if (fills) rootEl.style.minHeight = "";
   if (scrollbar) de.style.overflow = "";
   return css;
 }

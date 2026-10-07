@@ -21,7 +21,8 @@ export function renderGeneral() {
   const hidden = draft.hideTrayIcon;
 
   document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel">
+    <div class="tabpanel general-grid" role="tabpanel">
+      <div class="general-col">
       <div class="group">
         <div class="group-head">
           <h2 class="group-title">${esc(t("boards.title"))}</h2>
@@ -34,7 +35,9 @@ export function renderGeneral() {
           ${S.importNote ? `<span class="group-note">${esc(S.importNote)}</span>` : ""}
         </div>
       </div>
+      </div>
 
+      <div class="general-col">
       <div class="group">
         <div class="card">
           <div class="row">
@@ -59,6 +62,7 @@ export function renderGeneral() {
             <div class="row-control"><input class="toggle" id="show-profile-list" type="checkbox" role="switch"${draft.showProfileList ? " checked" : ""}${hidden ? " disabled" : ""} /></div>
           </div>
         </div>
+      </div>
       </div>
     </div>`;
 }

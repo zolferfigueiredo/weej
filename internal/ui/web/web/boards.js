@@ -68,7 +68,12 @@ export function renderBoards() {
   }
   const d = currentBoard();
   const tabs = devices()
-    .map((b) => `<button class="subtab" type="button" role="tab" data-action="board-tab" data-board="${escAttr(b.id)}" aria-selected="${b.id === d.id}">${esc(clip(b.name, 24))}</button>`)
+    .map(
+      (b) => `<span class="chip${b.id === d.id ? " on" : ""}">
+        <button class="subtab" type="button" role="tab" data-action="board-tab" data-board="${escAttr(b.id)}" aria-selected="${b.id === d.id}">${esc(clip(b.name, 24))}</button>
+        <button class="chip-gear" type="button" data-action="gear" data-board="${escAttr(b.id)}" title="${escAttr(t("boards.settings_of", { name: b.name }))}" aria-label="${escAttr(t("boards.settings_of", { name: b.name }))}">${GEAR_ICON}</button>
+      </span>`
+    )
     .join("");
   const st = statusText(d);
   const view = d.view === "list" ? "list" : "draw";
@@ -78,10 +83,10 @@ export function renderBoards() {
   const calibrate = isSMC(d) ? "" : `<button class="btn" type="button" data-action="calibrate-board">${esc(t("calibrate"))}</button>`;
   const head = `
       <div class="board-bar">
-        <span class="row-desc${st.cls}">${esc(st.text)}</span>
+        ${d.enabled ? `<span class="segmented">${viewSwitch}</span>` : ""}
         <span class="spacer"></span>
-        ${d.enabled ? `<span class="segmented">${viewSwitch}</span>${calibrate}` : ""}
-        <button class="btn btn-icon" type="button" data-action="gear" data-board="${escAttr(d.id)}" title="${escAttr(t("boards.settings"))}" aria-label="${escAttr(t("boards.settings"))}">${GEAR_ICON}</button>
+        <span class="row-desc${st.cls}">${esc(st.text)}</span>
+        ${d.enabled ? calibrate : ""}
       </div>`;
   let body;
   if (!d.enabled) body = `<div class="empty-state"><p>${esc(t("boards.off"))}</p></div>`;
