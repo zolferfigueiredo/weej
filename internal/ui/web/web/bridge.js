@@ -603,7 +603,7 @@ function mockSettingsInit(enStrings) {
     connection: { connected: true, busy: false, port: "COM6" },
     forcedPort: "",
     baudRates: [9600, 19200, 38400, 57600, 115200],
-    lightPatterns: ["off", "on", "chase", "bounce", "wave", "sparkle", "blink"],
+    lightPatterns: ["off", "on", "eq", "fire", "chase", "bounce", "wave", "sparkle", "blink", "rain", "matrix", "snake", "fill", "explode", "checker", "rise", "zigzag", "orbit", "heartbeat", "stars", "bars", "ball", "comet", "helix", "breathe", "clock"],
   };
 }
 

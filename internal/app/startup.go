@@ -180,7 +180,7 @@ func (app *App) startSerial() {
 // startMixer (re)starts the mixer's input loop beside the board's, if a mixer is picked.
 func (app *App) startMixer() {
 	device := app.snapshotSettings().MixerPort
-	midiport.SetLights(app.snapshotSettings().MixerLights)
+	app.applyLights(app.snapshotSettings().Setup)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	app.mu.Lock()
@@ -338,7 +338,12 @@ func (app *App) shutdown() {
 		}
 		app.mu.Lock()
 		cancels := []context.CancelFunc{app.cancelSerial, app.cancelMixer}
+		loopback := app.loopback
+		app.loopback = nil
 		app.mu.Unlock()
+		if loopback != nil {
+			loopback.Stop()
+		}
 		for _, cancel := range cancels {
 			if cancel != nil {
 				cancel()

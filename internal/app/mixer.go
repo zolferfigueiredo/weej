@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
+	"github.com/zolferfigueiredo/weej/internal/platform/audio"
 	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 )
@@ -239,6 +240,30 @@ func (app *App) runButtonAction(action core.ButtonAction, engine *core.Engine, d
 	}
 }
 
+// applyLights runs the mixer's button light pattern, listening to the speakers only for the EQ.
+func (app *App) applyLights(s core.Setup) {
+	midiport.SetLights(s.MixerLights)
+	eq := s.MixerLights == "eq" && s.MixerIsSMC()
+	app.mu.Lock()
+	if app.spectrum == nil {
+		app.spectrum = core.NewSpectrum()
+		midiport.SetSpectrum(app.spectrum)
+	}
+	stop := app.loopback
+	if eq && stop == nil {
+		app.loopback = audio.StartLoopback(app.spectrum, app.log)
+	}
+	if eq {
+		stop = nil
+	} else {
+		app.loopback = nil
+	}
+	app.mu.Unlock()
+	if stop != nil {
+		stop.Stop()
+	}
+}
+
 // nextLights steps the button lights to their next pattern and saves it, as Settings would.
 func (app *App) nextLights() {
 	s := app.snapshotSettings()
@@ -246,7 +271,7 @@ func (app *App) nextLights() {
 	if err := app.persistSettings(s); err != nil {
 		return
 	}
-	midiport.SetLights(s.MixerLights)
+	app.applyLights(s.Setup)
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "mixerLights", "pattern": s.MixerLights})
 	}

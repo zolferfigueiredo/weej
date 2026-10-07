@@ -322,7 +322,7 @@ func (app *App) handleSettingsSave(data []byte) {
 	if old.Port != newSetup.Port || old.BaudRate() != newSetup.BaudRate() {
 		app.startSerial()
 	}
-	midiport.SetLights(newSetup.MixerLights)
+	app.applyLights(newSetup)
 	if old.MixerPort != newSetup.MixerPort {
 		app.startMixer()
 	}

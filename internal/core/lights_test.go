@@ -1,8 +1,10 @@
 package core
 
 import (
+	"math"
 	"slices"
 	"testing"
+	"time"
 )
 
 func TestLightFramesLightOnlyTheStripButtons(t *testing.T) {
@@ -51,7 +53,7 @@ func TestParseLightPattern(t *testing.T) {
 			t.Errorf("ParseLightPattern(%q) = %q, want %q", in, got, want)
 		}
 	}
-	if NextLightPattern("") != "on" || NextLightPattern("wave") != "sparkle" || NextLightPattern("blink") != "" {
+	if NextLightPattern("") != "on" || NextLightPattern("wave") != "sparkle" || NextLightPattern("clock") != "" {
 		t.Error("Next doesn't step through the patterns and back to off")
 	}
 	if Animated("on") || Animated("") || !Animated("sparkle") {
@@ -78,5 +80,44 @@ func TestLightGuardDropsTheLightsDriftButNotAHand(t *testing.T) {
 	}
 	if !g.Pass(cc(16, 1), 20.05, 20) {
 		t.Error("a knob step was taken for a pot")
+	}
+}
+
+func TestEQFrameFillsEachColumnToItsBand(t *testing.T) {
+	frame := EQFrame([8]float64{0, 1, 0.5, 0, 0, 0, 0, 0.05})
+	want := []int{MixerNoteButton(16 + 1), MixerNoteButton(8 + 1), MixerNoteButton(0 + 1), MixerNoteButton(0 + 2), MixerNoteButton(24 + 1), MixerNoteButton(24 + 2)}
+	slices.Sort(frame)
+	slices.Sort(want)
+	if !slices.Equal(frame, want) {
+		t.Errorf("EQFrame = %v, want %v", frame, want)
+	}
+}
+
+func TestClockFrameShowsTheTimeInBinary(t *testing.T) {
+	// 12:34:56: the hours' 1 lights the bottom of column 1, the 2 the row above in column 2, and so on.
+	frame := ClockFrame(time.Date(2026, 1, 1, 12, 34, 56, 0, time.Local))
+	lit := func(row, col int) bool { return slices.Contains(frame, MixerNoteButton(lightRows[row]+col)) }
+	if !lit(3, 1) || lit(2, 1) || !lit(2, 2) || lit(3, 2) || !lit(2, 6) || !lit(1, 6) || lit(3, 6) {
+		t.Errorf("12:34:56 drawn as %v", frame)
+	}
+}
+
+func TestSpectrumFindsATone(t *testing.T) {
+	s := NewSpectrum()
+	tone := make([]float32, 4096)
+	for i := range tone {
+		tone[i] = float32(0.5 * math.Sin(2*math.Pi*3000*float64(i)/48000))
+	}
+	s.Add(tone)
+	bands := s.Bands(1)
+	for b, v := range bands {
+		if b == 5 && v < 0.9 || b != 5 && b != 4 && b != 6 && v > 0.5 {
+			t.Errorf("a 3 kHz tone gives bands %.2f", bands)
+			break
+		}
+	}
+	s.Add(make([]float32, 4096))
+	if bands := s.Bands(3); bands != [8]float64{} {
+		t.Errorf("silence two seconds later gives %.2f, want nothing", bands)
 	}
 }

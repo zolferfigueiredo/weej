@@ -179,6 +179,7 @@ var (
 	// muteLEDs is what SetLED last asked of each button's light, by id.
 	muteLEDs     [256]atomic.Bool
 	lightPattern atomic.Value
+	spectrum     atomic.Pointer[core.Spectrum]
 	lightsPoke   = make(chan struct{}, 1)
 )
 
@@ -196,6 +197,9 @@ func SetLED(button int, on bool) {
 		pokeLights()
 	}
 }
+
+// SetSpectrum is the sound the "eq" pattern follows.
+func SetSpectrum(s *core.Spectrum) { spectrum.Store(s) }
 
 // SetLights picks the pattern an SMC-Mixer's button lights run (core.LightPatterns).
 func SetLights(pattern string) {
@@ -413,8 +417,17 @@ func (l *buttonLights) update() {
 	if daw := mode.DAW(); daw != l.daw {
 		l.daw, l.want, l.sent = daw, [256]int8{}, [256]int8{}
 	}
+	frame := core.LightFrame(pattern, time.Since(l.start).Seconds())
+	switch pattern {
+	case "eq":
+		if sp := spectrum.Load(); sp != nil {
+			frame = core.EQFrame(sp.Bands(time.Since(l.start).Seconds()))
+		}
+	case "clock":
+		frame = core.ClockFrame(time.Now())
+	}
 	var lit [256]bool
-	for _, id := range core.LightFrame(pattern, time.Since(l.start).Seconds()) {
+	for _, id := range frame {
 		lit[id] = true
 	}
 	for id := range lit {

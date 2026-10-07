@@ -58,8 +58,11 @@ type App struct {
 
 	engine *core.Engine
 	audio  *audio.Audio
-	ddc    *display.DDC
-	via    *via.VIA
+	// spectrum is the sound the button lights' EQ follows, while loopback listens for it.
+	spectrum *core.Spectrum
+	loopback *audio.Loopback
+	ddc      *display.DDC
+	via      *via.VIA
 
 	nightlight NightLight
 	zoom       Zoom
