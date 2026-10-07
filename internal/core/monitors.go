@@ -20,7 +20,7 @@ type Display struct {
 func ScreenCount(externals int, setup Setup) int {
 	n := externals
 	for _, p := range setup.Profiles {
-		for _, row := range p.Jobs {
+		for _, row := range p.AllJobs() {
 			for _, j := range row {
 				if (j.Kind == JobBrightness || j.Kind == JobContrast) && j.Screen+1 > n {
 					n = j.Screen + 1

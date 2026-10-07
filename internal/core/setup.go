@@ -226,10 +226,19 @@ type Shortcut struct {
 }
 
 type Profile struct {
-	Name     string    `json:"name"`
-	Jobs     [][]Job   `json:"jobs"`
-	Shortcut *Shortcut `json:"shortcut,omitempty"`
+	Name string `json:"name"`
+	// Jobs are the board's knobs and MixerJobs the mixer's: each device has its own knobs.
+	// Nil MixerJobs means a profile saved before that split; DecodeSettings fills it in.
+	Jobs      [][]Job   `json:"jobs"`
+	MixerJobs [][]Job   `json:"mixerJobs"`
+	Shortcut  *Shortcut `json:"shortcut,omitempty"`
+	// Buttons is what each mixer button does in this profile. Nil means a profile saved before
+	// buttons were per profile; DecodeSettings fills it in.
+	Buttons ButtonMap `json:"buttons"`
 }
+
+// AllJobs is every job the profile uses, on either device.
+func (p Profile) AllJobs() [][]Job { return append(append([][]Job{}, p.Jobs...), p.MixerJobs...) }
 
 func (p Profile) JobsOf(knob int) []Job {
 	if knob < 0 || knob >= len(p.Jobs) {
@@ -298,20 +307,29 @@ func Letter(i int) string {
 }
 
 type Setup struct {
-	Columns      []int
-	Profiles     []Profile
-	Active       int
-	Next         *Shortcut
-	Previous     *Shortcut
+	Columns  []int
+	Profiles []Profile
+	Active   int
+	Next     *Shortcut
+	Previous *Shortcut
+	// Invert is the board's: its pots are often wired the other way round, so false flips them.
+	// MixerInvert is the mixer's own: false leaves a fader's top at its highest value.
 	Invert       bool
+	MixerInvert  bool
 	HideIcon     bool
 	ShowProfiles bool
 	Icon         IconStyle
 	Speed        Speed
-	// Port is a COM port to use instead of finding the board automatically; empty means automatic.
+	// Port is a COM port or a MidiPort to use instead of finding the board automatically; empty
+	// means automatic, which only ever looks for serial boards.
 	Port string
 	// Baud is the serial speed; 0 means DefaultBaud.
 	Baud int
+	// MixerColumns is the mixer's own calibration, so the board's Columns survive a switch to
+	// the mixer and back. Nil means never calibrated: knob i reads mixer column i.
+	MixerColumns []int
+	// ButtonOrder is the mixer buttons Calibrate found, as CCs: Button 1 first. Nil means never.
+	ButtonOrder []int
 }
 
 func (s Setup) activeJobs() [][]Job {
@@ -342,6 +360,16 @@ func mapping(columns []int, jobs [][]Job) map[int][]Job {
 
 func (s Setup) Mapping() map[int][]Job { return mapping(s.Columns, s.activeJobs()) }
 
+func (s Setup) ActiveButtons() ButtonMap {
+	switch {
+	case s.Active >= 0 && s.Active < len(s.Profiles):
+		return s.Profiles[s.Active].Buttons
+	case len(s.Profiles) > 0:
+		return s.Profiles[0].Buttons
+	}
+	return nil
+}
+
 func lastIndexOf(columns []int, col int) int {
 	for i := len(columns) - 1; i >= 0; i-- {
 		if columns[i] == col {
@@ -367,7 +395,7 @@ func (s Setup) MenuOrder() []int {
 func (s Setup) Apps() []string {
 	set := map[string]struct{}{}
 	for _, p := range s.Profiles {
-		for _, row := range p.Jobs {
+		for _, row := range p.AllJobs() {
 			for _, j := range row {
 				if j.Kind == JobApp {
 					set[j.Exe] = struct{}{}

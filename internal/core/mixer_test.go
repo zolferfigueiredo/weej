@@ -1,0 +1,526 @@
+package core
+
+import (
+	"reflect"
+	"testing"
+)
+
+func cc(control, value int) uint32 {
+	return 0xB0 | uint32(control)<<8 | uint32(value)<<16
+}
+
+func TestMixerFadersAndKnobsScaleToColumns(t *testing.T) {
+	m := NewMixerState()
+	for _, v := range m.Values() {
+		if v != -1 {
+			t.Fatalf("fresh values = %v, want all -1", m.Values())
+		}
+	}
+
+	cases := []struct {
+		msg  uint32
+		col  int
+		want int
+	}{
+		{cc(40, 0), 40, 0},
+		{cc(40, 127), 40, 1023},
+		{cc(47, 64), 47, 516},
+		{cc(30, 127), 30, 1023},
+		{cc(37, 1), 37, 8},
+		{cc(9, 100), 9, 806},
+	}
+	for _, c := range cases {
+		changed, pressed := m.Feed(c.msg)
+		if !changed || pressed != -1 {
+			t.Errorf("Feed(%#x) = %v, %d, want a change and no press", c.msg, changed, pressed)
+		}
+		if got := m.Values()[c.col]; got != c.want {
+			t.Errorf("Feed(%#x): column %d = %d, want %d", c.msg, c.col, got, c.want)
+		}
+	}
+	if changed, _ := m.Feed(cc(37, 1)); changed {
+		t.Error("the same value again reported a change")
+	}
+	if got := m.Values()[41]; got != -1 {
+		t.Errorf("untouched fader 2 = %d, want -1", got)
+	}
+}
+
+func TestMixerButtonsPressOnlyOnTheWayDown(t *testing.T) {
+	m := NewMixerState()
+	if changed, pressed := m.Feed(cc(20, 127)); changed || pressed != 20 {
+		t.Errorf("press = %v, %d, want no change and CC 20", changed, pressed)
+	}
+	if _, pressed := m.Feed(cc(20, 0)); pressed != -1 {
+		t.Errorf("release pressed %d, want -1", pressed)
+	}
+	if changed, pressed := m.Feed(0x90 | 40<<8 | 100<<16); changed || pressed != MixerNoteButton(40) {
+		t.Errorf("note on = %v, %d, want a DAW-mode button", changed, pressed)
+	}
+}
+
+func TestEveryMixerButtonIsListedOnce(t *testing.T) {
+	seen := map[int]bool{}
+	for _, b := range DefaultMixerButtonOrder {
+		if seen[b] {
+			t.Errorf("CC %d listed twice", b)
+		}
+		seen[b] = true
+		for _, c := range defaultMixerControls {
+			if b == c {
+				t.Errorf("button CC %d is also a fader or knob", b)
+			}
+		}
+	}
+	for cc := range DefaultMixerButtons() {
+		if !seen[cc] {
+			t.Errorf("default action on CC %d, which is not a listed button", cc)
+		}
+	}
+}
+
+func TestButtonActionsValidate(t *testing.T) {
+	valid := []ButtonAction{ActionNone, ActionPlayPause, ActionStop, ActionPreviousTrack, ActionNextTrack,
+		ActionNextProfile, ActionPreviousProfile, ActionOpenSettings, MuteAction(0), MuteAction(15)}
+	for _, a := range valid {
+		if !a.Valid() {
+			t.Errorf("%q not valid", a)
+		}
+	}
+	for _, a := range []ButtonAction{"bogus", "mute:", "mute:-1", "mute:x", "mute:01"} {
+		if a.Valid() {
+			t.Errorf("%q valid, want invalid", a)
+		}
+	}
+	if knob, ok := MuteAction(3).MuteKnob(); !ok || knob != 3 {
+		t.Errorf("MuteKnob = %d, %v, want 3", knob, ok)
+	}
+}
+
+func TestForMixerDefaultsToFadersAndNeverFlips(t *testing.T) {
+	s := Setup{Columns: []int{0, 3, -1}, Invert: false}
+	m := s.ForMixer()
+	if !reflect.DeepEqual(m.Columns, []int{40, 41, 42}) || !m.Invert {
+		t.Errorf("ForMixer = %v invert %v, want faders 1-3 (CC 40-42) and no flip", m.Columns, m.Invert)
+	}
+	if !reflect.DeepEqual(s.Columns, []int{0, 3, -1}) {
+		t.Errorf("ForMixer changed the saved columns to %v", s.Columns)
+	}
+}
+
+func TestMidiPorts(t *testing.T) {
+	p := MidiPort("SMC-Mixer-bt")
+	if !IsMidiPort(p) || MidiDevice(p) != "SMC-Mixer-bt" || IsMidiPort("COM6") {
+		t.Errorf("MidiPort round trip failed: %q", p)
+	}
+}
+
+func TestMixerButtonsSurviveSaving(t *testing.T) {
+	fresh, _ := DecodeSettings([]byte(`{"profiles":[{"name":"Default","jobs":[]}]}`), "Default")
+	if !reflect.DeepEqual(fresh.ActiveButtons(), DefaultMixerButtons()) {
+		t.Errorf("old file buttons = %v, want the defaults", fresh.ActiveButtons())
+	}
+
+	s := DefaultSettings("Default")
+	s.Profiles = []Profile{
+		{Name: "One", Buttons: ButtonMap{20: {ActionNone}, 52: {ActionPlayPause, ActionMuteMic}, MixerNoteButton(24): {ActionStop}}},
+		{Name: "Two", Buttons: ButtonMap{}},
+	}
+	data, err := EncodeSettings(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, _ := DecodeSettings(data, "Default")
+	want := ButtonMap{52: {ActionPlayPause, ActionMuteMic}, MixerNoteButton(24): {ActionStop}}
+	if !reflect.DeepEqual(back.Profiles[0].Buttons, want) {
+		t.Errorf("profile one = %v, want %v (CC 20 set to nothing stays nothing)", back.Profiles[0].Buttons, want)
+	}
+	if b := back.Profiles[1].Buttons; b == nil || len(b) != 0 {
+		t.Errorf("profile two = %v, want still cleared, not the defaults", b)
+	}
+
+	bad, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[],"buttons":{"52":"bogus","x":["settings"],"61":"settings","62":["pc.lock","bogus","pc.lock"]}}]}`), "Default")
+	if !reflect.DeepEqual(bad.ActiveButtons(), ButtonMap{61: {ActionOpenSettings}, 62: {ActionLockPC}}) {
+		t.Errorf("bad entries = %v, want CC 61 read from a single action and CC 62 cleaned", bad.ActiveButtons())
+	}
+}
+
+func TestSharedButtonsMoveIntoEveryProfile(t *testing.T) {
+	old, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[]},{"name":"B","jobs":[]}],"profile":1,`+
+		`"mixerButtons":{"20":"media.stop"}}`), "Default")
+	for i, p := range old.Profiles {
+		if !reflect.DeepEqual(p.Buttons, ButtonMap{20: {ActionStop}}) {
+			t.Errorf("profile %d = %v, want the shared set", i, p.Buttons)
+		}
+	}
+	old.Profiles[0].Buttons[21] = []ButtonAction{ActionNextTrack}
+	if _, ok := old.Profiles[1].Buttons[21]; ok {
+		t.Error("profiles share one map, want a copy each")
+	}
+	if !reflect.DeepEqual(old.ActiveButtons(), ButtonMap{20: {ActionStop}}) {
+		t.Errorf("active buttons = %v, want profile B's", old.ActiveButtons())
+	}
+}
+
+func TestEngineSkipsUnknownMixerValues(t *testing.T) {
+	a := &fakeApplier{}
+	e := NewEngine(a)
+	setup := Setup{
+		Columns:      []int{0, 1},
+		MixerColumns: []int{0, 1},
+		Profiles:     []Profile{{MixerJobs: [][]Job{{{Kind: JobMaster}}, {{Kind: JobMicrophone}}}}},
+		Speed:        SpeedSuperFast,
+	}.ForMixer()
+	e.Handle([]int{-1, 512}, setup, false)
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.applied) != 1 || a.applied[0].Kind != JobMicrophone {
+		t.Errorf("applied = %v, want only the microphone (the master fader never moved)", a.applied)
+	}
+}
+
+type recordingApplier struct {
+	fakeApplier
+	values []float64
+}
+
+func (r *recordingApplier) Apply(job Job, s float64) {
+	r.fakeApplier.Apply(job, s)
+	r.mu.Lock()
+	r.values = append(r.values, s)
+	r.mu.Unlock()
+}
+
+func TestEngineMuteHoldsAndRestores(t *testing.T) {
+	a := &recordingApplier{}
+	e := NewEngine(a)
+	setup := Setup{
+		Columns:      []int{0},
+		MixerColumns: []int{0},
+		Profiles:     []Profile{{MixerJobs: [][]Job{{{Kind: JobMaster}}}}},
+		Speed:        SpeedSuperFast,
+	}.ForMixer()
+
+	e.Handle([]int{1023}, setup, false)
+	if !e.ToggleMute(0, setup) {
+		t.Fatal("first toggle did not mute")
+	}
+	e.Handle([]int{0}, setup, false)
+	if e.ToggleMute(0, setup) {
+		t.Fatal("second toggle did not unmute")
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !reflect.DeepEqual(a.values, []float64{1, 0, 0}) {
+		t.Errorf("applied values = %v, want [1 0 0]: the sync, the mute, then the fader's new spot on unmute", a.values)
+	}
+}
+
+func TestEngineResetUnmutes(t *testing.T) {
+	e := NewEngine(&fakeApplier{})
+	setup := Setup{Columns: []int{0}, MixerColumns: []int{0}, Profiles: []Profile{{MixerJobs: [][]Job{{{Kind: JobMaster}}}}}}.ForMixer()
+	e.ToggleMute(0, setup)
+	e.Reset()
+	if !e.ToggleMute(0, setup) {
+		t.Error("after Reset the next toggle should mute again")
+	}
+}
+
+func TestForMixerUsesTheMixersOwnCalibration(t *testing.T) {
+	s := Setup{Columns: []int{0, 3, 2}, MixerColumns: []int{9, -1}}
+	if got := s.ForMixer().Columns; !reflect.DeepEqual(got, []int{9, -1}) {
+		t.Errorf("ForMixer = %v, want the mixer's own [9 -1]", got)
+	}
+}
+
+func TestMixerColumnsSurviveSaving(t *testing.T) {
+	s := DefaultSettings("Default")
+	s.Columns = []int{0, 3}
+	data, _ := EncodeSettings(s)
+	back, _ := DecodeSettings(data, "Default")
+	if back.MixerColumns != nil {
+		t.Errorf("never calibrated = %v, want nil", back.MixerColumns)
+	}
+
+	s.MixerColumns = []int{8, -1}
+	data, _ = EncodeSettings(s)
+	back, _ = DecodeSettings(data, "Default")
+	if !reflect.DeepEqual(back.MixerColumns, []int{8, -1}) || !reflect.DeepEqual(back.Columns, []int{0, 3}) {
+		t.Errorf("round trip = mixer %v board %v, want [8 -1] and [0 3]", back.MixerColumns, back.Columns)
+	}
+}
+
+func TestCalibratorWaitsForAnUnknownControlToSwing(t *testing.T) {
+	c := NewCalibrator(nil, false)
+	c.Feed([]int{-1, -1}, 0)
+	c.Feed([]int{-1, 900}, 0.1)
+	if len(c.Found()) != 0 {
+		t.Fatalf("found %v after a first touch, want nothing yet", c.Found())
+	}
+	c.Feed([]int{-1, 100}, 0.2)
+	if !reflect.DeepEqual(c.Found(), []int{1}) {
+		t.Errorf("found %v, want column 1 once it swung", c.Found())
+	}
+}
+
+func TestMixerCalibrationCleansThenFindsButtons(t *testing.T) {
+	c := NewMixerCalibrator(nil, false)
+	c.Feed([]int{-1, -1}, 0)
+	c.Feed([]int{-1, 0}, 0.1)
+	c.Feed([]int{-1, 1023}, 0.2)
+	if c.Phase() != 1 || c.Knob() != 0 {
+		t.Fatalf("after finding knob A: phase %d knob %d, want knob A's cleaning turn", c.Phase(), c.Knob())
+	}
+	c.Skip()
+	if c.Phase() != 0 || c.Knob() != 1 {
+		t.Fatalf("after the cleaning turn: phase %d knob %d, want knob B", c.Phase(), c.Knob())
+	}
+
+	c.PressButton(20)
+	if len(c.Buttons()) != 0 {
+		t.Fatal("a button counted before the button stage")
+	}
+	c.StartButtons()
+	c.Feed([]int{0, 0}, 0.3)
+	c.Feed([]int{1023, 0}, 0.4)
+	if len(c.Found()) != 1 {
+		t.Errorf("found %v, want knobs left alone during the button stage", c.Found())
+	}
+	c.PressButton(52)
+	c.PressButton(20)
+	c.PressButton(52)
+	if !reflect.DeepEqual(c.Buttons(), []int{52, 20}) || c.RepeatedButton() != 0 {
+		t.Errorf("buttons %v repeated %d, want [52 20] and button 1 pressed again", c.Buttons(), c.RepeatedButton())
+	}
+}
+
+func TestForMixerHasItsOwnKnobCount(t *testing.T) {
+	s := Setup{Columns: []int{0, 1}, MixerColumns: []int{8, 9, 10}}
+	if got := len(s.ForMixer().Columns); got != 3 {
+		t.Errorf("mixer knobs = %d, want 3 from its own calibration", got)
+	}
+}
+
+func TestButtonOrderSurvivesSaving(t *testing.T) {
+	s := DefaultSettings("Default")
+	if !reflect.DeepEqual(s.MixerButtonOrder(), DefaultMixerButtonOrder) {
+		t.Errorf("fresh order = %v, want the default", s.MixerButtonOrder())
+	}
+	s.ButtonOrder = []int{52, 20}
+	data, _ := EncodeSettings(s)
+	back, _ := DecodeSettings(data, "Default")
+	if !reflect.DeepEqual(back.ButtonOrder, []int{52, 20}) {
+		t.Errorf("round trip = %v, want [52 20]", back.ButtonOrder)
+	}
+}
+
+func TestMoveWatcherIgnoresJitter(t *testing.T) {
+	var w MoveWatcher
+	if got := w.Moved([]int{500, -1}); got != nil {
+		t.Errorf("first frame moved %v, want nothing", got)
+	}
+	if got := w.Moved([]int{505, -1}); got != nil {
+		t.Errorf("jitter moved %v, want nothing", got)
+	}
+	if got := w.Moved([]int{520, 300}); !reflect.DeepEqual(got, []int{0, 1}) {
+		t.Errorf("moved %v, want [0 1]: a real turn and a mixer control's first report", got)
+	}
+	if got := w.Moved([]int{528, 300}); got != nil {
+		t.Errorf("moved %v, want nothing within the threshold of the new spot", got)
+	}
+}
+
+func TestMixerKnobIsFoundAfterAFewSteps(t *testing.T) {
+	few := [][]int{{-1, 500}, {-1, 520}}
+
+	board := NewCalibrator(nil, false)
+	mixer := NewMixerCalibrator(nil, false)
+	for i, v := range few {
+		board.Feed(v, float64(i))
+		mixer.Feed(v, float64(i))
+	}
+	if len(board.Found()) != 0 {
+		t.Errorf("board found %v after a small nudge, want nothing: pots jitter", board.Found())
+	}
+	if !reflect.DeepEqual(mixer.Found(), []int{1}) {
+		t.Errorf("mixer found %v, want column 1 after a few clean steps", mixer.Found())
+	}
+}
+
+func TestMixerCalibrationNeverRunsOutOfKnobs(t *testing.T) {
+	c := NewMixerCalibrator(nil, false)
+	frame := NewMixerState().Values()
+	for i, cc := range append(append([]int{}, defaultMixerControls...), 1, 2, 3) {
+		frame[cc] = 0
+		c.Feed(frame, float64(i))
+		frame[cc] = 1023
+		c.Feed(frame, float64(i)+0.5)
+		c.Skip()
+	}
+	if len(c.Found()) != 19 || c.Full() {
+		t.Errorf("found %d knobs, full %v, want 19 and still asking for more", len(c.Found()), c.Full())
+	}
+}
+
+func TestMixerDAWModeLandsOnTheSameColumns(t *testing.T) {
+	m := NewMixerState()
+
+	m.Feed(0xE0 | 0<<8 | 127<<16)
+	m.Feed(0xE7 | 0<<8 | 64<<16)
+	if v := m.Values(); v[40] != 1023 || v[47] != 516 {
+		t.Errorf("faders 1 and 8 = %d, %d, want 1023 and 516 on CC 40 and 47's columns, as CC mode reads them", v[40], v[47])
+	}
+
+	m.Feed(cc(16, 1))
+	m.Feed(cc(16, 1))
+	m.Feed(cc(16, 65))
+	if v := m.Values()[30]; v != 512+vpotStep {
+		t.Errorf("knob 1 = %d, want two steps up and one down from the middle", v)
+	}
+	for i := 0; i < 300; i++ {
+		m.Feed(cc(17, 65))
+	}
+	if v := m.Values()[31]; v != 0 {
+		t.Errorf("knob 2 = %d, want it to stop at 0", v)
+	}
+
+	if _, pressed := m.Feed(cc(20, 127)); pressed != 20 {
+		t.Errorf("CC 20 at 127 pressed %d, want the CC-mode button", pressed)
+	}
+	if _, pressed := m.Feed(cc(20, 1)); pressed != -1 {
+		t.Errorf("CC 20 stepping pressed %d, want knob 5 instead", pressed)
+	}
+}
+
+func TestMixerDAWButtonsAreNotes(t *testing.T) {
+	m := NewMixerState()
+	if _, pressed := m.Feed(0x90 | 24<<8 | 127<<16); pressed != MixerNoteButton(24) {
+		t.Errorf("Square 1 pressed %d, want %d", pressed, MixerNoteButton(24))
+	}
+	if _, pressed := m.Feed(0x90 | 24<<8 | 0<<16); pressed != -1 {
+		t.Errorf("release pressed %d, want -1", pressed)
+	}
+	if note, ok := MixerButtonNote(MixerNoteButton(94)); !ok || note != 94 {
+		t.Errorf("MixerButtonNote = %d, %v, want 94", note, ok)
+	}
+	if _, ok := MixerButtonNote(20); ok {
+		t.Error("CC 20 read as a note")
+	}
+}
+
+func TestEngineUnmuteAllRestoresWithoutAHUD(t *testing.T) {
+	a := &recordingApplier{}
+	e := NewEngine(a)
+	setup := Setup{
+		Columns:      []int{0},
+		MixerColumns: []int{0},
+		Profiles:     []Profile{{MixerJobs: [][]Job{{{Kind: JobMaster}}}}},
+		Speed:        SpeedSuperFast,
+	}.ForMixer()
+	e.Handle([]int{1023}, setup, false)
+	e.ToggleMute(0, setup)
+	huds := len(a.huds)
+	if n := e.UnmuteAll(setup); n != 1 {
+		t.Errorf("UnmuteAll = %d, want 1", n)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if last := a.values[len(a.values)-1]; last != 1 || len(a.huds) != huds {
+		t.Errorf("last applied %v, HUDs %d -> %d, want the master back at 1 with no HUD", last, huds, len(a.huds))
+	}
+	if e.UnmuteAll(setup) != 0 {
+		t.Error("a second UnmuteAll found mutes left")
+	}
+}
+
+func TestEachDeviceHasItsOwnKnobJobs(t *testing.T) {
+	old, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[[{"kind":"master"}]]}],"columns":[0]}`), "Default")
+	p := old.Profiles[0]
+	if len(p.MixerJobs) != 1 || p.MixerJobs[0][0].Kind != JobMaster {
+		t.Fatalf("mixer jobs = %v, want a copy of the shared jobs", p.MixerJobs)
+	}
+	p.MixerJobs[0][0] = Job{Kind: JobMicrophone}
+	if p.Jobs[0][0].Kind != JobMaster {
+		t.Error("changing the mixer's jobs changed the board's")
+	}
+
+	s := Setup{
+		Columns:      []int{0},
+		MixerColumns: []int{40},
+		Profiles:     []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}, MixerJobs: [][]Job{{{Kind: JobMicrophone}}}}},
+	}
+	if got := s.Mapping()[0]; len(got) != 1 || got[0].Kind != JobMaster {
+		t.Errorf("board mapping = %v, want master", got)
+	}
+	if got := s.ForMixer().Mapping()[40]; len(got) != 1 || got[0].Kind != JobMicrophone {
+		t.Errorf("mixer mapping = %v, want the microphone", got)
+	}
+	if s.Profiles[0].Jobs[0][0].Kind != JobMaster {
+		t.Error("ForMixer changed the board's jobs")
+	}
+
+	data, _ := EncodeSettings(Settings{Setup: Setup{Profiles: []Profile{{Name: "B"}}}})
+	back, _ := DecodeSettings(data, "Default")
+	if back.Profiles[0].MixerJobs == nil {
+		t.Error("a saved profile came back unmigrated, want its empty mixer jobs kept")
+	}
+}
+
+func TestInvertIsPerDevice(t *testing.T) {
+	s := Setup{Columns: []int{0}, Invert: false}
+	if !s.ForMixer().Invert {
+		t.Error("the board's flip leaked onto the mixer, want the mixer unflipped by default")
+	}
+	s.MixerInvert = true
+	if s.ForMixer().Invert {
+		t.Error("the mixer's own invert did not flip it")
+	}
+	data, _ := EncodeSettings(Settings{Setup: Setup{Profiles: []Profile{{Name: "A"}}, MixerInvert: true}})
+	if back, _ := DecodeSettings(data, "Default"); !back.MixerInvert || back.Invert {
+		t.Errorf("round trip invert = board %v, mixer %v, want false and true", back.Invert, back.MixerInvert)
+	}
+}
+
+func TestButtonActionsWithASetting(t *testing.T) {
+	cases := []struct {
+		action ButtonAction
+		valid  bool
+	}{
+		{OpenAppAction(`C:\Program Files\Spotify\Spotify.exe`), true},
+		{"open:", false},
+		{CloseAppAction("spotify.exe"), true},
+		{URLAction("https://weej.zolfer.com"), true},
+		{URLAction("HTTP://example.com"), true},
+		{URLAction("file:///C:/x"), false},
+		{KeysAction(Shortcut{VK: 0x4D, Mods: ModControl | ModShift, Key: "m"}), true},
+		{KeysAction(Shortcut{VK: 0xBA, Key: ":"}), true},
+		{"keys:2:0:x", false},
+		{"keys:", false},
+		{ProfileAction(2), true},
+		{"profile:-1", false},
+		{ActionPlay, true},
+		{ActionMuteMic, true},
+		{"pc.reboot", false},
+	}
+	for _, c := range cases {
+		if got := c.action.Valid(); got != c.valid {
+			t.Errorf("%q valid = %v, want %v", c.action, got, c.valid)
+		}
+	}
+
+	s, ok := KeysAction(Shortcut{VK: 0xBA, Mods: ModShift, Key: ":"}).Keys()
+	if !ok || s.VK != 0xBA || s.Mods != ModShift || s.Key != ":" {
+		t.Errorf("Keys round trip = %+v, %v", s, ok)
+	}
+	if path, ok := OpenAppAction(`C:\Apps\c.exe`).OpenApp(); !ok || path != `C:\Apps\c.exe` {
+		t.Errorf("OpenApp = %q, %v", path, ok)
+	}
+	if i, ok := ProfileAction(3).Profile(); !ok || i != 3 {
+		t.Errorf("Profile = %d, %v", i, ok)
+	}
+	if _, ok := MuteAction(1).Profile(); ok {
+		t.Error("a mute action read as a profile")
+	}
+}

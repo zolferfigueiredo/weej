@@ -9,11 +9,11 @@ const progressEl = document.getElementById("progress");
 const cancelBtn = document.getElementById("btn-cancel");
 const actionBtn = document.getElementById("btn-action");
 
-let actionIsFinish = false;
+let action = "skip"; // "skip", "finish", or "continue" (a mixer going on from its knobs to its buttons)
 
 function renderChrome() {
   cancelBtn.textContent = t("cancel");
-  actionBtn.textContent = actionIsFinish ? t("finish") : t("skip");
+  actionBtn.textContent = t(action);
 }
 
 function onMessage(msg) {
@@ -24,13 +24,13 @@ function onMessage(msg) {
     bodyEl.textContent = msg.body || "";
     progressEl.textContent = msg.progress || "";
     progressEl.classList.toggle("warning", !!msg.warning);
-    actionIsFinish = msg.button === "finish";
+    action = msg.button || "skip";
     renderChrome();
   }
 }
 
 cancelBtn.addEventListener("click", () => send({ type: "cancel" }));
-actionBtn.addEventListener("click", () => send({ type: actionIsFinish ? "finish" : "skip" }));
+actionBtn.addEventListener("click", () => send({ type: action === "skip" ? "skip" : "finish" }));
 
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {

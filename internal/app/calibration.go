@@ -11,7 +11,6 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/lang"
 	"github.com/zolferfigueiredo/weej/internal/ui/web"
-	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 )
 
 // calibrationTurnSeconds mirrors core's own private turnSeconds (20): it is
@@ -20,7 +19,9 @@ import (
 const calibrationTurnSeconds = "20"
 
 func (app *App) startCalibration(onlyNew bool) {
-	saved := app.snapshotSettings().Columns
+	// Read before taking app.mu: snapshotSettings, under both of these, locks it too.
+	saved := app.activeColumns(app.snapshotSettings().Setup)
+	mixer := app.usesMixer()
 	app.mu.Lock()
 	if app.calibWin != nil {
 		win := app.calibWin
@@ -28,7 +29,15 @@ func (app *App) startCalibration(onlyNew bool) {
 		win.Focus()
 		return
 	}
-	app.calibrator = core.NewCalibrator(saved, onlyNew)
+	if mixer {
+		// A full mixer calibration starts empty, so the mixer has as many knobs as get calibrated.
+		if !onlyNew {
+			saved = nil
+		}
+		app.calibrator = core.NewMixerCalibrator(saved, onlyNew)
+	} else {
+		app.calibrator = core.NewCalibrator(saved, onlyNew)
+	}
 	app.calibOnlyNew = onlyNew
 	app.mu.Unlock()
 	app.setCalibrating(true)
@@ -68,9 +77,7 @@ func (app *App) onCalibrationMessage(data []byte) {
 		app.refreshCalibration()
 	case "skip":
 		if cal := app.currentCalibrator(); cal != nil {
-			before := cal.StepKey()
 			cal.Skip()
-			app.soundIfStepChanged(before, cal.StepKey())
 		}
 		app.refreshCalibration()
 	case "finish":
@@ -103,12 +110,38 @@ func (app *App) finishCalibration() {
 	if cal == nil {
 		return
 	}
+	if cal.Mixer() && !cal.ButtonStage() {
+		cal.StartButtons()
+		app.refreshCalibration()
+		return
+	}
 	result := cal.Result()
-	saved := app.snapshotSettings().Columns
+	mixer := cal.Mixer()
+	cur := app.snapshotSettings()
+	saved := app.activeColumns(cur.Setup)
 	changed := !intSliceEqual(result, saved)
+	if buttons := cal.Buttons(); mixer && len(buttons) > 0 && !intSliceEqual(buttons, cur.ButtonOrder) {
+		cur.ButtonOrder = buttons
+		profiles := make([]core.Profile, len(cur.Profiles))
+		for i, p := range cur.Profiles {
+			kept := core.ButtonMap{}
+			for _, cc := range buttons {
+				if actions, ok := p.Buttons[cc]; ok {
+					kept[cc] = actions
+				}
+			}
+			p.Buttons = kept
+			profiles[i] = p
+		}
+		cur.Profiles = profiles
+		changed = true
+	}
 	if changed {
-		cur := app.snapshotSettings()
-		cur.Columns = result
+		if mixer {
+			cur.MixerColumns = result
+		} else {
+			cur.Columns = result
+		}
 		if err := app.persistSettings(cur); err != nil {
 			app.log("Could not save settings: " + err.Error())
 		}
@@ -129,7 +162,14 @@ func (app *App) finishCalibration() {
 		app.openSettings("general")
 		if wasOpen {
 			if win := app.settingsWin; win != nil {
-				win.Send(map[string]any{"type": "columns", "columns": columnsToJSON(result)})
+				buttons := make([]core.ButtonMap, len(cur.Profiles))
+				for i, p := range cur.Profiles {
+					buttons[i] = p.Buttons
+				}
+				win.Send(map[string]any{
+					"type": "columns", "mixer": mixer, "columns": columnsToJSON(result),
+					"buttonOrder": cur.ButtonOrder, "profileButtons": buttons,
+				})
 			}
 		}
 	})
@@ -153,17 +193,9 @@ func (app *App) feedCalibrator(values []int, now float64) {
 		if cal == nil {
 			return
 		}
-		before := cal.StepKey()
 		cal.Feed(values, now)
-		app.soundIfStepChanged(before, cal.StepKey())
 		app.refreshCalibration()
 	})
-}
-
-func (app *App) soundIfStepChanged(before, after core.StepKey) {
-	if before != after {
-		winui.StepSound()
-	}
 }
 
 func (app *App) refreshCalibration() {
@@ -188,6 +220,10 @@ func (app *App) refreshCalibration() {
 func composeCalibrationTexts(cal *core.Calibrator, code string, onlyNew, connected bool) (title, body, progress string, warning bool, button string) {
 	tr := func(key string, vars map[string]string) string { return lang.T(code, key, vars) }
 
+	if cal.ButtonStage() {
+		return composeButtonTexts(cal, code)
+	}
+
 	if cal.Full() {
 		button = "finish"
 	} else if cal.CanSkip() {
@@ -195,10 +231,16 @@ func composeCalibrationTexts(cal *core.Calibrator, code string, onlyNew, connect
 	} else {
 		button = "finish"
 	}
+	if cal.Mixer() && button == "finish" {
+		button = "continue"
+	}
 
 	letter := core.Letter(cal.Knob())
 
 	switch {
+	case cal.Full() && cal.Mixer():
+		title = tr("cal.all_found", nil)
+		body = tr("cal.all_found_mixer", map[string]string{"n": strconv.Itoa(len(cal.Found()))})
 	case cal.Full():
 		title = tr("cal.all_found", nil)
 		body = tr("cal.all_found_text", map[string]string{"n": strconv.Itoa(len(cal.Found()))})
@@ -246,6 +288,8 @@ func composeCalibrationBody(cal *core.Calibrator, code string, onlyNew bool, let
 			parts = append(parts, tr("cal.move", map[string]string{"letter": letter}))
 		}
 		switch {
+		case !cal.CanSkip() && cal.Mixer():
+			parts = append(parts, tr("cal.no_knob_mixer", map[string]string{"letter": letter}))
 		case !cal.CanSkip():
 			parts = append(parts, tr("cal.no_knob", map[string]string{"letter": letter}))
 		case onlyNew:
@@ -260,4 +304,23 @@ func composeCalibrationBody(cal *core.Calibrator, code string, onlyNew bool, let
 		parts = append(parts, tr("cal.turn", map[string]string{"n": calibrationTurnSeconds}))
 	}
 	return lang.Join(code, parts...)
+}
+
+func composeButtonTexts(cal *core.Calibrator, code string) (title, body, progress string, warning bool, button string) {
+	tr := func(key string, vars map[string]string) string { return lang.T(code, key, vars) }
+	buttons := cal.Buttons()
+	n := map[string]string{"n": strconv.Itoa(len(buttons) + 1)}
+
+	title = tr("mixer.button", n)
+	body = tr("cal.press_button", n)
+	switch {
+	case cal.RepeatedButton() >= 0:
+		warning = true
+		progress = tr("cal.button_again", map[string]string{"n": strconv.Itoa(cal.RepeatedButton() + 1)})
+	case len(buttons) == 0:
+		progress = tr("cal.waiting_button", nil)
+	default:
+		progress = tr("cal.buttons_so_far", map[string]string{"n": strconv.Itoa(len(buttons))})
+	}
+	return title, body, progress, warning, "finish"
 }

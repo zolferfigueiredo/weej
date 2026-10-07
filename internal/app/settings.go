@@ -11,6 +11,7 @@ import (
 
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/lang"
+	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
 	"github.com/zolferfigueiredo/weej/internal/platform/serialport"
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/ui/web"
@@ -25,19 +26,22 @@ const (
 )
 
 type setupJSON struct {
-	Columns         []*int         `json:"columns"`
-	Profiles        []core.Profile `json:"profiles"`
-	Profile         int            `json:"profile"`
-	NextProfile     *core.Shortcut `json:"nextProfile"`
-	PreviousProfile *core.Shortcut `json:"previousProfile"`
-	InvertKnobs     bool           `json:"invertKnobs"`
-	HideTrayIcon    bool           `json:"hideTrayIcon"`
-	ShowProfileList bool           `json:"showProfileList"`
-	TrayIcon        string         `json:"trayIcon"`
-	Speed           string         `json:"speed"`
-	Port            string         `json:"port"`
-	BaudRate        int            `json:"baudRate"`
-	Language        string         `json:"language"`
+	Columns          []*int         `json:"columns"`
+	Profiles         []core.Profile `json:"profiles"`
+	Profile          int            `json:"profile"`
+	NextProfile      *core.Shortcut `json:"nextProfile"`
+	PreviousProfile  *core.Shortcut `json:"previousProfile"`
+	InvertKnobs      bool           `json:"invertKnobs"`
+	InvertMixer      bool           `json:"invertMixer"`
+	HideTrayIcon     bool           `json:"hideTrayIcon"`
+	ShowProfileList  bool           `json:"showProfileList"`
+	TrayIcon         string         `json:"trayIcon"`
+	Speed            string         `json:"speed"`
+	Port             string         `json:"port"`
+	BaudRate         int            `json:"baudRate"`
+	MixerColumns     []*int         `json:"mixerColumns"`
+	MixerButtonOrder []int          `json:"mixerButtonOrder"`
+	Language         string         `json:"language"`
 }
 
 func columnsToJSON(cols []int) []*int {
@@ -64,41 +68,52 @@ func columnsFromJSON(ptrs []*int) []int {
 	return out
 }
 
+func mixerColumnsFromJSON(ptrs []*int) []int {
+	if ptrs == nil {
+		return nil
+	}
+	return columnsFromJSON(ptrs)
+}
+
+func padJobRows(rows [][]core.Job, knobs int) [][]core.Job {
+	out := make([][]core.Job, max(len(rows), knobs))
+	for j := range out {
+		out[j] = []core.Job{}
+		if j < len(rows) && rows[j] != nil {
+			out[j] = rows[j]
+		}
+	}
+	return out
+}
+
 func setupToJSON(s core.Setup) setupJSON {
 	columns := s.Columns
 	if columns == nil {
 		columns = []int{}
 	}
-	// One jobs row per knob: the page adds and removes knobs by index.
+	// One jobs row per knob on each device: the page adds and removes knobs by index.
 	profiles := make([]core.Profile, len(s.Profiles))
 	for i, p := range s.Profiles {
-		rows := len(p.Jobs)
-		if rows < len(columns) {
-			rows = len(columns)
-		}
-		jobs := make([][]core.Job, rows)
-		for j := range jobs {
-			jobs[j] = []core.Job{}
-			if j < len(p.Jobs) && p.Jobs[j] != nil {
-				jobs[j] = p.Jobs[j]
-			}
-		}
-		p.Jobs = jobs
+		p.Jobs = padJobRows(p.Jobs, len(columns))
+		p.MixerJobs = padJobRows(p.MixerJobs, len(s.ForMixer().Columns))
 		profiles[i] = p
 	}
 	return setupJSON{
-		Columns:         columnsToJSON(columns),
-		Profiles:        profiles,
-		Profile:         s.Active,
-		NextProfile:     s.Next,
-		PreviousProfile: s.Previous,
-		InvertKnobs:     s.Invert,
-		HideTrayIcon:    s.HideIcon,
-		ShowProfileList: s.ShowProfiles,
-		TrayIcon:        string(s.Icon),
-		Speed:           string(s.Speed),
-		Port:            s.Port,
-		BaudRate:        s.BaudRate(),
+		Columns:          columnsToJSON(columns),
+		Profiles:         profiles,
+		Profile:          s.Active,
+		NextProfile:      s.Next,
+		PreviousProfile:  s.Previous,
+		InvertKnobs:      s.Invert,
+		InvertMixer:      s.MixerInvert,
+		HideTrayIcon:     s.HideIcon,
+		ShowProfileList:  s.ShowProfiles,
+		TrayIcon:         string(s.Icon),
+		Speed:            string(s.Speed),
+		Port:             s.Port,
+		BaudRate:         s.BaudRate(),
+		MixerColumns:     core.EncodeMixerColumns(s.MixerColumns),
+		MixerButtonOrder: s.ButtonOrder,
 	}
 }
 
@@ -116,12 +131,15 @@ func setupFromJSON(j setupJSON) core.Setup {
 		Next:         j.NextProfile,
 		Previous:     j.PreviousProfile,
 		Invert:       j.InvertKnobs,
+		MixerInvert:  j.InvertMixer,
 		HideIcon:     j.HideTrayIcon,
 		ShowProfiles: j.ShowProfileList,
 		Icon:         core.ParseIconStyle(j.TrayIcon),
 		Speed:        core.ParseSpeed(j.Speed),
 		Port:         j.Port,
 		Baud:         j.BaudRate,
+		MixerColumns: mixerColumnsFromJSON(j.MixerColumns),
+		ButtonOrder:  j.MixerButtonOrder,
 	}
 }
 
@@ -144,7 +162,7 @@ func (app *App) openSettings(tab string) {
 	app.mu.Unlock()
 
 	w, err := web.Open(app.loop.Invoke, "settings", web.Options{
-		Title: app.tr("settings"), Width: 460, Height: 560,
+		Title: app.tr("settings"), Width: 900, Height: 560,
 		OnClose: func() {
 			app.mu.Lock()
 			app.settingsWin = nil
@@ -241,8 +259,11 @@ func (app *App) sendSettingsInit() {
 	payload["labels"] = app.shortcutLabels(s.Setup)
 	payload["nightLightExperimental"] = true
 	payload["connection"] = app.connectionPayload()
+	payload["calibrating"] = app.isCalibrating()
 	payload["forcedPort"] = app.forcedPort
 	payload["baudRates"] = core.BaudRates
+	payload["mixerButtonDefaults"] = core.DefaultMixerButtonOrder
+	payload["ctrlName"] = app.ctrlLabelName()
 	win.Send(payload)
 }
 
@@ -270,6 +291,9 @@ func (app *App) handleSettingsSave(data []byte) {
 
 	cur := app.snapshotSettings()
 	old := cur.Setup
+	if old.Active != newSetup.Active {
+		app.unmuteAll()
+	}
 	cur.Setup = newSetup
 	if err := app.persistSettings(cur); err != nil {
 		app.log("Could not save settings: " + err.Error())
@@ -285,7 +309,7 @@ func (app *App) handleSettingsSave(data []byte) {
 		win.Send(map[string]any{"type": "saved", "setup": setupToJSONWithLanguage(cur)})
 	}
 
-	if hasUncalibratedColumn(cur.Columns) {
+	if hasUncalibratedColumn(app.activeColumns(cur.Setup)) {
 		app.loop.Invoke(func() { app.startCalibration(true) })
 	}
 }
@@ -302,6 +326,9 @@ func hasUncalibratedColumn(cols []int) bool {
 func (app *App) handleSettingsPickApp(data []byte) {
 	var msg struct {
 		Knob int `json:"knob"`
+		// Button is set when a mixer button's Open or Close an app asks; Mode says which.
+		Button *int   `json:"button"`
+		Mode   string `json:"mode"`
 	}
 	_ = json.Unmarshal(data, &msg)
 
@@ -321,6 +348,12 @@ func (app *App) handleSettingsPickApp(data []byte) {
 	app.appCacheMu.Unlock()
 
 	name := app.resolveApp(exe)
+	if msg.Button != nil {
+		if win := app.settingsWin; win != nil {
+			win.Send(map[string]any{"type": "buttonAppPicked", "button": *msg.Button, "mode": msg.Mode, "path": path, "exe": exe, "name": name})
+		}
+		return
+	}
 	job := core.Job{Kind: core.JobApp, Exe: exe}
 	entry := catalogEntry{
 		Section: sectionName(job.Section()),
@@ -488,6 +521,13 @@ func (app *App) handleSettingsKey(data []byte) {
 		win.Send(map[string]any{"type": "rejected", "field": msg.Field})
 	}
 
+	// A mixer button presses its keys rather than listening for them, so any key will do and
+	// nothing has to be free to register.
+	if strings.HasPrefix(msg.Field, "button:") {
+		win.Send(map[string]any{"type": "recorded", "field": msg.Field, "shortcut": shortcut, "label": core.Label(shortcut, app.ctrlLabelName())})
+		return
+	}
+
 	if !core.Valid(shortcut) {
 		reject()
 		return
@@ -577,6 +617,6 @@ func (app *App) sendPorts() {
 		if ports == nil {
 			ports = []serialport.PortInfo{}
 		}
-		win.Send(map[string]any{"type": "ports", "ports": ports})
+		win.Send(map[string]any{"type": "ports", "ports": ports, "midi": midiport.List()})
 	}()
 }

@@ -292,6 +292,46 @@ p {
   cursor: pointer;
 }
 
+.tabpanel.general-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 14px 20px;
+}
+
+@media (max-width: 760px) {
+  .tabpanel.general-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The knob and button lists scroll on their own, so the page itself stays put. */
+.button-param {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.button-param .input {
+  width: 100%;
+}
+
+.button-param .param-label {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+}
+
+.list-group > .card {
+  max-height: var(--list-max, 420px);
+  overflow-y: auto;
+}
+
+.row.lit,
+.row.lit:hover {
+  background: var(--selection);
+}
+
 .row.clickable:hover {
   background: var(--card-bg-hover);
 }

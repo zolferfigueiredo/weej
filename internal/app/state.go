@@ -48,7 +48,11 @@ func (app *App) connectionStatus() (connected, busy bool, port string) {
 func (app *App) setCalibrating(v bool) {
 	app.mu.Lock()
 	app.calibrating = v
+	win := app.settingsWin
 	app.mu.Unlock()
+	if win != nil {
+		win.Send(map[string]any{"type": "calibrating", "on": v})
+	}
 }
 
 func (app *App) isCalibrating() bool {

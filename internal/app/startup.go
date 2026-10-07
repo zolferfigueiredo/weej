@@ -14,6 +14,7 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/lang"
 	"github.com/zolferfigueiredo/weej/internal/platform/audio"
 	"github.com/zolferfigueiredo/weej/internal/platform/display"
+	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
 	"github.com/zolferfigueiredo/weej/internal/platform/nightlight"
 	"github.com/zolferfigueiredo/weej/internal/platform/serialport"
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
@@ -110,18 +111,21 @@ func (app *App) printStartupSummary() {
 	if s.Active < 0 || s.Active >= len(s.Profiles) {
 		return
 	}
+	if app.usesMixer() {
+		s.Setup = s.ForMixer()
+	}
 	active := s.Profiles[s.Active]
 	tr := app.trFunc()
 	app.log("profile " + active.Name)
 	for i, col := range s.Columns {
 		letter := core.Letter(i)
 		if col < 0 {
-			app.log(fmt.Sprintf("knob %s, not calibrated: %s", letter, app.tr("job.nothing")))
+			app.log(fmt.Sprintf("knob %s, not calibrated: %s", letter, app.tr("job.empty")))
 			continue
 		}
 		jobs := active.JobsOf(i)
 		if len(jobs) == 0 {
-			app.log(fmt.Sprintf("knob %s, input %d: %s", letter, col, app.tr("job.nothing")))
+			app.log(fmt.Sprintf("knob %s, input %d: %s", letter, col, app.tr("job.empty")))
 			continue
 		}
 		titles := make([]string, len(jobs))
@@ -132,15 +136,12 @@ func (app *App) printStartupSummary() {
 	}
 }
 
-// startSerial (re)starts the serial loop with the saved port and speed. A port given on the
-// command line wins over the saved one. The previous loop has closed its port before the new
-// one opens it, or the board would look busy for a moment.
+// startSerial (re)starts the input loop, serial or MIDI, with the saved port and speed. A port
+// given on the command line wins over the saved one. The previous loop has closed its port
+// before the new one opens it, or the board would look busy for a moment.
 func (app *App) startSerial() {
 	s := app.snapshotSettings()
-	port := app.forcedPort
-	if port == "" {
-		port = s.Port
-	}
+	port := app.sourcePort()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	app.mu.Lock()
@@ -155,6 +156,19 @@ func (app *App) startSerial() {
 			<-prevDone
 			app.onSerialStatus(serialport.Status{})
 		}
+		if core.IsMidiPort(port) {
+			device := core.MidiDevice(port)
+			midiport.Run(ctx, midiport.Config{
+				Device:   device,
+				OnValues: app.onMixerValues,
+				OnButton: app.onMixerButton,
+				OnStatus: func(connected, busy bool) {
+					app.onSerialStatus(serialport.Status{Connected: connected, Busy: busy, Port: device})
+				},
+				Log: app.log,
+			}, app.reconnectCh)
+			return
+		}
 		serialport.Run(ctx, serialport.Config{
 			ForcedPort: port,
 			Baud:       s.BaudRate(),
@@ -166,12 +180,18 @@ func (app *App) startSerial() {
 }
 
 func (app *App) onSerialLine(values []int) {
+	app.handleValues(values, app.snapshotSettings().Setup)
+}
+
+func (app *App) handleValues(values []int, setup core.Setup) {
 	calibrating := app.isCalibrating()
 	if calibrating {
 		app.feedCalibrator(values, time.Since(app.startTime).Seconds())
 	}
-	setup := app.snapshotSettings().Setup
 	app.engine.Handle(values, setup, calibrating)
+	if !calibrating {
+		app.pointOutMovedKnobs(values, setup)
+	}
 	app.updateTerminalLine(values, setup, calibrating)
 }
 
@@ -195,7 +215,7 @@ func (app *App) onSerialStatus(status serialport.Status) {
 }
 
 func (app *App) calibrateIfNeeded() {
-	cols := app.snapshotSettings().Columns
+	cols := app.activeColumns(app.snapshotSettings().Setup)
 	if len(cols) == 0 || hasUncalibratedColumn(cols) {
 		app.startCalibration(true)
 	}
@@ -217,8 +237,11 @@ func (app *App) updateTerminalLine(values []int, setup core.Setup, calibrating b
 		assigned[c] = true
 	}
 
-	segs := make([]string, len(values))
+	segs := make([]string, 0, len(values))
 	for i, raw := range values {
+		if raw < 0 {
+			continue
+		}
 		marker := byte(' ')
 		if assigned[i] {
 			marker = '|'
@@ -226,7 +249,7 @@ func (app *App) updateTerminalLine(values []int, setup core.Setup, calibrating b
 				marker = '*'
 			}
 		}
-		segs[i] = fmt.Sprintf("%c%d:%4d", marker, i, raw)
+		segs = append(segs, fmt.Sprintf("%c%d:%4d", marker, i, raw))
 	}
 
 	tr := app.trFunc()

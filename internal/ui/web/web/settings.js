@@ -19,7 +19,9 @@ let dialog = null; // { kind: "removeProfile" | "removeKnob" }
 let saved = null; // the setup as last saved, so Save is enabled only when the draft differs
 let importNote = ""; // last import_skipped / import_failed text, shown under the import button
 let ports = null; // [{ name, product, usb }] once Go has listed them
+let midiInputs = []; // MIDI input names; a "midi:<name>" port reads that mixer
 let connection = { connected: false, busy: false, port: "" };
+let calibrating = false; // set on the click, so the button greys out before the window opens
 
 const SECTION_LABEL_KEY = {
   volume: "section.volume",
@@ -86,7 +88,7 @@ function jobEntryFor(job) {
 }
 
 function jobLines(jobs) {
-  if (!jobs.length) return `<span class="job-line muted">${esc(t("job.nothing"))}</span>`;
+  if (!jobs.length) return `<span class="job-line muted">${esc(t("job.empty"))}</span>`;
   return jobs
     .map((job) => {
       const entry = jobEntryFor(job);
@@ -139,7 +141,6 @@ function render() {
   renderTabs();
   renderFooter();
   if (activeTab === "app") renderApp();
-  else if (activeTab === "connection") renderConnection();
   else if (activeTab === "about") renderAbout();
   else renderGeneral();
 
@@ -155,7 +156,6 @@ function renderTabs() {
   const tabs = [
     ["general", t("tab.general")],
     ["app", t("tab.app")],
-    ["connection", t("tab.connection")],
     ["about", t("tab.about")],
   ];
   document.getElementById("tabs").innerHTML = tabs
@@ -206,10 +206,12 @@ function renderGeneral() {
     )
     .join("");
 
-  const knobsHtml = draft.columns.length
-    ? draft.columns
+  const mixer = usesMixer();
+  const cols = knobColumns();
+  const knobsHtml = cols.length
+    ? cols
         .map((col, i) => {
-          const jobs = profile.jobs[i] || [];
+          const jobs = deviceJobs(profile)[i] || [];
           const needsCal = col === null || col === undefined || col === -1;
           return `
             <div class="row clickable knob-row" id="knob-row-${i}" role="button" tabindex="0" data-action="open-job-menu" data-knob="${i}">
@@ -227,8 +229,7 @@ function renderGeneral() {
         .join("")
     : `<div class="row"><span class="row-desc">${esc(t("no_knobs"))}</span></div>`;
 
-  document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel">
+  const profileGroup = `
       <div class="group">
         <div class="group-head">
           <h2 class="group-title">${esc(t("profile"))}</h2>
@@ -251,24 +252,25 @@ function renderGeneral() {
             <div class="row-control">${shortcutControl("profile:" + draft.profile, profile.shortcut)}</div>
           </div>
         </div>
-      </div>
+      </div>`;
 
-      <div class="group">
+  const knobsGroup = `
+      <div class="group list-group">
         <div class="group-head">
           <h2 class="group-title">${esc(t("knobs"))}</h2>
           <span class="spacer"></span>
           <span class="segmented">
             <button class="btn btn-icon" type="button" data-action="add-knob" title="${escAttr(t("add_knob"))}" aria-label="${escAttr(t("add_knob"))}">+</button>
-            <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${draft.columns.length === 0 ? " disabled" : ""}>&minus;</button>
+            <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${cols.length === 0 ? " disabled" : ""}>&minus;</button>
           </span>
         </div>
         <div class="card">${knobsHtml}</div>
         <div class="group-foot">
           <span class="group-note">${esc(t("jobs_note"))}</span>
-          <button class="btn" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
         </div>
-      </div>
+      </div>`;
 
+  const invertGroup = `
       <div class="group">
         <div class="card">
           <div class="row">
@@ -276,15 +278,44 @@ function renderGeneral() {
               <span class="row-title">${esc(t("invert"))}</span>
               <span class="row-desc">${esc(t("invert_note"))}</span>
             </div>
-            <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft.invertKnobs ? " checked" : ""} /></div>
+            <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft[mixer ? "invertMixer" : "invertKnobs"] ? " checked" : ""} /></div>
           </div>
         </div>
-        <div class="group-foot end">
-          ${importNote ? `<span class="group-note">${esc(importNote)}</span>` : ""}
-          <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
+      </div>`;
+
+  const calibrateGroup = `
+      <div class="group">
+        <div class="card">
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("calibrate"))}</span>
+              <span class="row-desc">${esc(t(mixer ? "calibrate_note_mixer" : "calibrate_note"))}</span>
+            </div>
+            <div class="row-control"><button class="btn" type="button" data-action="calibrate"${calibrating ? " disabled" : ""}>${esc(t("calibrate"))}</button></div>
+          </div>
         </div>
-      </div>
+      </div>`;
+
+  const importFoot = `
+      <div class="group-foot">
+        <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
+        ${importNote ? `<span class="group-note">${esc(importNote)}</span>` : ""}
+      </div>`;
+
+  // Two columns whose rows line up: connection and profile, invert and calibrate, then the knobs
+  // and the buttons. A redraw keeps where each list was scrolled to.
+  const listCards = () => document.querySelectorAll(".list-group > .card");
+  const scrolled = Array.from(listCards(), (card) => card.scrollTop);
+  document.getElementById("panel").innerHTML = `
+    <div class="tabpanel general-grid" role="tabpanel">
+      ${connectionGroup()}${profileGroup}
+      ${invertGroup}${calibrateGroup}
+      ${knobsGroup}${renderMixerButtons()}
+      ${importFoot}
     </div>`;
+  listCards().forEach((card, i) => {
+    card.scrollTop = scrolled[i] || 0;
+  });
 }
 
 function renderApp() {
@@ -382,7 +413,295 @@ function portLabel(p) {
   return p.product ? `${p.name} (${p.product})` : p.name;
 }
 
-function renderConnection() {
+const MIDI_PREFIX = "midi:";
+
+function isMidiPort(port) {
+  return (port || "").startsWith(MIDI_PREFIX);
+}
+
+function midiLabel(port) {
+  return `${port.slice(MIDI_PREFIX.length)} (MIDI)`;
+}
+
+function usesMixer() {
+  return isMidiPort(init.forcedPort || draft.port);
+}
+
+// The calibration of whatever is connected, as Go's activeColumns picks it. A mixer never
+// calibrated reads knob i from its column i, as core.Setup.ForMixer does.
+function knobColumns() {
+  if (!usesMixer()) return draft.columns;
+  return draft.mixerColumns || draft.columns.map((_, i) => i);
+}
+
+function knobCount() {
+  return knobColumns().length;
+}
+
+// Each device has its own knob jobs in every profile: jobs for the board, mixerJobs for the
+// mixer, as core.Profile keeps them.
+function deviceJobs(profile) {
+  const key = usesMixer() ? "mixerJobs" : "jobs";
+  return profile[key] || (profile[key] = []);
+}
+
+function padJobRows(setup) {
+  for (const p of setup.profiles) {
+    const jobs = deviceJobs(p);
+    while (jobs.length < knobCount()) jobs.push([]);
+  }
+}
+
+// A button's functions are core.ButtonAction strings, ticked in the same popup menu as a knob's
+// jobs. The ones ending in ":" take a setting after it, which the button's row asks for.
+const BUTTON_GROUPS = [
+  [
+    "action.group.media",
+    [
+      ["media.playpause", "action.play_pause"],
+      ["media.play", "action.play"],
+      ["media.pause", "action.pause"],
+      ["media.stop", "action.stop"],
+      ["media.previous", "action.previous_track"],
+      ["media.next", "action.next_track"],
+      ["volume.up", "action.volume_up"],
+      ["volume.down", "action.volume_down"],
+      ["mute.all", "action.mute_all"],
+    ],
+  ],
+  [
+    "action.group.apps",
+    [
+      ["open:", "action.open_app"],
+      ["close:", "action.close_app"],
+      ["url:", "action.open_url"],
+    ],
+  ],
+  [
+    "action.group.system",
+    [
+      ["mute.mic", "action.mute_mic"],
+      ["keys:", "action.keys"],
+      ["nightlight", "action.night_light"],
+      ["screens.off", "action.screens_off"],
+      ["pc.lock", "action.lock"],
+      ["pc.sleep", "action.sleep"],
+    ],
+  ],
+  [
+    "action.group.weej",
+    [
+      ["profile.previous", "previous_profile"],
+      ["profile.next", "next_profile"],
+      ["settings", "action.open_settings"],
+    ],
+  ],
+];
+const PARAM_KINDS = ["open:", "close:", "url:", "keys:"];
+
+// The popup menu tells a button from a knob by this offset on the id it sends back.
+const BUTTON_MENU_BASE = 10000;
+
+// F13 to F24, keys no keyboard has, so other apps can bind them to a button without clashing.
+const FKEYS = Array.from({ length: 12 }, (_, i) => [`keys:0:${0x7c + i}:F${13 + i}`, `F${13 + i}`]);
+
+// The menu entry an action is ticked under: itself, or the kind of one that takes a setting.
+function actionKind(action) {
+  if (FKEYS.some(([value]) => value === action)) return action;
+  return PARAM_KINDS.find((kind) => action.startsWith(kind)) || action;
+}
+
+function profileLabel(i) {
+  const p = draft.profiles[i];
+  return p && p.name ? p.name : t("profile_n", { n: String(i + 1) });
+}
+
+function actionLabel(action) {
+  const kind = actionKind(action);
+  const fkey = FKEYS.find(([value]) => value === kind);
+  if (fkey) return fkey[1];
+  for (const [, items] of BUTTON_GROUPS) for (const [value, key] of items) if (value === kind) return t(key);
+  if (kind.startsWith("mute:")) return t("action.mute", { letter: letterFor(parseInt(kind.slice(5), 10)) });
+  if (kind.startsWith("profile:")) return t("action.go_profile", { name: profileLabel(parseInt(kind.slice(8), 10)) });
+  return kind;
+}
+
+function buttonActions(cc) {
+  return (activeProfile().buttons || {})[cc] || [];
+}
+
+function setButtonActions(cc, actions) {
+  const profile = activeProfile();
+  profile.buttons = profile.buttons || {};
+  if (actions.length) profile.buttons[cc] = actions;
+  else delete profile.buttons[cc];
+}
+
+// Puts action in place of whatever the button had of the same kind, so each kind is there once.
+function replaceKind(cc, action) {
+  const kind = actionKind(action);
+  setButtonActions(cc, [...buttonActions(cc).filter((a) => actionKind(a) !== kind), action]);
+}
+
+let appNames = {}; // an app's path or exe, as an action holds it, to the name the picker found
+
+function baseName(path) {
+  return path.split(/[\\/]/).pop();
+}
+
+// "keys:<mods>:<vk>:<key>", as core.KeysAction writes it.
+function keysShortcut(value) {
+  const [mods, vk, ...key] = value.split(":");
+  return vk ? { vk: parseInt(vk, 10), mods: parseInt(mods, 10), key: key.join(":") } : null;
+}
+
+function buttonParams(cc) {
+  return buttonActions(cc)
+    .map((action) => {
+      const kind = actionKind(action);
+      if (!PARAM_KINDS.includes(kind)) return "";
+      const value = action.slice(kind.length);
+      let control;
+      if (kind === "url:") {
+        control = `<input class="input" type="text" data-button-url="${cc}" value="${escAttr(value)}" placeholder="https://" spellcheck="false" />`;
+      } else if (kind === "keys:") {
+        control = shortcutControl(`button:${cc}`, keysShortcut(value));
+      } else {
+        const label = value ? appNames[value] || baseName(value) : t("choose");
+        control = `<button class="btn" type="button" data-action="pick-button-app" data-cc="${cc}" data-mode="${kind.slice(0, -1)}">${esc(label)}</button>`;
+      }
+      return `<div class="button-param"><span class="param-label">${esc(actionLabel(action))}</span>${control}</div>`;
+    })
+    .join("");
+}
+
+function buttonLines(cc) {
+  const actions = buttonActions(cc);
+  if (!actions.length) return `<span class="job-line muted">${esc(t("job.empty"))}</span>`;
+  return actions.map((a) => `<span class="job-line"><span>${esc(actionLabel(a))}</span></span>`).join("");
+}
+
+function openButtonMenu(cc, row) {
+  const r = row.getBoundingClientRect();
+  const kinds = new Set(buttonActions(cc).map(actionKind));
+  const item = (action, title) => ({ job: { action }, title, icon: TRANSPARENT_PIXEL, checked: kinds.has(action) });
+  const sections = BUTTON_GROUPS.map(([key, items]) => ({ title: t(key), items: items.map(([v, k]) => item(v, t(k))) }));
+  const weej = sections[sections.length - 1];
+  weej.items.splice(2, 0, ...draft.profiles.map((_, i) => item(`profile:${i}`, t("action.go_profile", { name: profileLabel(i) }))));
+  sections.push({ title: t("action.group.fkeys"), items: FKEYS.map(([v, label]) => item(v, label)) });
+  const mutes = [];
+  for (let i = 0; i < knobCount(); i++) mutes.push(item(`mute:${i}`, t("action.mute", { letter: letterFor(i) })));
+  sections.push({ title: t("action.group.knobs"), items: mutes });
+  send({
+    type: "openJobMenu",
+    knob: BUTTON_MENU_BASE + cc,
+    anchor: { left: r.left, top: r.top, right: r.right, bottom: r.bottom },
+    model: { sections },
+  });
+}
+
+function onButtonMenuToggle(cc, action, checked) {
+  if (!checked) {
+    setButtonActions(cc, buttonActions(cc).filter((a) => actionKind(a) !== action));
+  } else if (PARAM_KINDS.includes(action)) {
+    replaceKind(cc, action);
+    if (action === "open:" || action === "close:") send({ type: "pickApp", button: cc, mode: action.slice(0, -1) });
+  } else if (!buttonActions(cc).includes(action)) {
+    setButtonActions(cc, [...buttonActions(cc), action]);
+  }
+  render();
+}
+
+function buttonOrder() {
+  return draft.mixerButtonOrder || init.mixerButtonDefaults || [];
+}
+
+function editableButtonOrder() {
+  if (!draft.mixerButtonOrder) draft.mixerButtonOrder = clone(init.mixerButtonDefaults || []);
+  return draft.mixerButtonOrder;
+}
+
+// A row added with + reads -1 until a mixer button is pressed to fill it in.
+function renderMixerButtons() {
+  const mixer = usesMixer();
+  const order = mixer ? buttonOrder() : [];
+  const rows = order.length
+    ? order
+        .map((cc, i) => {
+          const title = `<span class="row-title">${esc(t("mixer.button", { n: String(i + 1) }))}</span>`;
+          if (cc < 0) {
+            return `
+          <div class="row">
+            <div class="row-main">${title}<span class="row-desc warning">${esc(t("mixer.press"))}</span></div>
+          </div>`;
+          }
+          return `
+          <div class="row clickable" data-cc="${cc}" role="button" tabindex="0" data-action="open-button-menu" data-button="${cc}">
+            <div class="row-main">${title}${buttonParams(cc)}</div>
+            <div class="row-control">
+              <div class="job-list">${buttonLines(cc)}</div>
+              <span class="chev" aria-hidden="true">&#x2304;</span>
+            </div>
+          </div>`;
+        })
+        .join("")
+    : `<div class="row"><span class="row-desc">${esc(t("mixer.none"))}</span></div>`;
+  return `
+      <div class="group list-group">
+        <div class="group-head">
+          <h2 class="group-title">${esc(t("mixer_buttons"))}</h2>
+          <span class="spacer"></span>
+          <span class="segmented">
+            <button class="btn btn-icon" type="button" data-action="add-button" title="${escAttr(t("add_button"))}" aria-label="${escAttr(t("add_button"))}"${mixer ? "" : " disabled"}>+</button>
+            <button class="btn btn-icon" type="button" data-action="remove-button" title="${escAttr(t("remove_button"))}" aria-label="${escAttr(t("remove_button"))}"${order.length === 0 ? " disabled" : ""}>&minus;</button>
+          </span>
+        </div>
+        <div class="card">${rows}</div>
+        <div class="group-foot"><span class="group-note">${esc(t("mixer_buttons_note"))}</span></div>
+      </div>`;
+}
+
+function addButton() {
+  editableButtonOrder().push(-1);
+  render();
+}
+
+function removeButton() {
+  const cc = editableButtonOrder().pop();
+  if (cc >= 0) for (const p of draft.profiles) if (p.buttons) delete p.buttons[cc];
+  render();
+}
+
+// A pressed button not on the list yet fills the first row waiting for one.
+function onMixerButtonPressed(cc) {
+  if (activeTab !== "general") return;
+  const order = buttonOrder();
+  if (!order.includes(cc) && order.includes(-1)) {
+    const editable = editableButtonOrder();
+    editable[editable.indexOf(-1)] = cc;
+    render();
+    updateSaveButton();
+  }
+  lightRow(document.querySelector(`.row[data-cc="${cc}"]`));
+}
+
+// A row stays lit for a second after its control's last move, so a moving fader holds it steady.
+const litTimers = new WeakMap();
+
+function lightRow(row) {
+  if (activeTab !== "general" || !row) return;
+  if (!row.classList.contains("lit")) {
+    row.classList.add("lit");
+    row.scrollIntoView({ block: "nearest" });
+  }
+  clearTimeout(litTimers.get(row));
+  litTimers.set(
+    row,
+    setTimeout(() => row.classList.remove("lit"), 1000)
+  );
+}
+
+function connectionGroup() {
   const forced = init.forcedPort || "";
   const autoLabel =
     !draft.port && connection.connected && connection.port ? t("port_auto_found", { port: connection.port }) : t("port_auto");
@@ -395,12 +714,18 @@ function renderConnection() {
       `<option value=""${draft.port ? "" : " selected"}>${esc(autoLabel)}</option>` +
       list
         .map((p) => `<option value="${escAttr(p.name)}"${draft.port === p.name ? " selected" : ""}>${esc(portLabel(p))}</option>`)
+        .join("") +
+      midiInputs
+        .map((name) => MIDI_PREFIX + name)
+        .map((port) => `<option value="${escAttr(port)}"${draft.port === port ? " selected" : ""}>${esc(midiLabel(port))}</option>`)
         .join("");
     // A saved port that is unplugged right now still has to show as the choice.
-    if (draft.port && !list.some((p) => p.name === draft.port)) {
-      portOptions += `<option value="${escAttr(draft.port)}" selected>${esc(draft.port)}</option>`;
+    if (draft.port && !list.some((p) => p.name === draft.port) && !midiInputs.some((name) => MIDI_PREFIX + name === draft.port)) {
+      const label = isMidiPort(draft.port) ? midiLabel(draft.port) : draft.port;
+      portOptions += `<option value="${escAttr(draft.port)}" selected>${esc(label)}</option>`;
     }
   }
+  const midi = isMidiPort(forced || draft.port);
 
   const rates = (init.baudRates || [9600]).slice();
   if (draft.baudRate && !rates.includes(draft.baudRate)) rates.push(draft.baudRate);
@@ -418,8 +743,7 @@ function renderConnection() {
     statusClass = " warning";
   }
 
-  document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel">
+  return `
       <div class="group">
         <div class="card">
           <div class="row">
@@ -439,16 +763,19 @@ function renderConnection() {
               <select class="select" id="port-select"${forced ? " disabled" : ""}>${portOptions}</select>
             </div>
           </div>
-          <div class="row">
+          ${
+            midi
+              ? ""
+              : `<div class="row">
             <div class="row-main">
               <span class="row-title">${esc(t("baud_rate"))}</span>
               <span class="row-desc">${esc(t("baud_note"))}</span>
             </div>
             <div class="row-control"><select class="select" id="baud-select">${baudOptions}</select></div>
-          </div>
+          </div>`
+          }
         </div>
-      </div>
-    </div>`;
+      </div>`;
 }
 
 function hostnameOf(url) {
@@ -478,7 +805,7 @@ function renderAbout() {
 // whole menu, and Go hands every tick back as jobMenuToggle or jobMenuClear.
 function openJobMenu(knob, row) {
   const r = row.getBoundingClientRect();
-  const knobJobs = activeProfile().jobs[knob] || [];
+  const knobJobs = deviceJobs(activeProfile())[knob] || [];
   const item = (entry) => ({
     job: entry.job,
     title: entry.title,
@@ -508,7 +835,7 @@ function renderDialog() {
     title = name ? t("remove_named", { name }) : t("remove_this_profile");
     body = t("remove_profile_info");
   } else {
-    title = t("remove_knob_q", { letter: letterFor(draft.columns.length - 1) });
+    title = t("remove_knob_q", { letter: letterFor(knobCount() - 1) });
     body = t("remove_knob_info");
   }
   const html = `
@@ -528,7 +855,8 @@ function renderDialog() {
 // --- Mutations --------------------------------------------------------------
 
 function addProfile() {
-  draft.profiles.push({ name: "", jobs: draft.columns.map(() => []), shortcut: null });
+  draft.profiles.push({ name: "", jobs: [], mixerJobs: [], shortcut: null, buttons: {} });
+  padJobRows(draft);
   draft.profile = draft.profiles.length - 1;
   render();
 }
@@ -550,8 +878,8 @@ let swallowClick = false;
 // Moves a knob's jobs to another knob in the profile shown, the knobs in between shifting by
 // one, as cards in a list do. Knobs keep their letters, inputs and calibration.
 function moveKnobJobs(from, to) {
-  const jobs = activeProfile().jobs;
-  while (jobs.length < draft.columns.length) jobs.push([]);
+  const jobs = deviceJobs(activeProfile());
+  while (jobs.length < knobCount()) jobs.push([]);
   const [moved] = jobs.splice(from, 1);
   jobs.splice(to, 0, moved);
 }
@@ -638,7 +966,7 @@ function onKnobKeydown(e) {
   if (!row) return;
   const from = Number(row.dataset.knob);
   const to = from + (e.key === "ArrowUp" ? -1 : 1);
-  if (to < 0 || to >= draft.columns.length) return;
+  if (to < 0 || to >= knobCount()) return;
   e.preventDefault();
   moveKnobJobs(from, to);
   render();
@@ -646,15 +974,26 @@ function onKnobKeydown(e) {
   if (moved) moved.focus();
 }
 
+// Adding or removing a knob changes the calibration of whatever is connected; the other input
+// keeps its own knobs.
+function editableKnobColumns() {
+  if (!usesMixer()) return draft.columns;
+  if (!draft.mixerColumns) draft.mixerColumns = draft.columns.map((_, i) => i);
+  return draft.mixerColumns;
+}
+
 function addKnob() {
-  draft.columns.push(-1);
-  for (const p of draft.profiles) p.jobs.push([]);
+  editableKnobColumns().push(-1);
+  padJobRows(draft);
   render();
 }
 
 function removeKnobConfirmed() {
-  draft.columns.pop();
-  for (const p of draft.profiles) p.jobs.pop();
+  editableKnobColumns().pop();
+  for (const p of draft.profiles) {
+    const jobs = deviceJobs(p);
+    if (jobs.length > knobCount()) jobs.pop();
+  }
 }
 
 function applyRecorded(field, shortcut) {
@@ -663,6 +1002,9 @@ function applyRecorded(field, shortcut) {
   else if (field && field.indexOf("profile:") === 0) {
     const i = parseInt(field.slice("profile:".length), 10);
     if (draft.profiles[i]) draft.profiles[i].shortcut = shortcut;
+  } else if (field && field.indexOf("button:") === 0) {
+    const cc = field.slice("button:".length);
+    replaceKind(cc, shortcut ? `keys:${shortcut.mods}:${shortcut.vk}:${shortcut.key}` : "keys:");
   }
 }
 
@@ -689,7 +1031,8 @@ function onRecordKeydown(e) {
   // Holding Ctrl or Alt fires a keydown for the modifier itself; wait for the real key.
   if (MODIFIER_KEYS.has(e.key)) return;
   const isClear = (e.key === "Delete" || e.key === "Backspace") && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
-  if (!isClear && !e.ctrlKey && !e.altKey) return; // wait for a real Ctrl/Alt chord
+  // A hotkey needs a Ctrl/Alt chord; a key a mixer button presses can be any key.
+  if (!isClear && !e.ctrlKey && !e.altKey && recording.field.indexOf("button:") !== 0) return;
   send({
     type: "key",
     field: recording.field,
@@ -744,7 +1087,7 @@ function onClick(e) {
   switch (target.dataset.action) {
     case "switch-tab":
       activeTab = target.dataset.tab;
-      if (activeTab === "connection") send({ type: "listPorts" });
+      if (activeTab === "general") send({ type: "listPorts" });
       render();
       break;
     case "add-profile":
@@ -760,7 +1103,7 @@ function onClick(e) {
       addKnob();
       break;
     case "remove-knob":
-      if (draft.columns.length > 0) {
+      if (knobCount() > 0) {
         dialog = { kind: "removeKnob" };
         render();
       }
@@ -778,12 +1121,25 @@ function onClick(e) {
     case "open-job-menu":
       openJobMenu(parseInt(target.dataset.knob, 10), target);
       break;
+    case "open-button-menu":
+      // Typing in a button's address box or clicking its own controls is not a click on the row.
+      if (!e.target.closest(".button-param")) openButtonMenu(parseInt(target.dataset.button, 10), target);
+      break;
     case "record": {
       const field = target.dataset.field;
       if (recording && recording.field === field) stopRecording(true);
       else startRecording(field);
       break;
     }
+    case "pick-button-app":
+      send({ type: "pickApp", button: parseInt(target.dataset.cc, 10), mode: target.dataset.mode });
+      break;
+    case "add-button":
+      addButton();
+      break;
+    case "remove-button":
+      removeButton();
+      break;
     case "refresh-ports":
       send({ type: "listPorts" });
       break;
@@ -795,6 +1151,8 @@ function onClick(e) {
       render();
       break;
     case "calibrate":
+      calibrating = true;
+      render();
       send({ type: "calibrate" });
       break;
     case "import-deej":
@@ -817,6 +1175,7 @@ function onInput(e) {
     // time something else forces a redraw.
     activeProfile().name = e.target.value;
   }
+  if (e.target.dataset.buttonUrl) replaceKind(e.target.dataset.buttonUrl, `url:${e.target.value.trim()}`);
   updateSaveButton();
 }
 
@@ -828,7 +1187,7 @@ function onChange(e) {
       render();
       break;
     case "invert":
-      draft.invertKnobs = el.checked;
+      draft[usesMixer() ? "invertMixer" : "invertKnobs"] = el.checked;
       break;
     case "language-select":
       draft.language = el.value;
@@ -862,12 +1221,16 @@ function onChange(e) {
 function onMessage(msg) {
   switch (msg.type) {
     case "init":
+      // The window grows to fit the page (bridge.js reportHeight), so the mixer's lists get a cap
+      // of about 8 rows, less on a short screen, and scroll inside it; about 520px is the rest.
+      document.documentElement.style.setProperty("--list-max", `${Math.max(200, Math.min(360, screen.availHeight - 520))}px`);
       init = msg;
       draft = clone(msg.setup);
       labels = Object.assign({}, msg.labels || {});
       activeTab = msg.tab || "general";
       connection = msg.connection || connection;
-      if (activeTab === "connection") send({ type: "listPorts" });
+      calibrating = !!msg.calibrating;
+      if (activeTab === "general") send({ type: "listPorts" });
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
       saved = clone(draft);
       render();
@@ -889,12 +1252,34 @@ function onMessage(msg) {
       break;
     case "ports":
       ports = msg.ports || [];
-      if (activeTab === "connection") render();
+      midiInputs = msg.midi || [];
+      if (activeTab === "general") render();
+      break;
+    // Go-initiated: a mixer button was pressed, so its row lights up to show which one it is.
+    // Go-initiated: Calibration opened or closed, from here or from the tray.
+    case "calibrating":
+      calibrating = !!msg.on;
+      render();
+      break;
+    case "buttonAppPicked": {
+      const value = msg.mode === "open" ? msg.path : msg.exe;
+      appNames[value] = msg.name;
+      replaceKind(String(msg.button), `${msg.mode}:${value}`);
+      render();
+      updateSaveButton();
+      break;
+    }
+    case "mixerButton":
+      onMixerButtonPressed(msg.cc);
+      break;
+    // Go-initiated: a knob's control moved, so its row lights up the same way.
+    case "knobMoved":
+      lightRow(document.getElementById(`knob-row-${msg.knob}`));
       break;
     // Go-initiated: the board connected, dropped or got blocked by another app.
     case "connection":
       connection = { connected: !!msg.connected, busy: !!msg.busy, port: msg.port || "" };
-      if (activeTab === "connection") {
+      if (activeTab === "general") {
         send({ type: "listPorts" });
         render();
       }
@@ -904,7 +1289,12 @@ function onMessage(msg) {
       render();
       break;
     case "jobMenuToggle": {
-      const jobs = activeProfile().jobs[msg.knob] || (activeProfile().jobs[msg.knob] = []);
+      if (msg.knob >= BUTTON_MENU_BASE) {
+        onButtonMenuToggle(msg.knob - BUTTON_MENU_BASE, msg.job.action, msg.checked);
+        break;
+      }
+      const knobs = deviceJobs(activeProfile());
+      const jobs = knobs[msg.knob] || (knobs[msg.knob] = []);
       const k = jobKey(msg.job);
       const idx = jobs.findIndex((j) => jobKey(j) === k);
       if (msg.checked && idx < 0) jobs.push(msg.job);
@@ -913,11 +1303,13 @@ function onMessage(msg) {
       break;
     }
     case "jobMenuClear":
-      activeProfile().jobs[msg.knob] = [];
+      if (msg.knob >= BUTTON_MENU_BASE) setButtonActions(msg.knob - BUTTON_MENU_BASE, []);
+      else deviceJobs(activeProfile())[msg.knob] = [];
       render();
       break;
     case "appPicked": {
-      const jobs = activeProfile().jobs[msg.knob] || (activeProfile().jobs[msg.knob] = []);
+      const knobs = deviceJobs(activeProfile());
+      const jobs = knobs[msg.knob] || (knobs[msg.knob] = []);
       if (!hasJob(jobs, msg.entry.job)) jobs.push(msg.entry.job);
       if (!init.catalog.some((c) => jobKey(c.job) === jobKey(msg.entry.job))) init.catalog.push(msg.entry);
       render();
@@ -939,11 +1331,18 @@ function onMessage(msg) {
       break;
     // Go-initiated: Calibration finished with a different column mapping
     // while this window was already open, so the draft's columns are stale.
-    case "columns":
-      draft.columns = msg.columns;
-      if (saved) saved.columns = clone(msg.columns); // Calibration saved them already
+    case "columns": {
+      const changes = { [msg.mixer ? "mixerColumns" : "columns"]: msg.columns };
+      if (msg.mixer) changes.mixerButtonOrder = msg.buttonOrder;
+      // Calibration saved these already.
+      for (const setup of saved ? [draft, saved] : [draft]) {
+        Object.assign(setup, clone(changes));
+        if (msg.mixer) (msg.profileButtons || []).forEach((b, i) => setup.profiles[i] && (setup.profiles[i].buttons = clone(b)));
+        padJobRows(setup);
+      }
       render();
       break;
+    }
     // Go-initiated: the window was already open and got asked to switch tab
     // (e.g. the tray's About item) instead of opening a new one.
     case "tab":

@@ -59,7 +59,7 @@ func (app *App) screenCount(setup core.Setup) int {
 
 func assignedAnywhere(setup core.Setup, kind core.JobKind) bool {
 	for _, p := range setup.Profiles {
-		for _, row := range p.Jobs {
+		for _, row := range p.AllJobs() {
 			for _, j := range row {
 				if j.Kind == kind {
 					return true
@@ -264,6 +264,13 @@ func (app *App) shortcutLabels(setup core.Setup) map[string]string {
 	add(setup.Previous)
 	for _, p := range setup.Profiles {
 		add(p.Shortcut)
+		for _, actions := range p.Buttons {
+			for _, a := range actions {
+				if s, ok := a.Keys(); ok {
+					add(&s)
+				}
+			}
+		}
 	}
 	return labels
 }

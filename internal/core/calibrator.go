@@ -23,6 +23,12 @@ type Calibrator struct {
 	lastMove  float64
 	lastTime  float64
 	stepStart float64
+
+	// A mixer finds its controls after a few steps, and its buttons follow the knobs.
+	mixer       bool
+	buttonStage bool
+	buttons     []int
+	repeated    int
 }
 
 func containsInt(xs []int, v int) bool {
@@ -54,6 +60,49 @@ func NewCalibrator(saved []int, onlyNew bool) *Calibrator {
 	c.skipKept()
 	c.first = c.Knob()
 	return c
+}
+
+func NewMixerCalibrator(saved []int, onlyNew bool) *Calibrator {
+	c := NewCalibrator(saved, onlyNew)
+	c.mixer = true
+	c.repeated = -1
+	return c
+}
+
+// A pot jitters, so a board knob has to swing half its range to be found, and a found one has to
+// move well past the noise to count as the wrong knob. A mixer sends clean steps of about 8, so
+// two steps past its first report are enough.
+func (c *Calibrator) swings() (find, wrong int) {
+	if c.mixer {
+		return 16, 32
+	}
+	return 512, 200
+}
+
+func (c *Calibrator) Mixer() bool       { return c.mixer }
+func (c *Calibrator) ButtonStage() bool { return c.buttonStage }
+func (c *Calibrator) Buttons() []int    { return append([]int{}, c.buttons...) }
+
+// RepeatedButton is the index of a button pressed again after it was found, or -1.
+func (c *Calibrator) RepeatedButton() int { return c.repeated }
+
+func (c *Calibrator) StartButtons() {
+	c.buttonStage = true
+	c.repeated = -1
+}
+
+func (c *Calibrator) PressButton(cc int) {
+	if !c.buttonStage {
+		return
+	}
+	for i, b := range c.buttons {
+		if b == cc {
+			c.repeated = i
+			return
+		}
+	}
+	c.buttons = append(c.buttons, cc)
+	c.repeated = -1
 }
 
 func (c *Calibrator) Knob() int {
@@ -110,16 +159,8 @@ func (c *Calibrator) Result() []int {
 	return result
 }
 
-type StepKey struct {
-	Knob  int
-	Phase int
-	Full  bool
-}
-
-func (c *Calibrator) StepKey() StepKey { return StepKey{c.Knob(), c.phase, c.full} }
-
 func (c *Calibrator) Feed(values []int, now float64) {
-	if c.full {
+	if c.full || c.buttonStage {
 		return
 	}
 	if c.phase == 0 {
@@ -158,6 +199,13 @@ func (c *Calibrator) feedSearch(values []int) {
 		c.high = append([]int{}, values...)
 	}
 	for i, v := range values {
+		// A mixer control that has not moved yet reads -1; its first real value is a start, not a swing.
+		if v < 0 {
+			continue
+		}
+		if c.low[i] < 0 {
+			c.low[i], c.high[i] = v, v
+		}
 		if v < c.low[i] {
 			c.low[i] = v
 		}
@@ -180,9 +228,10 @@ func (c *Calibrator) feedSearch(values []int) {
 		return
 	}
 
+	findSwing, wrongSwing := c.swings()
 	// A found knob moving: say so and start over, so a pin echoing it can't pass for the next knob.
 	for fi, col := range c.found {
-		if col < len(values) && c.high[col]-c.low[col] >= 200 {
+		if col < len(values) && c.high[col]-c.low[col] >= wrongSwing {
 			c.wrongKnob = fi
 			c.low = append([]int{}, values...)
 			c.high = append([]int{}, values...)
@@ -190,7 +239,7 @@ func (c *Calibrator) feedSearch(values []int) {
 		}
 	}
 
-	if bestSwing >= 512 {
+	if bestSwing >= findSwing {
 		c.found = append(c.found, best)
 		c.next()
 	}
