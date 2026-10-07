@@ -1768,7 +1768,8 @@ function onMessage(msg) {
       connection = msg.connection || connection;
       mixerConnection = msg.mixerConnection || mixerConnection;
       calibrating = !!msg.calibrating;
-      live = { board: [], mixer: [], ...(msg.values || {}) };
+      // A device that sent nothing yet comes as null.
+      live = { board: (msg.values && msg.values.board) || [], mixer: (msg.values && msg.values.mixer) || [] };
       if (isDeviceTab()) send({ type: "listPorts" });
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
       saved = clone(draft);
