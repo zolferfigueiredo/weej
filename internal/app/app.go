@@ -108,10 +108,19 @@ type App struct {
 	shutdownOnce sync.Once
 
 	movesBoard core.ButtonWatcher
+	mixerMoves core.MoveWatcher
 
-	liveMu    sync.Mutex
-	live      []int
-	liveTimer *time.Timer
+	boardLive, mixerLive liveFrames
+
+	// The mixer runs beside the board, with an engine and a connection of its own.
+	mixerEngine      *core.Engine
+	mixerConnected   bool
+	mixerBusy        bool
+	mixerPortName    string
+	mixerReconnectCh chan struct{}
+	cancelMixer      context.CancelFunc
+	mixerDone        chan struct{}
+	mixerFirstDone   bool
 }
 
 func Main(args []string) int {
@@ -164,6 +173,7 @@ func Main(args []string) int {
 		log:               lg.Log,
 		startTime:         time.Now(),
 		reconnectCh:       make(chan struct{}, 1),
+		mixerReconnectCh:  make(chan struct{}, 1),
 		appName:           map[string]string{},
 		appPath:           map[string]string{},
 		appIcon:           map[string]string{},

@@ -63,14 +63,14 @@ func TestSMCControlsAreFixed(t *testing.T) {
 		t.Error("another mixer read as an SMC-Mixer")
 	}
 
-	s := Setup{Port: MidiPort("SMC-Mixer"), Columns: []int{0, 1}, MixerColumns: []int{31, 40}, ButtonOrder: []int{144}}
+	s := Setup{MixerPort: "SMC-Mixer", Columns: []int{0, 1}, MixerColumns: []int{31, 40}, ButtonOrder: []int{144}}
 	if got := s.ForMixer().Columns; !reflect.DeepEqual(got, smcColumns) {
 		t.Errorf("columns = %v, want faders then knobs whatever was calibrated", got)
 	}
 	if got := s.MixerButtonOrder(); !reflect.DeepEqual(got, SMCButtonOrder()) {
 		t.Errorf("button order = %v, want every button", got)
 	}
-	s.Port = MidiPort("nanoKONTROL2")
+	s.MixerPort = "nanoKONTROL2"
 	if got := s.ForMixer().Columns; !reflect.DeepEqual(got, []int{31, 40}) {
 		t.Errorf("another mixer's columns = %v, want its calibration", got)
 	}
@@ -181,7 +181,7 @@ func TestMigrateSMCKeepsJobsOnTheirControl(t *testing.T) {
 	master := []Job{{Kind: JobMaster}}
 	mic := []Job{{Kind: JobMicrophone}}
 	s := Setup{
-		Port:         MidiPort("SMC-Mixer"),
+		MixerPort:    "SMC-Mixer",
 		MixerColumns: []int{31, 40, -1},
 		ButtonOrder:  []int{144},
 		Profiles: []Profile{{
@@ -248,6 +248,9 @@ const smcSettingsFixture = `{
 
 func TestSMCSettingsSurviveTheMove(t *testing.T) {
 	s, _ := DecodeSettings([]byte(smcSettingsFixture), "Default")
+	if s.Port != PortOff || s.MixerPort != "SMC-Mixer" {
+		t.Errorf("ports = %q, %q, want the board off and the mixer kept", s.Port, s.MixerPort)
+	}
 	if s.MixerColumns != nil || s.ButtonOrder != nil {
 		t.Errorf("calibration kept: %v, %v", s.MixerColumns, s.ButtonOrder)
 	}

@@ -27,9 +27,7 @@ func IsSMCName(device string) bool {
 	return strings.Contains(strings.ToLower(device), "smc-mixer")
 }
 
-func (s Setup) MixerIsSMC() bool {
-	return IsMidiPort(s.Port) && IsSMCName(MidiDevice(s.Port))
-}
+func (s Setup) MixerIsSMC() bool { return IsSMCName(s.MixerPort) }
 
 // SMCButtonID is the id of the button that sends cc in CC mode.
 func SMCButtonID(cc int) (int, bool) {

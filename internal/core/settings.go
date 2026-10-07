@@ -47,6 +47,7 @@ type settingsJSON struct {
 	TrayIcon         string     `json:"trayIcon"`
 	Speed            string     `json:"speed"`
 	Port             string     `json:"port"`
+	MixerPort        string     `json:"mixerPort"`
 	BaudRate         int        `json:"baudRate"`
 	BoardKinds       []string   `json:"boardKinds,omitempty"`
 	BoardLayout      [][]int    `json:"boardLayout,omitempty"`
@@ -223,6 +224,7 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		TrayIcon:         string(s.Icon),
 		Speed:            string(s.Speed),
 		Port:             s.Port,
+		MixerPort:        s.MixerPort,
 		BaudRate:         s.BaudRate(),
 		BoardKinds:       EncodeKinds(s.BoardKinds),
 		BoardLayout:      s.BoardLayout,
@@ -308,6 +310,13 @@ func DecodeSettings(data []byte, defaultProfileName string) (Settings, error) {
 	}
 	if v, ok := take[string](raw, "port"); ok {
 		s.Port = v
+	}
+	if v, ok := take[string](raw, "mixerPort"); ok {
+		s.MixerPort = v
+	}
+	// The mixer was read in the board's place before both could run at once.
+	if IsMidiPort(s.Port) {
+		s.MixerPort, s.Port = MidiDevice(s.Port), PortOff
 	}
 	if v, ok := take[int](raw, "baudRate"); ok && v > 0 {
 		s.Baud = v

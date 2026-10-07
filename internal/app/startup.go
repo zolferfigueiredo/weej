@@ -49,6 +49,7 @@ func (app *App) setup(l *winui.Loop) {
 	app.printStartupSummary()
 
 	app.engine = core.NewEngine(&applier{app: app})
+	app.mixerEngine = core.NewEngine(&applier{app: app})
 
 	audioW, err := audio.Start(app.log)
 	if err != nil {
@@ -70,6 +71,7 @@ func (app *App) setup(l *winui.Loop) {
 	app.registerHotkeys(app.snapshotSettings().Setup)
 
 	app.startSerial()
+	app.startMixer()
 
 	app.setupAutoUpdateChecks()
 
@@ -111,34 +113,40 @@ func (app *App) printStartupSummary() {
 	if s.Active < 0 || s.Active >= len(s.Profiles) {
 		return
 	}
-	if app.usesMixer() {
-		s.Setup = s.ForMixer()
+	app.log("profile " + s.Profiles[s.Active].Name)
+	if s.Port != core.PortOff {
+		app.printKnobs("board", s.Setup)
 	}
+	if s.MixerPort != "" {
+		app.printKnobs("mixer", s.ForMixer())
+	}
+}
+
+func (app *App) printKnobs(device string, s core.Setup) {
 	active := s.Profiles[s.Active]
 	tr := app.trFunc()
-	app.log("profile " + active.Name)
 	for i, col := range s.Columns {
 		letter := core.Letter(i)
 		if col < 0 {
-			app.log(fmt.Sprintf("knob %s, not calibrated: %s", letter, app.tr("job.empty")))
+			app.log(fmt.Sprintf("%s knob %s, not calibrated: %s", device, letter, app.tr("job.empty")))
 			continue
 		}
 		jobs := active.JobsOf(i)
 		if len(jobs) == 0 {
-			app.log(fmt.Sprintf("knob %s, input %d: %s", letter, col, app.tr("job.empty")))
+			app.log(fmt.Sprintf("%s knob %s, input %d: %s", device, letter, col, app.tr("job.empty")))
 			continue
 		}
 		titles := make([]string, len(jobs))
 		for j, job := range jobs {
 			titles[j] = job.Title(tr, app.appDisplayName)
 		}
-		app.log(fmt.Sprintf("knob %s, input %d: %s", letter, col, strings.Join(titles, ", ")))
+		app.log(fmt.Sprintf("%s knob %s, input %d: %s", device, letter, col, strings.Join(titles, ", ")))
 	}
 }
 
-// startSerial (re)starts the input loop, serial or MIDI, with the saved port and speed. A port
-// given on the command line wins over the saved one. The previous loop has closed its port
-// before the new one opens it, or the board would look busy for a moment.
+// startSerial (re)starts the board's input loop with the saved port and speed, unless the board
+// is off. A port given on the command line wins over the saved one. The previous loop has closed
+// its port before the new one opens it, or the board would look busy for a moment.
 func (app *App) startSerial() {
 	s := app.snapshotSettings()
 	port := app.sourcePort()
@@ -156,19 +164,7 @@ func (app *App) startSerial() {
 			<-prevDone
 			app.onSerialStatus(serialport.Status{})
 		}
-		if core.IsMidiPort(port) {
-			device := core.MidiDevice(port)
-			midiport.Run(ctx, midiport.Config{
-				Device:   device,
-				OnValues: app.onMixerValues,
-				OnButton: app.onMixerButton,
-				OnStatus: func(connected, busy bool) {
-					app.onSerialStatus(serialport.Status{Connected: connected, Busy: busy, Port: device})
-				},
-				StripLights:  core.IsSMCName(device),
-				OnStripLight: app.onStripLight,
-				Log:          app.log,
-			}, app.reconnectCh)
+		if port == core.PortOff {
 			return
 		}
 		serialport.Run(ctx, serialport.Config{
@@ -181,11 +177,43 @@ func (app *App) startSerial() {
 	}()
 }
 
+// startMixer (re)starts the mixer's input loop beside the board's, if a mixer is picked.
+func (app *App) startMixer() {
+	device := app.snapshotSettings().MixerPort
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	app.mu.Lock()
+	prevCancel, prevDone := app.cancelMixer, app.mixerDone
+	app.cancelMixer, app.mixerDone = cancel, done
+	app.mu.Unlock()
+
+	go func() {
+		defer close(done)
+		if prevCancel != nil {
+			prevCancel()
+			<-prevDone
+			app.onMixerStatus(false, false, "")
+		}
+		if device == "" {
+			return
+		}
+		midiport.Run(ctx, midiport.Config{
+			Device:       device,
+			OnValues:     app.onMixerValues,
+			OnButton:     app.onMixerButton,
+			OnStatus:     func(connected, busy bool) { app.onMixerStatus(connected, busy, device) },
+			StripLights:  core.IsSMCName(device),
+			OnStripLight: app.onStripLight,
+			Log:          app.log,
+		}, app.mixerReconnectCh)
+	}()
+}
+
 func (app *App) onSerialLine(values []int) {
 	setup := app.snapshotSettings().Setup
-	app.handleValues(values, setup)
-	app.showValues(values)
-	if app.isCalibrating() {
+	app.handleValues(app.engine, values, setup, false)
+	app.showValues(false, &app.boardLive, values)
+	if cal := app.currentCalibrator(); cal != nil && !cal.Mixer() {
 		return
 	}
 	app.movesMu.Lock()
@@ -196,23 +224,25 @@ func (app *App) onSerialLine(values []int) {
 	}
 }
 
-func (app *App) handleValues(values []int, setup core.Setup) {
-	calibrating := app.isCalibrating()
+// handleValues runs a device's frame through its engine, unless it is the device calibrating.
+func (app *App) handleValues(engine *core.Engine, values []int, setup core.Setup, mixer bool) {
+	cal := app.currentCalibrator()
+	calibrating := cal != nil && cal.Mixer() == mixer
 	if calibrating {
 		app.feedCalibrator(values, time.Since(app.startTime).Seconds())
 	}
-	app.engine.Handle(values, setup, calibrating)
+	engine.Handle(values, setup, calibrating)
 	if !calibrating {
-		app.pointOutMovedKnobs(values, setup)
+		app.pointOutMovedKnobs(mixer, values, setup)
 	}
-	app.updateTerminalLine(values, setup, calibrating)
+	app.updateTerminalLine(engine, values, setup, calibrating)
 }
 
 func (app *App) onSerialStatus(status serialport.Status) {
 	app.loop.Invoke(func() {
 		app.setConnection(status.Connected, status.Busy, status.Port)
 		app.refreshTrayNow()
-		app.pushConnection()
+		app.pushConnection(false)
 		if !status.Connected {
 			app.engine.Reset()
 			app.movesMu.Lock()
@@ -225,19 +255,42 @@ func (app *App) onSerialStatus(status serialport.Status) {
 		app.firstConnectDone = true
 		app.mu.Unlock()
 		if first {
-			app.calibrateIfNeeded()
+			app.calibrateIfNeeded(false)
 		}
 	})
 }
 
-func (app *App) calibrateIfNeeded() {
-	cols := app.activeColumns(app.snapshotSettings().Setup)
+func (app *App) onMixerStatus(connected, busy bool, port string) {
+	app.loop.Invoke(func() {
+		app.setMixerConnection(connected, busy, port)
+		app.refreshTrayNow()
+		app.pushConnection(true)
+		if !connected {
+			app.mixerEngine.Reset()
+			return
+		}
+		app.mu.Lock()
+		first := !app.mixerFirstDone
+		app.mixerFirstDone = true
+		app.mu.Unlock()
+		if first {
+			app.calibrateIfNeeded(true)
+		}
+	})
+}
+
+func (app *App) calibrateIfNeeded(mixer bool) {
+	s := app.snapshotSettings().Setup
+	if mixer && s.MixerIsSMC() {
+		return
+	}
+	cols := deviceColumns(s, mixer)
 	if len(cols) == 0 || hasUncalibratedColumn(cols) {
-		app.startCalibration(true)
+		app.startCalibration(mixer, true)
 	}
 }
 
-func (app *App) updateTerminalLine(values []int, setup core.Setup, calibrating bool) {
+func (app *App) updateTerminalLine(engine *core.Engine, values []int, setup core.Setup, calibrating bool) {
 	if calibrating || !sys.StdoutIsTerminal() {
 		return
 	}
@@ -269,7 +322,7 @@ func (app *App) updateTerminalLine(values []int, setup core.Setup, calibrating b
 	}
 
 	tr := app.trFunc()
-	lines := app.engine.Lines()
+	lines := engine.Lines()
 	jobTexts := make([]string, len(lines))
 	for i, ln := range lines {
 		jobTexts[i] = fmt.Sprintf("%s %d%%", ln.Job.Title(tr, app.appDisplayName), ln.Percent)
@@ -284,10 +337,12 @@ func (app *App) shutdown() {
 			app.zoom.Off()
 		}
 		app.mu.Lock()
-		cancel := app.cancelSerial
+		cancels := []context.CancelFunc{app.cancelSerial, app.cancelMixer}
 		app.mu.Unlock()
-		if cancel != nil {
-			cancel()
+		for _, cancel := range cancels {
+			if cancel != nil {
+				cancel()
+			}
 		}
 		if app.audio != nil {
 			app.audio.Close()

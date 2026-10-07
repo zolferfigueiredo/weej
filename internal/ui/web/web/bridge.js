@@ -391,7 +391,8 @@ const MOCK_EN_STRINGS = {
   baud_rate: "Baud rate",
   baud_note: "Must match Serial.begin() in your board’s sketch.",
   refresh: "Refresh",
-  "tab.general": "General",
+  "tab.board": "Board",
+  "tab.mixer": "Mixer",
   tray: "Tray icon",
   tray_tip: "If you don't see its icon, open Show hidden icons on the taskbar and drag it next to the clock.",
   tray_tip_title: "WeeJ is running",
@@ -459,7 +460,8 @@ function mockShortcutKeyJSON(s) {
 // The SMC-Mixer preview (?mock=settings&device=smc): a profile set up the way a real one was.
 function mockSMC(init) {
   const setup = init.setup;
-  setup.port = "midi:SMC-Mixer";
+  setup.port = "off";
+  setup.mixerPort = "SMC-Mixer";
   for (const p of setup.profiles) {
     p.mixerJobs = Array.from({ length: 16 }, () => []);
     p.buttons = { 174: ["profile.previous"], 175: ["profile.next"] };
@@ -476,11 +478,13 @@ function mockSMC(init) {
   for (let i = 0; i < 8; i++) p.buttons[144 + i] = [`mute:${i}`];
   p.buttons[222] = ["media.playpause"];
   p.buttons[227] = ["settings", "url:https://weej.zolfer.com"];
-  init.connection = { connected: true, busy: false, port: "SMC-Mixer" };
+  init.connection = { connected: false, busy: false, port: "" };
+  init.mixerConnection = { connected: true, busy: false, port: "SMC-Mixer" };
   // A mixer frame: CC-mode columns, faders on 40-47 and knobs on 30-37.
-  init.values = Array(144).fill(-1);
-  [1023, 600, 300, -1, -1, 800, 150, -1].forEach((v, i) => (init.values[40 + i] = v));
-  init.values[30] = 512;
+  const frame = Array(144).fill(-1);
+  [1023, 600, 300, -1, -1, 800, 150, -1].forEach((v, i) => (frame[40 + i] = v));
+  frame[30] = 512;
+  init.values = { mixer: frame };
   return init;
 }
 
@@ -494,7 +498,7 @@ function mockBoard(init) {
   setup.profiles[0].jobs[3] = [{ kind: "microphone" }];
   setup.profiles[0].boardButtons = { 5: ["media.playpause"] };
   init.connection = { connected: true, busy: false, port: "COM6" };
-  init.values = [500, 120, 800, 1023, 300, 0];
+  init.values = { board: [500, 120, 800, 1023, 300, 0] };
   return init;
 }
 
@@ -502,12 +506,12 @@ function mockBoard(init) {
 function startSMCDemo(post, frame) {
   const values = frame.slice();
   setTimeout(() => {
-    post({ type: "knobMoved", knob: 2 });
+    post({ type: "knobMoved", device: "mixer", knob: 2 });
     post({ type: "stripLight", strip: 2, on: true });
     let step = 0;
     const timer = setInterval(() => {
       values[42] = Math.round(512 + 400 * Math.sin(step / 5));
-      post({ type: "values", values: values.slice() });
+      post({ type: "values", device: "mixer", values: values.slice() });
       if (++step > 30) {
         clearInterval(timer);
         setTimeout(() => post({ type: "stripLight", strip: 2, on: false }), 300);
@@ -593,6 +597,7 @@ function mockSettingsInit(enStrings) {
       trayIcon: "mixer",
       speed: "slow",
       port: "",
+      mixerPort: "",
       baudRate: 9600,
     },
     catalog,
@@ -615,7 +620,7 @@ function startSettingsMock(post, enStrings) {
           const device = new URLSearchParams(location.search).get("device");
           if (device === "smc") {
             mockSMC(draft);
-            startSMCDemo(post, draft.values);
+            startSMCDemo(post, draft.values.mixer);
           }
           if (device === "board") mockBoard(draft);
           post(draft);
@@ -633,6 +638,7 @@ function startSettingsMock(post, enStrings) {
               { name: "COM1", product: "", usb: false },
               { name: "COM6", product: "USB Serial", usb: true },
             ],
+            midi: ["SMC-Mixer"],
           });
         }, 100);
         break;

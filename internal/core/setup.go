@@ -322,9 +322,10 @@ type Setup struct {
 	ShowProfiles bool
 	Icon         IconStyle
 	Speed        Speed
-	// Port is a COM port or a MidiPort to use instead of finding the board automatically; empty
-	// means automatic, which only ever looks for serial boards.
-	Port string
+	// Port is the board's: a COM port, empty to find it automatically, or PortOff. MixerPort is
+	// the MIDI input the mixer is read from, empty for none; both can run at once.
+	Port      string
+	MixerPort string
 	// Baud is the serial speed; 0 means DefaultBaud.
 	Baud int
 	// MixerColumns is the mixer's own calibration, so the board's Columns survive a switch to
@@ -456,6 +457,9 @@ func Clipped(name string, limit int) string {
 	}
 	return strings.TrimRight(string(r[:limit-1]), " \t\n") + "…"
 }
+
+// PortOff keeps WeeJ off the serial ports: finding a board opens each, which restarts an Arduino.
+const PortOff = "off"
 
 // DefaultBaud is what deej's sketch (and so most boards) passes to Serial.begin().
 const DefaultBaud = 9600

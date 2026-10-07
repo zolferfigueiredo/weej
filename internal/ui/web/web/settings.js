@@ -2,7 +2,7 @@ import { connect, send, t } from "./bridge.js";
 import {
   SMC_COLUMNS,
   boardSVG,
-  isSMCPort,
+  isSMCName,
   isStripControl,
   showValue,
   smcButtonIcon,
@@ -24,18 +24,19 @@ const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAA
 let init = null;
 let draft = null;
 let labels = {};
-let activeTab = "general";
+let activeTab = "board";
 let recording = null; // { field: "profile:<i>" | "next" | "previous" }
 let dialog = null; // { kind: "removeProfile" | "removeKnob" }
 let saved = null; // the setup as last saved, so Save is enabled only when the draft differs
 let importNote = ""; // last import_skipped / import_failed text, shown under the import button
 let ports = null; // [{ name, product, usb }] once Go has listed them
 let midiInputs = []; // MIDI input names; a "midi:<name>" port reads that mixer
-let connection = { connected: false, busy: false, port: "" };
+let connection = { connected: false, busy: false, port: "" }; // the board's
+let mixerConnection = { connected: false, busy: false, port: "" };
 let calibrating = false; // set on the click, so the button greys out before the window opens
 let selected = 0; // the SMC-Mixer control the inspector shows: a fader or knob 0-15, or a button id
 let boardSelected = 0; // the board's control the inspector shows, by knob index
-let liveValues = []; // the last frame from whatever is connected
+let live = { board: [], mixer: [] }; // the last frame from each device
 let learning = null; // { knob, start }: the frame when the picked control began waiting for its input
 let stripLights = Array(8).fill(false);
 const litUntil = new Map(); // control id to when it stops showing as touched
@@ -172,7 +173,8 @@ function render() {
 
 function renderTabs() {
   const tabs = [
-    ["general", t("tab.general")],
+    ["board", t("tab.board")],
+    ["mixer", t("tab.mixer")],
     ["app", t("tab.app")],
     ["about", t("tab.about")],
   ];
@@ -382,7 +384,7 @@ function renderSMCGeneral(profileGroup, importFoot) {
       ${connectionGroup(invertRow)}${profileGroup}
       <div class="device-row">
         <div class="group">
-          <div class="group-head"><h2 class="group-title">${esc(draft.port.slice(MIDI_PREFIX.length))}</h2></div>
+          <div class="group-head"><h2 class="group-title">${esc(draft.mixerPort)}</h2></div>
           <div class="card device-card">${svg}</div>
         </div>
         ${inspector()}
@@ -508,7 +510,7 @@ function waitingForInput() {
 // Moving or pressing a control on the mixer lights it, and picks it unless an address is being
 // typed or keys recorded for the one picked.
 function onControlTouched(id) {
-  if (activeTab !== "general" || !document.getElementById(`ctl-${id}`)) return;
+  if (!isDeviceTab() || !document.getElementById(`ctl-${id}`)) return;
   const el = document.activeElement;
   const typing = el && (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && el.type === "text"));
   if (id !== picked() && !recording && !typing && !waitingForInput()) {
@@ -529,16 +531,21 @@ function lightControl(id) {
   );
 }
 
+function currentDevice() {
+  return usesMixer() ? "mixer" : "board";
+}
+
 function valueAt(col) {
-  const v = liveValues[col];
+  const v = live[currentDevice()][col];
   return v === undefined || col < 0 ? -1 : v;
 }
 
-// Moves the drawn faders and knobs to a new frame, and finds the input of a control waiting for one.
-function showValues(values) {
-  const before = liveValues;
-  liveValues = values;
-  if (activeTab !== "general" || !draft) return;
+// Moves the drawn faders and knobs to a device's new frame, and finds the input of a control
+// waiting for one.
+function showValues(device, values) {
+  const before = live[device] || [];
+  live[device] = values;
+  if (!isDeviceTab() || !draft || device !== currentDevice()) return;
   const columns = usesSMC() ? SMC_COLUMNS : usesBoard() ? draft.columns : [];
   columns.forEach((col, id) => {
     if (col >= 0 && before[col] !== values[col]) showValue(document, id, valueAt(col));
@@ -556,12 +563,12 @@ function learnInput(before) {
     return;
   }
   if (!learning || learning.knob !== boardSelected) {
-    learning = { knob: boardSelected, start: before.length ? before : liveValues };
+    learning = { knob: boardSelected, start: before.length ? before : live.board };
     return;
   }
-  for (let col = 0; col < liveValues.length; col++) {
+  for (let col = 0; col < live.board.length; col++) {
     if (draft.columns.includes(col) || learning.start[col] === undefined) continue;
-    if (Math.abs(liveValues[col] - learning.start[col]) >= LEARN_SWING) {
+    if (Math.abs(live.board[col] - learning.start[col]) >= LEARN_SWING) {
       const k = boardSelected;
       draft.columns[k] = col;
       learning = null;
@@ -868,26 +875,27 @@ function portLabel(p) {
   return p.product ? `${p.name} (${p.product})` : p.name;
 }
 
-const MIDI_PREFIX = "midi:";
-
-function isMidiPort(port) {
-  return (port || "").startsWith(MIDI_PREFIX);
-}
-
-function midiLabel(port) {
-  return `${port.slice(MIDI_PREFIX.length)} (MIDI)`;
+// The board and the mixer each have a tab, and every device setting follows the one showing.
+function isDeviceTab() {
+  return activeTab === "board" || activeTab === "mixer";
 }
 
 function usesMixer() {
-  return isMidiPort(init.forcedPort || draft.port);
+  return activeTab === "mixer";
 }
 
 function usesSMC() {
-  return isSMCPort(init.forcedPort || draft.port);
+  return usesMixer() && isSMCName(draft.mixerPort);
 }
 
 function usesBoard() {
-  return !usesMixer();
+  return activeTab === "board";
+}
+
+// Go opens Settings on "general": the mixer's tab when it is the only device, else the board's.
+function tabFor(tab) {
+  if (tab && tab !== "general") return tab;
+  return draft.port === "off" && draft.mixerPort ? "mixer" : "board";
 }
 
 // The control the inspector shows, on whichever device is drawn.
@@ -1169,7 +1177,7 @@ function removeButton() {
 
 // A pressed button not on the list yet fills the first row waiting for one.
 function onMixerButtonPressed(cc) {
-  if (activeTab !== "general") return;
+  if (!isDeviceTab()) return;
   const order = buttonOrder();
   if (!order.includes(cc) && order.includes(-1)) {
     const editable = editableButtonOrder();
@@ -1184,7 +1192,7 @@ function onMixerButtonPressed(cc) {
 const litTimers = new WeakMap();
 
 function lightRow(row) {
-  if (activeTab !== "general" || !row) return;
+  if (!isDeviceTab() || !row) return;
   if (!row.classList.contains("lit")) {
     row.classList.add("lit");
     row.scrollIntoView({ block: "nearest" });
@@ -1197,30 +1205,24 @@ function lightRow(row) {
 }
 
 function connectionGroup(extra = "") {
-  const forced = init.forcedPort || "";
-  const autoLabel =
-    !draft.port && connection.connected && connection.port ? t("port_auto_found", { port: connection.port }) : t("port_auto");
-  const list = ports || [];
+  const midi = usesMixer();
+  const conn = midi ? mixerConnection : connection;
+  const forced = midi ? "" : init.forcedPort || "";
+  const value = (midi ? draft.mixerPort : draft.port) || "";
+  const option = (v, label) => `<option value="${escAttr(v)}"${value === v ? " selected" : ""}>${esc(label)}</option>`;
   let portOptions;
   if (forced) {
     portOptions = `<option selected>${esc(forced)}</option>`;
+  } else if (midi) {
+    portOptions = option("", t("mixer_port_none")) + midiInputs.map((name) => option(name, name)).join("");
+    // A saved device that is unplugged right now still has to show as the choice.
+    if (value && !midiInputs.includes(value)) portOptions += option(value, value);
   } else {
-    portOptions =
-      `<option value=""${draft.port ? "" : " selected"}>${esc(autoLabel)}</option>` +
-      list
-        .map((p) => `<option value="${escAttr(p.name)}"${draft.port === p.name ? " selected" : ""}>${esc(portLabel(p))}</option>`)
-        .join("") +
-      midiInputs
-        .map((name) => MIDI_PREFIX + name)
-        .map((port) => `<option value="${escAttr(port)}"${draft.port === port ? " selected" : ""}>${esc(midiLabel(port))}</option>`)
-        .join("");
-    // A saved port that is unplugged right now still has to show as the choice.
-    if (draft.port && !list.some((p) => p.name === draft.port) && !midiInputs.some((name) => MIDI_PREFIX + name === draft.port)) {
-      const label = isMidiPort(draft.port) ? midiLabel(draft.port) : draft.port;
-      portOptions += `<option value="${escAttr(draft.port)}" selected>${esc(label)}</option>`;
-    }
+    const list = ports || [];
+    const autoLabel = !value && conn.connected && conn.port ? t("port_auto_found", { port: conn.port }) : t("port_auto");
+    portOptions = option("", autoLabel) + option("off", t("port_off")) + list.map((p) => option(p.name, portLabel(p))).join("");
+    if (value && value !== "off" && !list.some((p) => p.name === value)) portOptions += option(value, value);
   }
-  const midi = isMidiPort(forced || draft.port);
 
   const rates = (init.baudRates || [9600]).slice();
   if (draft.baudRate && !rates.includes(draft.baudRate)) rates.push(draft.baudRate);
@@ -1230,11 +1232,11 @@ function connectionGroup(extra = "") {
 
   let status = t("not_connected");
   let statusClass = "";
-  if (connection.connected) {
-    status = t("connected", { port: connection.port });
+  if (conn.connected) {
+    status = t("connected", { port: conn.port });
     statusClass = " status-ok";
-  } else if (connection.busy && connection.port) {
-    status = t("port_busy", { port: connection.port });
+  } else if (conn.busy && conn.port) {
+    status = t("port_busy", { port: conn.port });
     statusClass = " warning";
   }
 
@@ -1251,7 +1253,7 @@ function connectionGroup(extra = "") {
           <div class="row">
             <div class="row-main">
               <span class="row-title">${esc(t("port"))}</span>
-              <span class="row-desc">${esc(forced ? t("port_forced", { port: forced }) : t("port_note"))}</span>
+              <span class="row-desc">${esc(forced ? t("port_forced", { port: forced }) : t(midi ? "mixer_port_note" : "port_note"))}</span>
             </div>
             <div class="row-control">
               <button class="btn btn-icon btn-subtle" type="button" data-action="refresh-ports" title="${escAttr(t("refresh"))}" aria-label="${escAttr(t("refresh"))}"${forced ? " disabled" : ""}>&#x21bb;</button>
@@ -1585,7 +1587,7 @@ function onClick(e) {
   switch (target.dataset.action) {
     case "switch-tab":
       activeTab = target.dataset.tab;
-      if (activeTab === "general") send({ type: "listPorts" });
+      if (isDeviceTab()) send({ type: "listPorts" });
       render();
       break;
     case "add-profile":
@@ -1681,7 +1683,7 @@ function onClick(e) {
     case "calibrate":
       calibrating = true;
       render();
-      send({ type: "calibrate" });
+      send({ type: "calibrate", device: currentDevice() });
       break;
     case "import-deej":
       send({ type: "importDeej" });
@@ -1741,7 +1743,8 @@ function onChange(e) {
       draft.speed = el.value;
       break;
     case "port-select":
-      draft.port = el.value;
+      if (usesMixer()) draft.mixerPort = el.value;
+      else draft.port = el.value;
       padJobRows(draft);
       render();
       break;
@@ -1761,11 +1764,12 @@ function onMessage(msg) {
       init = msg;
       draft = clone(msg.setup);
       labels = Object.assign({}, msg.labels || {});
-      activeTab = msg.tab || "general";
+      activeTab = tabFor(msg.tab);
       connection = msg.connection || connection;
+      mixerConnection = msg.mixerConnection || mixerConnection;
       calibrating = !!msg.calibrating;
-      liveValues = msg.values || [];
-      if (activeTab === "general") send({ type: "listPorts" });
+      live = { board: [], mixer: [], ...(msg.values || {}) };
+      if (isDeviceTab()) send({ type: "listPorts" });
       draft.profile = clampIndex(draft.profile, draft.profiles.length);
       saved = clone(draft);
       render();
@@ -1788,7 +1792,7 @@ function onMessage(msg) {
     case "ports":
       ports = msg.ports || [];
       midiInputs = msg.midi || [];
-      if (activeTab === "general") render();
+      if (isDeviceTab()) render();
       break;
     // Go-initiated: a mixer button was pressed, so its row lights up to show which one it is.
     // Go-initiated: Calibration opened or closed, from here or from the tray.
@@ -1806,10 +1810,11 @@ function onMessage(msg) {
     }
     case "mixerButton":
       if (usesSMC()) onControlTouched(msg.id);
-      else onMixerButtonPressed(msg.id);
+      else if (usesMixer()) onMixerButtonPressed(msg.id);
       break;
     // Go-initiated: a knob's control moved, so its row lights up the same way.
     case "knobMoved":
+      if (msg.device !== currentDevice()) break;
       if (usesSMC() || usesBoard()) onControlTouched(msg.knob);
       else lightRow(document.getElementById(`knob-row-${msg.knob}`));
       break;
@@ -1817,23 +1822,26 @@ function onMessage(msg) {
     case "boardButton":
       if (usesBoard()) onControlTouched(msg.knob);
       break;
-    // Go-initiated: the last frame from whatever is connected, about 20 times a second.
+    // Go-initiated: a device's last frame, about 20 times a second.
     case "values":
-      showValues(msg.values || []);
+      showValues(msg.device, msg.values || []);
       break;
     // Go-initiated: a strip's light over its fader went on or off.
     case "stripLight":
       stripLights[msg.strip] = !!msg.on;
-      if (activeTab === "general") smcShowStrip(document, msg.strip, !!msg.on);
+      if (isDeviceTab()) smcShowStrip(document, msg.strip, !!msg.on);
       break;
-    // Go-initiated: the board connected, dropped or got blocked by another app.
-    case "connection":
-      connection = { connected: !!msg.connected, busy: !!msg.busy, port: msg.port || "" };
-      if (activeTab === "general") {
+    // Go-initiated: the board or the mixer connected, dropped or got blocked by another app.
+    case "connection": {
+      const conn = { connected: !!msg.connected, busy: !!msg.busy, port: msg.port || "" };
+      if (msg.device === "mixer") mixerConnection = conn;
+      else connection = conn;
+      if (isDeviceTab()) {
         send({ type: "listPorts" });
         render();
       }
       break;
+    }
     case "importFailed":
       importNote = t("import_failed");
       render();
@@ -1896,7 +1904,7 @@ function onMessage(msg) {
     // Go-initiated: the window was already open and got asked to switch tab
     // (e.g. the tray's About item) instead of opening a new one.
     case "tab":
-      activeTab = msg.tab || activeTab;
+      activeTab = tabFor(msg.tab || activeTab);
       render();
       break;
   }

@@ -40,17 +40,25 @@ func (app *App) refreshTrayNow() {
 	}
 	s := app.snapshotSettings()
 	connected, _, port := app.connectionStatus()
+	mixerConnected, _, mixerPort := app.mixerStatus()
+	var ports []string
+	if connected {
+		ports = append(ports, port)
+	}
+	if mixerConnected {
+		ports = append(ports, mixerPort)
+	}
 
-	icon := draw.TrayIcon(draw.IconStyle(s.Icon), connected, app.tray.IconSize(), sys.TaskbarLight())
+	icon := draw.TrayIcon(draw.IconStyle(s.Icon), len(ports) > 0, app.tray.IconSize(), sys.TaskbarLight())
 	app.tray.SetIcon(icon)
 
 	var tip string
-	if connected {
+	if len(ports) > 0 {
 		name := ""
 		if s.Active >= 0 && s.Active < len(s.Profiles) {
 			name = s.Profiles[s.Active].Name
 		}
-		tip = "WeeJ: " + port + " · " + name
+		tip = "WeeJ: " + strings.Join(ports, ", ") + " · " + name
 	} else {
 		tip = "WeeJ: " + app.tr("not_connected")
 	}
@@ -99,26 +107,22 @@ func (app *App) buildMenu() []winui.MenuItem {
 		items = append(items, winui.MenuItem{Separator: true})
 	}
 
+	board := s.Port != core.PortOff || app.forcedPort != ""
 	items = append(items, winui.MenuItem{Text: app.tr("settings"), OnClick: func() { app.openSettings("") }})
-	if !app.isSMC() {
-		items = append(items, winui.MenuItem{Text: app.tr("calibrate"), Disabled: !connected, OnClick: func() { app.startCalibration(false) }})
+	if board {
+		items = append(items, winui.MenuItem{Text: app.tr("calibrate"), Disabled: !connected, OnClick: func() { app.startCalibration(false, false) }})
 	}
 	items = append(items, winui.MenuItem{Text: app.tr("language"), Children: app.languageMenuItems(s.Language)})
 
 	items = append(items, winui.MenuItem{Separator: true})
-	var connLine string
-	switch {
-	case connected:
-		connLine = app.trVars("connected", v1("port", port))
-	case busy:
-		connLine = app.trVars("port_busy", v1("port", port))
-	default:
-		connLine = app.tr("not_connected")
+	if board {
+		items = append(items, winui.MenuItem{Text: app.statusLine(connected, busy, port, ""), Disabled: true})
 	}
-	items = append(items,
-		winui.MenuItem{Text: connLine, Disabled: true},
-		winui.MenuItem{Text: app.tr("reconnect"), OnClick: app.requestReconnect},
-	)
+	if s.MixerPort != "" {
+		mixerConnected, mixerBusy, mixerPort := app.mixerStatus()
+		items = append(items, winui.MenuItem{Text: app.statusLine(mixerConnected, mixerBusy, mixerPort, s.MixerPort), Disabled: true})
+	}
+	items = append(items, winui.MenuItem{Text: app.tr("reconnect"), OnClick: app.requestReconnect})
 
 	items = append(items, winui.MenuItem{Separator: true})
 	items = append(items, winui.MenuItem{
@@ -163,10 +167,25 @@ func (app *App) switchProfile(i int) {
 	app.showProfileHUD(s)
 }
 
+// statusLine is a device's line in the menu; waitingFor names a device picked but not found.
+func (app *App) statusLine(connected, busy bool, port, waitingFor string) string {
+	switch {
+	case connected:
+		return app.trVars("connected", v1("port", port))
+	case busy:
+		return app.trVars("port_busy", v1("port", port))
+	case waitingFor != "":
+		return app.trVars("waiting_for", v1("port", waitingFor))
+	}
+	return app.tr("not_connected")
+}
+
 func (app *App) requestReconnect() {
-	select {
-	case app.reconnectCh <- struct{}{}:
-	default:
+	for _, ch := range []chan struct{}{app.reconnectCh, app.mixerReconnectCh} {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
 	}
 }
 

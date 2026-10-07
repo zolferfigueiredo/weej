@@ -7,8 +7,9 @@
 
 export const SMC_COLUMNS = [40, 41, 42, 43, 44, 45, 46, 47, 30, 31, 32, 33, 34, 35, 36, 37];
 
-export function isSMCPort(port) {
-  return (port || "").startsWith("midi:") && port.toLowerCase().includes("smc-mixer");
+// The mixer by its USB, Bluetooth or MIDI 2.0 name alike, as core.IsSMCName.
+export function isSMCName(name) {
+  return (name || "").toLowerCase().includes("smc-mixer");
 }
 
 const PITCH = 18;

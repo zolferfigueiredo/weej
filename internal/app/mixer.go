@@ -5,6 +5,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
@@ -19,50 +20,60 @@ func (app *App) sourcePort() string {
 	return app.snapshotSettings().Port
 }
 
-func (app *App) usesMixer() bool { return core.IsMidiPort(app.sourcePort()) }
+// isSMC tells whether the mixer is an SMC-Mixer, whose controls are fixed.
+func (app *App) isSMC() bool { return app.snapshotSettings().MixerIsSMC() }
 
-// isSMC tells whether the mixer read is an SMC-Mixer, whose controls are fixed.
-func (app *App) isSMC() bool {
-	port := app.sourcePort()
-	return core.IsMidiPort(port) && core.IsSMCName(core.MidiDevice(port))
-}
-
-// activeColumns is the calibration of whatever is connected: the board's or the mixer's.
-func (app *App) activeColumns(s core.Setup) []int {
-	if app.usesMixer() {
+// deviceColumns is the board's calibration, or the mixer's.
+func deviceColumns(s core.Setup, mixer bool) []int {
+	if mixer {
 		return s.ForMixer().Columns
 	}
 	return s.Columns
 }
 
-func (app *App) onMixerValues(values []int) {
-	app.handleValues(values, app.snapshotSettings().ForMixer())
-	app.showValues(values)
+// deviceName is how Settings tells the two apart.
+func deviceName(mixer bool) string {
+	if mixer {
+		return "mixer"
+	}
+	return "board"
 }
 
-// showValues keeps the last frame for the controls Settings draws, and hands it over at most 20
-// times a second, the last frame always among them.
-func (app *App) showValues(values []int) {
-	app.liveMu.Lock()
-	defer app.liveMu.Unlock()
-	app.live = values
-	if app.liveTimer == nil && app.settingsWin != nil {
-		app.liveTimer = time.AfterFunc(50*time.Millisecond, func() {
-			app.liveMu.Lock()
-			values := app.live
-			app.liveTimer = nil
-			app.liveMu.Unlock()
+func (app *App) onMixerValues(values []int) {
+	app.handleValues(app.mixerEngine, values, app.snapshotSettings().ForMixer(), true)
+	app.showValues(true, &app.mixerLive, values)
+}
+
+// liveFrames keeps a device's last frame for the controls Settings draws.
+type liveFrames struct {
+	mu    sync.Mutex
+	last  []int
+	timer *time.Timer
+}
+
+func (l *liveFrames) frame() []int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.last
+}
+
+// showValues hands Settings a device's frames at most 20 times a second, the last always among
+// them.
+func (app *App) showValues(mixer bool, live *liveFrames, values []int) {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	live.last = values
+	if live.timer == nil && app.settingsWin != nil {
+		live.timer = time.AfterFunc(50*time.Millisecond, func() {
+			live.mu.Lock()
+			values := live.last
+			live.timer = nil
+			live.mu.Unlock()
 			if win := app.settingsWin; win != nil {
-				win.Send(map[string]any{"type": "values", "values": values})
+				win.Send(map[string]any{"type": "values", "device": deviceName(mixer), "values": values})
 			}
 		})
 	}
-}
-
-func (app *App) lastValues() []int {
-	app.liveMu.Lock()
-	defer app.liveMu.Unlock()
-	return app.live
 }
 
 func (app *App) onStripLight(strip int, on bool) {
@@ -73,10 +84,14 @@ func (app *App) onStripLight(strip int, on bool) {
 
 // pointOutMovedKnobs lights up a knob's row in Settings while its control moves, so it is easy
 // to tell which knob is which.
-func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
+func (app *App) pointOutMovedKnobs(mixer bool, values []int, setup core.Setup) {
 	win := app.settingsWin
 	app.movesMu.Lock()
-	moved := app.moves.Moved(values)
+	watcher := &app.moves
+	if mixer {
+		watcher = &app.mixerMoves
+	}
+	moved := watcher.Moved(values)
 	app.movesMu.Unlock()
 	if win == nil {
 		return
@@ -84,7 +99,7 @@ func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
 	for _, col := range moved {
 		for knob, c := range setup.Columns {
 			if c == col {
-				win.Send(map[string]any{"type": "knobMoved", "knob": knob})
+				win.Send(map[string]any{"type": "knobMoved", "device": deviceName(mixer), "knob": knob})
 			}
 		}
 	}
@@ -94,11 +109,8 @@ func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
 // muted one could no longer be unmuted from its button.
 func (app *App) unmuteAll() {
 	setup := app.snapshotSettings().Setup
-	if !app.usesMixer() {
-		app.engine.UnmuteAll(setup)
-		return
-	}
-	if app.engine.UnmuteAll(setup.ForMixer()) == 0 {
+	app.engine.UnmuteAll(setup)
+	if app.mixerEngine.UnmuteAll(setup.ForMixer()) == 0 {
 		return
 	}
 	for id, actions := range setup.ActiveButtons() {
@@ -118,7 +130,7 @@ func mixerButtonName(id int) string {
 }
 
 func (app *App) onMixerButton(id int) {
-	if app.isCalibrating() {
+	if cal := app.currentCalibrator(); cal != nil && cal.Mixer() {
 		app.log(fmt.Sprintf("Mixer button %s pressed while calibrating", mixerButtonName(id)))
 		app.loop.Invoke(func() {
 			cal := app.currentCalibrator()
@@ -142,7 +154,7 @@ func (app *App) onMixerButton(id int) {
 		app.log(fmt.Sprintf("Mixer button %s pressed: %s", mixerButtonName(id), strings.Join(names, ", ")))
 	}
 	for _, action := range actions {
-		app.runButtonAction(action, setup.ForMixer(), func(on bool) { midiport.SetLED(id, on) })
+		app.runButtonAction(action, app.mixerEngine, setup.ForMixer(), func(on bool) { midiport.SetLED(id, on) })
 	}
 
 	if win := app.settingsWin; win != nil {
@@ -158,19 +170,19 @@ func (app *App) onBoardButton(knob int, setup core.Setup) {
 	}
 	app.log(fmt.Sprintf("Board button %s pressed: %s", core.Letter(knob), strings.Join(names, ", ")))
 	for _, action := range actions {
-		app.runButtonAction(action, setup, nil)
+		app.runButtonAction(action, app.engine, setup, nil)
 	}
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "boardButton", "knob": knob})
 	}
 }
 
-// runButtonAction does one of a button's actions. A mute acts on device, the board's or the
-// mixer's setup, whichever the button is on, and led shows the mute on the button if it has one.
-func (app *App) runButtonAction(action core.ButtonAction, device core.Setup, led func(on bool)) {
+// runButtonAction does one of a button's actions. A mute acts on the engine and setup of the
+// device the button is on, and led shows the mute on the button if it has a light.
+func (app *App) runButtonAction(action core.ButtonAction, engine *core.Engine, device core.Setup, led func(on bool)) {
 	if knob, ok := action.MuteKnob(); ok {
 		if knob < len(device.Columns) && device.Columns[knob] >= 0 {
-			muted := app.engine.ToggleMute(device.Columns[knob], device)
+			muted := engine.ToggleMute(device.Columns[knob], device)
 			if led != nil {
 				led(muted)
 			}
