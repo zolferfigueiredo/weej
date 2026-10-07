@@ -15,28 +15,28 @@ static HTML/CSS/JS, no build step, no framework (fixed by the task brief: vanill
 
 ## Users
 
-[Inferred from the task brief and TheeJ (WeeJ's macOS predecessor), not confirmed by interview: no interactive user was available in this session.] A single person, the owner of the PC, who wired a DIY knob box (an Arduino-class board with physical potentiometers) to their Windows machine and uses WeeJ to map each knob to something it controls: app/system volume, monitor brightness or contrast, keyboard backlight, night light warmth, screen zoom. They open these windows rarely, in short sessions, mostly right after plugging the board in for the first time, after adding a knob, or when something needs re-pairing.
+[Inferred from the task brief and TheeJ (WeeJ's macOS predecessor), not confirmed by interview: no interactive user was available in this session.] A single person, the owner of the PC, who wired a DIY knob box (an Arduino-class board with physical potentiometers) to their Windows machine, plugged in a MIDI mixer such as the M-VAVE SMC-Mixer, or both, and uses WeeJ to map each knob, fader and button to something it controls: app/system volume, monitor brightness or contrast, keyboard backlight, night light warmth, screen zoom, media keys and other actions. They open these windows rarely, in short sessions, mostly right after plugging a board in for the first time, after adding a control, or when something needs re-pairing.
 
 ## Product Purpose
 
-WeeJ is a Windows tray companion app (ported from the user's own macOS app, TheeJ) that reads serial input from a knob box and drives OS and app volume/display/keyboard controls from it. These four windows are its only GUI surface: Settings (profiles, knob-to-job mapping, shortcuts, language, tray and sensitivity options), Calibration (a short guided wizard that finds which physical knob is which), the first-run Language prompt, and the Update progress window. Success is a user who can set up or adjust their knob mapping without confusion, in a window that behaves like a native part of Windows 11.
+WeeJ is a Windows tray companion app (ported from the user's own macOS app, TheeJ) that reads any number of boards, deej knob boxes over serial and mixers over MIDI, and drives OS and app volume/display/keyboard controls from them. These three windows are its only GUI surface: Settings (the boards and each one's settings, profiles, control-to-job and button-to-action mapping, shortcuts and calibration, a short guided wizard that finds which physical control is which; plus language and tray options), the first-run Language prompt, and the Update progress window. Success is a user who can set up or adjust their boards without confusion, in a window that behaves like a native part of Windows 11.
 
 ## Positioning
 
-[Inferred.] Unlike a general macro-key or stream-deck app, WeeJ is purpose-built around physical rotary knobs reporting a 0-1023 analog value per turn, with a calibration flow that teaches the app which wire is which knob and a job system that targets OS volume/display primitives directly (not emulated keystrokes).
+[Inferred.] Unlike a general macro-key or stream-deck app, WeeJ is purpose-built around physical knobs and faders reporting an absolute level (a deej board's 0-1023 analog value, a MIDI controller's 0-127 or pitch bend), with a calibration flow that teaches the app which wire is which control and a job system that targets OS volume/display primitives directly (not emulated keystrokes).
 
 ## Operating Context
 
 - Runs from the Windows system tray; these windows are opened from the tray menu or on first run, never the main interaction surface of the OS session.
-- The knob box connects over a serial (COM) port; Settings' Calibrate flow and the standalone Calibration window both depend on that connection being live.
-- Settings is opened far more often than the other three windows; Language and Update are seen rarely (first run, and whenever an update is offered).
+- A DIY board connects over a serial (COM) port and a mixer as a MIDI input; calibrating a board in Settings depends on its connection being live.
+- Settings is opened far more often than the other two windows; Language and Update are seen rarely (first run, and whenever an update is offered).
 - The app and its windows must look native on Windows 11 in both the light and dark OS themes, and follow the OS accent color, since that is what signals "this app belongs here" to the user.
 
 ## Capabilities and Constraints
 
 - No build step; pages are plain HTML/CSS/JS (ES modules allowed), no external URLs, served over `https://weej.localhost` by the Go host via WebResourceRequested.
 - Every visible string must come from `internal/lang/catalogs/<lang>.json` through a `t(key, vars)` helper; no hardcoded copy, no em or en dashes anywhere.
-- The JS/Go message protocol, window sizing (DIP, height self-reported by the page and capped to the work area), and the four windows' init payloads live in `internal/ui/web` (bridge.js and the page scripts) and `internal/app`; this record does not repeat them.
+- The JS/Go message protocol, window sizing (DIP, height self-reported by the page and capped to the work area), and the three windows' init payloads live in `internal/ui/web` (bridge.js and the page scripts) and `internal/app`; this record does not repeat them.
 - Only strings may be posted from JS to Go (`chrome.webview.postMessage(JSON.stringify(...))`); the host echoes every message back to the page, which the bridge must ignore.
 - Fonts available: Segoe UI Variable where present (Windows 11), falling back to Segoe UI, then system sans; no web font loading (no external URLs allowed).
 - Twelve languages are supported (`internal/lang.Languages`), several written right-to-left-adjacent scripts are not among them (all are LTR), but several use longer average string lengths (German, Russian, Ukrainian, Polish) and two run without word spaces in the calibration prose (zh, ja): layout must not assume English string lengths.
@@ -57,7 +57,7 @@ WeeJ is a Windows tray companion app (ported from the user's own macOS app, Thee
 1. Feel native first. A Windows 11 user should never notice these are web pages: system fonts, system accent, system light/dark switching, native-feeling controls (toggles, segmented tabs, dropdowns), no web chrome.
 2. Say only what the catalog says. Copy is a translated, tested asset owned by `internal/lang`; these pages arrange and emphasize it, never invent or rephrase it.
 3. Small, rare, task-shaped windows. Nobody lives in these windows: get them to show the right state fast, keep controls dense but legible, and never block on decorative motion.
-4. One state machine, driven from Go. Calibration and Update progress are fully server-pushed (`step`/`update` messages); the page is a thin renderer of whatever Go last sent, never a place that re-derives app state.
+4. One state machine, driven from Go. Calibration and Update progress are fully server-pushed (`wizard`/`update` messages); the page is a thin renderer of whatever Go last sent, never a place that re-derives app state.
 
 ## Accessibility & Inclusion
 
