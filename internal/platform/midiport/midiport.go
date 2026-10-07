@@ -296,6 +296,10 @@ func Run(ctx context.Context, cfg Config, reconnect <-chan struct{}) {
 // per message.
 func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan struct{}) dropReason {
 	state := core.NewMixerState()
+	if cfg.Lights {
+		loadFaders(cfg.Device, state)
+		defer saveFaders(cfg.Device, state)
+	}
 	check := time.NewTicker(2 * time.Second)
 	defer check.Stop()
 	lights := newButtonLights(cfg.Lights, state)
@@ -453,6 +457,12 @@ func (l *buttonLights) update() {
 	}
 	if daw := mode.DAW(); daw != l.daw {
 		l.daw, l.want, l.sent, l.blink = daw, [256]int8{}, [256]int8{}, [8]uint32{}
+		// The mixer may still blink LEDs from before: settle every fader it is known for.
+		for strip := range l.blink {
+			if lsb, msb, ok := l.state.Pitch(strip); ok && daw && l.patterns {
+				send(core.SMCStripRestore(strip, lsb, msb))
+			}
+		}
 	}
 	frame := core.LightFrame(pattern, time.Since(l.start).Seconds())
 	switch pattern {

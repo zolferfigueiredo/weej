@@ -340,6 +340,7 @@ func (app *App) shutdown() {
 		cancels := []context.CancelFunc{app.cancelSerial, app.cancelMixer}
 		loopback := app.loopback
 		app.loopback = nil
+		mixerDone := app.mixerDone
 		app.mu.Unlock()
 		if loopback != nil {
 			loopback.Stop()
@@ -347,6 +348,13 @@ func (app *App) shutdown() {
 		for _, cancel := range cancels {
 			if cancel != nil {
 				cancel()
+			}
+		}
+		// The mixer loop puts its lights out and keeps the faders' positions on its way out.
+		if mixerDone != nil {
+			select {
+			case <-mixerDone:
+			case <-time.After(time.Second):
 			}
 		}
 		if app.audio != nil {

@@ -161,6 +161,10 @@ func TestMixerStateKeepsTheFaderPitch(t *testing.T) {
 	if _, _, ok := m.Pitch(2); ok {
 		t.Error("a fader that never moved has a position")
 	}
+	m.SetPitch(3, 0, 99)
+	if _, msb, ok := m.Pitch(3); !ok || msb != 99 || m.Values()[43] != -1 {
+		t.Error("a fader's remembered position is lost, or taken for a move")
+	}
 	m.Feed(0xE2 | 5<<8 | 70<<16)
 	if lsb, msb, ok := m.Pitch(2); !ok || lsb != 5 || msb != 70 || m.LastChanged() != 42 {
 		t.Errorf("pitch = %d, %d, %v, last %d, want 5, 70 on column 42", lsb, msb, ok, m.LastChanged())

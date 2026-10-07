@@ -247,6 +247,14 @@ func (m *MixerState) Pitch(strip int) (lsb, msb int, ok bool) {
 	return m.pitch[strip][0], m.pitch[strip][1], m.pitchOK[strip]
 }
 
+// SetPitch takes a fader's position from before, for its LED; its value stays unknown until it
+// moves.
+func (m *MixerState) SetPitch(strip, lsb, msb int) {
+	if strip >= 0 && strip < len(m.pitch) {
+		m.pitch[strip], m.pitchOK[strip] = [2]int{lsb & 0x7F, msb & 0x7F}, true
+	}
+}
+
 // LastChanged is the column the last Feed changed, or -1.
 func (m *MixerState) LastChanged() int { return m.last }
 
