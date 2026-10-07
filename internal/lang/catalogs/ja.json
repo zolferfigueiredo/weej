@@ -173,6 +173,7 @@
   "press_shortcut": "ショートカットを押す",
   "previous_profile": "前のプロファイル",
   "profile": "プロファイル",
+  "profile.edit": "プロファイルを編集…",
   "profile.export": "エクスポート…",
   "profile.export_failed": "プロファイルを保存できませんでした。",
   "profile.import": "インポート…",

@@ -174,6 +174,7 @@
   "press_shortcut": "Kurzbefehl drücken",
   "previous_profile": "Vorheriges Profil",
   "profile": "Profil",
+  "profile.edit": "Profil bearbeiten…",
   "profile.export": "Exportieren…",
   "profile.export_failed": "Das Profil konnte nicht gespeichert werden.",
   "profile.import": "Importieren…",

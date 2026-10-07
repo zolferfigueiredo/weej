@@ -173,6 +173,7 @@
   "press_shortcut": "단축키를 누르세요",
   "previous_profile": "이전 프로필",
   "profile": "프로필",
+  "profile.edit": "프로필 편집…",
   "profile.export": "내보내기…",
   "profile.export_failed": "프로필을 저장할 수 없습니다.",
   "profile.import": "가져오기…",

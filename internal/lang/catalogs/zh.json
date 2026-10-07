@@ -173,6 +173,7 @@
   "press_shortcut": "按下快捷键",
   "previous_profile": "上一个配置方案",
   "profile": "配置方案",
+  "profile.edit": "编辑配置方案…",
   "profile.export": "导出…",
   "profile.export_failed": "无法保存配置方案。",
   "profile.import": "导入…",

@@ -176,6 +176,7 @@
   "press_shortcut": "Нажмите сочетание",
   "previous_profile": "Предыдущий профиль",
   "profile": "Профиль",
+  "profile.edit": "Изменить профиль…",
   "profile.export": "Экспорт…",
   "profile.export_failed": "Не удалось сохранить профиль.",
   "profile.import": "Импорт…",

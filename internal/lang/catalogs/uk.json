@@ -176,6 +176,7 @@
   "press_shortcut": "Натисніть клавіші",
   "previous_profile": "Попередній профіль",
   "profile": "Профіль",
+  "profile.edit": "Змінити профіль…",
   "profile.export": "Експорт…",
   "profile.export_failed": "Не вдалося зберегти профіль.",
   "profile.import": "Імпорт…",

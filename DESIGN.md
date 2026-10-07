@@ -143,7 +143,7 @@ Settings fills its window, and its two-button footer sits at the bottom of it (`
 Mostly flat, by the brief's own evidence (Windows 11 Settings is a Mica surface with hairline cards, not a shadow-heavy system). The window's native Mica backdrop is requested by the host at the HWND level (`DWMWA_SYSTEMBACKDROP_TYPE`); the page content itself renders as fully opaque cards in a solid approximation of that Mica tone, so the page looks correct standing alone (including in a plain browser preview) rather than depending on true backdrop blending.
 
 ### Shadow Vocabulary
-- **Flyout** (`0 4px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.08)`): the only shadow in the system, reserved for the confirm dialogs, which visually float above the page rather than belong to it. The job picker floats too, but as a window of its own, so Windows draws its shadow.
+- **Flyout** (`0 4px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.08)`): the only shadow in the system, reserved for the dialogs and the Boards toolbar's ⋯ menu, which visually float above the page rather than belong to it. The job picker floats too, but as a window of its own, so Windows draws its shadow.
 
 ### Named Rules
 **The Flat-At-Rest Rule.** Every card, row, button and input is flat with a 1px border at rest. A shadow appears only on a surface that is actually layered above the page (a flyout, a dialog), never on a card that merely wants emphasis.
@@ -187,7 +187,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - A row in the Boards card: the on/off toggle at its left, the board's name, its status (Connected in Success, Disconnected or Off in secondary text) and an icon-button gear at its right that opens the board's settings.
 
 ### Drawn board (Boards tab, Draw)
-- An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. Draw | List heads the drawing, level with the inspector's head, which names the control picked beside Clear. On a DIY or MIDI board a gear between Draw and List turns on four arrows laid out as a keyboard's (up above left, down and right) that move the control picked.
+- An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. Beside the drawing, the inspector is one card, headed by the control picked and Clear, its list scrolling below; its top is level with the drawing's. On a DIY or MIDI board a gear between Draw and List turns on four arrows laid out as a keyboard's (up above left, down and right) that move the control picked.
 
 ### List (Boards tab, List)
 - Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions, ten rows at most before the card scrolls; a row takes the selection tint while its control moves or is pressed.
@@ -196,7 +196,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - First the 0% and the 100% readings, each an instruction in subtitle type with Next as the primary button. Then one control at a time: the step count, the instruction, a press counter for a button, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.
 
 ### Tabs (Settings' Pivot)
-- Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab lists the connected boards in a card on the left, the one picked marked by the hover tint and a 3px accent bar at its left edge, beside that board's profile on the right.
+- Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab has one toolbar instead: the board and profile menus, a ⋯ flyout menu (the profile's dialog, add, remove, import, export, the board's settings), and Draw | List at its right end.
 
 ### Dialog (confirm sheets, a board's settings, Add board, calibration)
 - Centered over the Scrim color (`rgba(0, 0, 0, 0.35)`, the one color in the system not tied to light/dark since a dimming layer reads the same over either), Card Surface, the system's one shadow, title (subtitle type) + body (secondary text) + right-aligned Cancel/destructive-action button pair.
