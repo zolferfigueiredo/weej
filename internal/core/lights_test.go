@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-func TestLightFramesLightOnlyTheMixersButtons(t *testing.T) {
-	all := SMCButtonOrder()
+func TestLightFramesLightOnlyTheStripButtons(t *testing.T) {
+	all := SMCStripButtons()
 	for _, p := range LightPatterns {
 		for step := 0; step < 40; step++ {
 			frame := LightFrame(p, float64(step)*0.07)

@@ -20,6 +20,18 @@ func ParseLightPattern(s string) string {
 // Square from top to bottom.
 var lightRows = [4]int{16, 8, 0, 24}
 
+// SMCStripButtons is the grid, row by row. The bottom row is left out of every pattern: lighting it
+// sets a real mixer sending fader moves nobody made.
+func SMCStripButtons() []int {
+	var ids []int
+	for _, first := range lightRows {
+		for col := 0; col < 8; col++ {
+			ids = append(ids, MixerNoteButton(first+col))
+		}
+	}
+	return ids
+}
+
 // LightFrame lists the buttons a pattern lights t seconds after it started.
 func LightFrame(pattern string, t float64) []int {
 	var on []int
@@ -31,10 +43,10 @@ func LightFrame(pattern string, t float64) []int {
 	}
 	switch pattern {
 	case "on":
-		on = SMCButtonOrder()
+		on = SMCStripButtons()
 	case "blink":
 		if int(t/0.5)%2 == 0 {
-			on = SMCButtonOrder()
+			on = SMCStripButtons()
 		}
 	case "chase":
 		column(int(t/0.12) % 8)
@@ -53,7 +65,7 @@ func LightFrame(pattern string, t float64) []int {
 		}
 	case "sparkle":
 		step := uint32(t / 0.15)
-		for _, id := range SMCButtonOrder() {
+		for _, id := range SMCStripButtons() {
 			if sparkle(step, id)%4 == 0 {
 				on = append(on, id)
 			}

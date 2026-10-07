@@ -356,8 +356,9 @@ type buttonLights struct {
 	tick     <-chan time.Time
 	daw      bool
 	held     [256]bool
-	// own is an SMC-Mixer's buttons, which a pattern from before may have left on.
-	own [256]bool
+	// strip is an SMC-Mixer's strip buttons, the only ones it lights, and which a pattern from
+	// before may have left on.
+	strip [256]bool
 	// sent is each light as last sent: 0 unknown, 1 off, 2 on.
 	sent [256]int8
 }
@@ -365,15 +366,15 @@ type buttonLights struct {
 func newButtonLights(patterns bool) *buttonLights {
 	l := &buttonLights{patterns: patterns}
 	if patterns {
-		for _, id := range core.SMCButtonOrder() {
-			l.own[id] = true
+		for _, id := range core.SMCStripButtons() {
+			l.strip[id] = true
 		}
 	}
 	return l
 }
 
 func (l *buttonLights) hold(id int, down bool) {
-	if id >= 0 && id < len(l.held) {
+	if id >= 0 && id < len(l.held) && (!l.patterns || l.strip[id]) {
 		l.held[id] = down
 		l.update()
 	}
@@ -404,7 +405,7 @@ func (l *buttonLights) update() {
 	}
 	for id := range lit {
 		on := lit[id] || l.held[id] || muteLEDs[id].Load()
-		if l.sent[id] == 0 && !on && !l.own[id] {
+		if l.sent[id] == 0 && !on && !l.strip[id] {
 			continue
 		}
 		l.set(id, on)
