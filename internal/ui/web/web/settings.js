@@ -383,7 +383,7 @@ function renderSMCGeneral(profileGroup, importFoot) {
               <span class="row-title">${esc(t("lights_leds"))}</span>
               <span class="row-desc">${esc(t("lights_leds_note"))}</span>
             </div>
-            <div class="row-control"><input class="toggle" id="lights-leds" type="checkbox" role="switch"${draft.mixerLEDs ? " checked" : ""} /></div>
+            <div class="row-control"><input class="toggle" id="lights-leds" type="checkbox" role="switch"${draft.mixerLEDs ? " checked" : ""}${draft.mixerLights ? "" : " disabled"} /></div>
           </div>`;
   const svg = smcSVG({
     name: (id) => smcControlName(id, t),
@@ -1764,6 +1764,7 @@ function onChange(e) {
       break;
     case "lights-select":
       draft.mixerLights = el.value === "off" ? "" : el.value;
+      document.getElementById("lights-leds").disabled = !draft.mixerLights;
       break;
     case "lights-leds":
       draft.mixerLEDs = el.checked;
