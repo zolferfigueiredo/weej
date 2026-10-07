@@ -394,7 +394,6 @@ const MOCK_EN_STRINGS = {
   baud_rate: "Baud rate",
   baud_note: "Must match Serial.begin() in your board’s sketch.",
   refresh: "Refresh",
-  tray: "Tray icon",
   tray_tip: "If you don't see its icon, open Show hidden icons on the taskbar and drag it next to the clock.",
   tray_tip_title: "WeeJ is running",
   up_to_date: "You're up to date!",

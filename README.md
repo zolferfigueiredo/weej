@@ -124,7 +124,7 @@ A left click, or Enter on the focused icon, opens Settings. A right click opens 
 
 **Settings** has three tabs, laid out in groups as Windows Settings is: **General** for your boards and the app, **Boards** for what each board's controls do, and **About**.
 
-**General** has **Language** at the top left and your boards under it. Each board's row has a switch on the left that turns the board on or off, its name, its status (Connected in green, Disconnected or Off) and a gear for its settings. The very first time, with no boards yet, it asks how many you have and adds each in turn, and **Add board** adds one more. On the right is the **Tray icon** group: **Hide tray icon** removes the icon (open WeeJ again to get back to Settings), and **Profile list** puts each board's profiles in the menu.
+**General** is one list down the middle of the window: your boards, then the app's own settings. Each board's row has a switch on the left that turns the board on or off, its name, its status (Connected in green, Disconnected or Off) and a gear for its settings. The very first time, with no boards yet, it asks how many you have and adds each in turn, and **Add board** adds one more. Under **App** come **Language**, **Hide tray icon**, which removes the icon (open WeeJ again to get back to Settings), and **Profile list**, which puts each board's profiles in the tray menu.
 
 **Add board** asks for a name and a type: **DIY (Arduino)**, **SMC-Mixer** or **Other MIDI**. A DIY board also asks for its COM port and baud rate, an Other MIDI board for its MIDI input, and both for how many knobs, faders and buttons it has; calibration follows. A port or input another board uses says so. An SMC-Mixer's controls are known, so it is ready at once.
 

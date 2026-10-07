@@ -295,24 +295,11 @@ p {
   cursor: pointer;
 }
 
-.general-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: start;
-  gap: 14px 20px;
-}
-
-.general-col {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-
-@media (max-width: 760px) {
-  .general-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
+/* General is one list down the middle, so a wide window doesn't stretch its rows. */
+.general-list {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
 }
 
 .button-param {

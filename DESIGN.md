@@ -134,7 +134,7 @@ Restrained by the brief, not by default: a single accent carries every call to a
 
 ## Layout
 
-Each window stacks its children top to bottom with a consistent gap: `.app` (Settings) or `.center-page` (the other two). Settings is the one window that can be resized and maximized. Until the user does either, the page reports its own rendered height to the host after every change and the host resizes the window's client area to match, capped to the work area; once sized by hand or maximized, it keeps its size and the page scrolls. Its one breakpoint, at 760px, folds the side-by-side layouts (General's two columns, a board's rows, List's three cards) into a single column.
+Each window stacks its children top to bottom with a consistent gap: `.app` (Settings) or `.center-page` (the other two). Settings is the one window that can be resized and maximized. Until the user does either, the page reports its own rendered height to the host after every change and the host resizes the window's client area to match, capped to the work area; once sized by hand or maximized, it keeps its size and the page scrolls. General is a single list at most 640px wide, centered, so a wide window never stretches its rows. Its one breakpoint, at 760px, folds the side-by-side layouts (a board's drawing beside its panel, List's three cards) into a single column.
 
 Settings fills its window, and its two-button footer sits at the bottom of it (`position: sticky; bottom: 0`), so Close/Apply stay in the same place whatever the tab's length. The two single-purpose windows center their content both axes, with a fixed 320px measure for body copy so translated strings with longer average length (German, Russian, Polish) still read comfortably.
 
