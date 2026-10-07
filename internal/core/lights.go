@@ -92,3 +92,59 @@ func sparkle(step uint32, id int) uint32 {
 	h *= 2654435761
 	return h >> 13
 }
+
+// LightGuard drops the small fader and pot moves an SMC-Mixer reports while its button lights
+// change: lighting many at once lifts its readings by up to 4 steps of 127 within milliseconds,
+// and they creep back over the next half second. A bigger move is a hand, followed closely until
+// it rests.
+type LightGuard struct {
+	reported [faderFirstCC + 8]int
+	known    [faderFirstCC + 8]bool
+	awake    [faderFirstCC + 8]float64
+}
+
+const (
+	guardWindow = 0.6 // seconds after a light change
+	guardSteps  = 5   // of 127
+	guardAwake  = 0.3 // seconds a hand's move keeps being followed
+)
+
+// Pass tells whether a message should be read, at now, the last light change having been at
+// lightChanged (both in seconds).
+func (g *LightGuard) Pass(msg uint32, now, lightChanged float64) bool {
+	col, v, ok := potReading(msg)
+	if !ok {
+		return true
+	}
+	hand := now < g.awake[col] || g.known[col] && abs(v-g.reported[col]) > guardSteps
+	if g.known[col] && now-lightChanged <= guardWindow && !hand {
+		return false
+	}
+	if hand {
+		g.awake[col] = now + guardAwake
+	}
+	g.known[col], g.reported[col] = true, v
+	return true
+}
+
+// potReading is the column and 7-bit value of a fader or absolute knob: a fader's pitch bend in
+// DAW mode, or the CC of a fader or knob in CC mode.
+func potReading(msg uint32) (col, value int, ok bool) {
+	status := int(msg & 0xFF)
+	data1 := int(msg>>8) & 0x7F
+	data2 := int(msg>>16) & 0x7F
+	switch {
+	case status >= 0xE0 && status < 0xE8:
+		return faderFirstCC + status - 0xE0, data2, true
+	case status&0xF0 == 0xB0 && (data1 >= knobFirstCC && data1 < knobFirstCC+8 || data1 >= faderFirstCC && data1 < faderFirstCC+8):
+		return data1, data2, true
+	}
+	return 0, 0, false
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
+}

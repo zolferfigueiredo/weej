@@ -58,3 +58,25 @@ func TestParseLightPattern(t *testing.T) {
 		t.Error("only patterns that change over time are animated")
 	}
 }
+
+func TestLightGuardDropsTheLightsDriftButNotAHand(t *testing.T) {
+	bend := func(strip, msb int) uint32 { return uint32(0xE0|strip) | uint32(msb)<<16 }
+	var g LightGuard
+	if !g.Pass(bend(1, 123), 0, -10) {
+		t.Fatal("a fader's first reading was dropped")
+	}
+	// Seen on a real unit: every light comes on, and fader 2 reads 127 for a while.
+	if g.Pass(bend(1, 127), 10.005, 10) || g.Pass(bend(1, 123), 10.4, 10) {
+		t.Error("the lights' drift went through")
+	}
+	if !g.Pass(bend(1, 126), 11, 10) {
+		t.Error("a small move long after the lights changed was dropped")
+	}
+	g.Pass(bend(1, 123), 11.1, 10)
+	if !g.Pass(bend(1, 110), 20.01, 20) || !g.Pass(bend(1, 109), 20.05, 20) {
+		t.Error("a hand's move while the lights changed was dropped")
+	}
+	if !g.Pass(cc(16, 1), 20.05, 20) {
+		t.Error("a knob step was taken for a pot")
+	}
+}

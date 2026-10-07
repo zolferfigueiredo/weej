@@ -292,6 +292,7 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 	check := time.NewTicker(2 * time.Second)
 	defer check.Stop()
 	lights := newButtonLights(cfg.Lights)
+	var guard core.LightGuard
 	lights.update()
 	defer lights.clear()
 
@@ -317,6 +318,9 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 				daw := mode.DAW()
 				if mode.Seen(m); daw != mode.DAW() {
 					lights.update()
+				}
+				if cfg.Lights && !guard.Pass(m, time.Since(lights.start0).Seconds(), lights.last.Sub(lights.start0).Seconds()) {
+					return
 				}
 				c, pressed := state.Feed(m)
 				changed = changed || c
@@ -365,14 +369,16 @@ type buttonLights struct {
 	// want and sent are each light as decided and as last sent: 0 unknown, 1 off, 2 on.
 	want, sent [256]int8
 	next       int
-	pace       *time.Ticker
-	paced      <-chan time.Time
+	// last is when a light was last sent, after start0, when these lights began.
+	start0, last time.Time
+	pace         *time.Ticker
+	paced        <-chan time.Time
 }
 
 const lightsBurst = 4
 
 func newButtonLights(patterns bool) *buttonLights {
-	l := &buttonLights{patterns: patterns}
+	l := &buttonLights{patterns: patterns, start0: time.Now()}
 	if patterns {
 		for _, id := range core.SMCStripButtons() {
 			l.strip[id] = true
@@ -440,6 +446,7 @@ func (l *buttonLights) flush() {
 			return
 		}
 		budget--
+		l.last = time.Now()
 		l.sent[id] = l.want[id]
 		if msg, ok := core.SMCButtonLED(id, l.want[id] == 2, l.daw); ok {
 			send(msg)
