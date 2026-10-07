@@ -92,6 +92,8 @@ type Window struct {
 	userSized      bool
 	dark           bool
 	brush          uintptr
+	// neededPx is the client height the page last asked for, clamped to the work area.
+	neededPx int32
 
 	// Popups only.
 	popup        bool
@@ -353,31 +355,44 @@ func (w *Window) resizeTo(heightPx int32, center bool) {
 		}
 		return
 	}
-	// Maximized or sized by hand, it keeps its size and a longer page scrolls.
-	if zoomed, _, _ := procIsZoomed.Call(w.hwnd); zoomed != 0 || w.userSized {
-		w.resizeWebView()
-		return
+	work := w.work
+	if !center {
+		work = monitorWorkArea(w.hwnd)
 	}
 	if heightPx < w.minHeightPx {
 		heightPx = w.minHeightPx
 	}
-	if maxH := (w.work.Bottom - w.work.Top) - w.frameH; maxH > 0 && heightPx > maxH {
+	if maxH := (work.Bottom - work.Top) - w.frameH; maxH > 0 && heightPx > maxH {
 		heightPx = maxH
 	}
+	w.neededPx = heightPx
+	// Maximized, it keeps its size and a longer page scrolls.
+	if zoomed, _, _ := procIsZoomed.Call(w.hwnd); zoomed != 0 {
+		w.resizeWebView()
+		return
+	}
+	cur := windowRect(w.hwnd)
 	totalW := w.widthPx + w.frameW
+	if w.userSized {
+		// Sized by hand, it keeps that size unless the page needs more height.
+		if in := clientRect(w.hwnd); in.Bottom-in.Top >= heightPx {
+			w.resizeWebView()
+			return
+		}
+		totalW = cur.Right - cur.Left
+	}
 	totalH := heightPx + w.frameH
 	if center {
-		x := w.work.Left + ((w.work.Right-w.work.Left)-totalW)/2
-		y := w.work.Top + ((w.work.Bottom-w.work.Top)-totalH)/2
+		x := work.Left + ((work.Right-work.Left)-totalW)/2
+		y := work.Top + ((work.Bottom-work.Top)-totalH)/2
 		setWindowPos(w.hwnd, x, y, totalW, totalH, swpNoZorder|swpNoActivate)
 	} else {
-		cur := windowRect(w.hwnd)
 		y := cur.Top
-		if y+totalH > w.work.Bottom {
-			y = w.work.Bottom - totalH
+		if y+totalH > work.Bottom {
+			y = work.Bottom - totalH
 		}
-		if y < w.work.Top {
-			y = w.work.Top
+		if y < work.Top {
+			y = work.Top
 		}
 		setWindowPos(w.hwnd, cur.Left, y, totalW, totalH, swpNoZorder|swpNoActivate)
 	}

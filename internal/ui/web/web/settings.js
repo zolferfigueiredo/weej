@@ -2,7 +2,6 @@ import { connect, send, t } from "./bridge.js";
 import {
   addControl,
   controlUsed,
-  keepScroll,
   moveControl,
   picked,
   pressed,
@@ -57,7 +56,7 @@ function render() {
   renderFooter();
   if (S.tab === "boards") renderBoards();
   else if (S.tab === "about") renderAbout();
-  else keepScroll(renderGeneral);
+  else renderGeneral();
 
   if (S.dialog) {
     renderDialog();

@@ -305,7 +305,6 @@ p {
   }
 }
 
-/* The knob and button lists scroll on their own, so the page itself stays put. */
 .button-param {
   display: flex;
   align-items: center;
@@ -320,11 +319,6 @@ p {
 .button-param .param-label {
   flex: 0 0 auto;
   color: var(--text-secondary);
-}
-
-.list-group > .card {
-  max-height: var(--list-max, 420px);
-  overflow-y: auto;
 }
 
 .row.lit,
@@ -957,11 +951,7 @@ select.select,
   padding: 4px 6px;
 }
 
-/* No height of its own, so the drawing sets the row's and the list scrolls inside it. */
 .inspector-card {
-  flex: 1 1 auto;
-  height: 0;
-  overflow-y: auto;
   padding-bottom: 6px;
 }
 
@@ -1360,11 +1350,6 @@ select.select,
   .list-columns {
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-.list-columns .card {
-  max-height: var(--list-max, 420px);
-  overflow-y: auto;
 }
 
 .setup {

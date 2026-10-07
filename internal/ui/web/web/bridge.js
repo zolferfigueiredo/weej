@@ -36,6 +36,9 @@ new MutationObserver((mutations) => {
   for (const m of mutations) {
     if (m.type === "attributes") applyDataStyles(m.target);
     m.addedNodes.forEach(applyDataStyles);
+    // A dialog floats over the page, so opening or closing one leaves the page's size alone.
+    const dialog = (n) => n.classList && n.classList.contains("dialog-scrim");
+    if ([...m.addedNodes].some(dialog) || [...m.removedNodes].some(dialog)) scheduleHeightReport();
   }
 }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-style"] });
 applyDataStyles(document.documentElement);
@@ -141,11 +144,19 @@ function applyTheme(theme) {
 function reportHeight() {
   if (!rootEl) return;
   const body = getComputedStyle(document.body);
-  const css =
+  let css =
     rootEl.getBoundingClientRect().bottom +
     window.scrollY +
     parseFloat(body.paddingBottom || "0") +
     parseFloat(body.marginBottom || "0");
+  // A dialog floats over the page, so its height is added on its own: all of it, scrolled part
+  // included, and the scrim's margin around it.
+  const dialog = document.querySelector(".dialog");
+  if (dialog) {
+    let need = dialog.getBoundingClientRect().height + 48;
+    dialog.querySelectorAll(".dialog-body").forEach((el) => (need += el.scrollHeight - el.clientHeight));
+    css = Math.max(css, need);
+  }
   send({ type: "height", value: Math.ceil(css * (window.devicePixelRatio || 1)) });
 }
 
