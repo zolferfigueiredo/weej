@@ -187,7 +187,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - A row in the Boards card: the on/off toggle at its left, the board's name, its status (Connected in Success, Disconnected or Off in secondary text) and an icon-button gear at its right that opens the board's settings.
 
 ### Drawn board (Boards tab, Draw)
-- An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. An inspector card edits the control picked: its kind, finding its input, four arrows laid out as a keyboard's (up above left, down and right), Clear and remove.
+- An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. An inspector card edits the control picked: finding its input, four arrows laid out as a keyboard's (up above left, down and right), and Clear.
 
 ### List (Boards tab, List)
 - Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions, ten rows at most before the card scrolls; a row takes the selection tint while its control moves or is pressed.

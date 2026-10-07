@@ -1231,34 +1231,6 @@ select.select,
   stroke-dasharray: 1 0.8;
 }
 
-.smc .add {
-  cursor: pointer;
-}
-
-.smc .add:focus,
-.smc .add:focus-visible {
-  outline: none;
-}
-
-.smc .add-face {
-  fill: transparent;
-  stroke: var(--text-disabled);
-  stroke-width: 0.3;
-  stroke-dasharray: 1 0.8;
-}
-
-.smc .add:hover .add-face,
-.smc .add:focus-visible .add-face {
-  fill: var(--card-bg-hover);
-  stroke: var(--accent);
-}
-
-.smc .add-plus {
-  stroke: var(--text-secondary);
-  stroke-width: 0.45;
-  stroke-linecap: round;
-}
-
 /* --- Boards ---------------------------------------------------------------- */
 
 .status-ok,

@@ -355,7 +355,6 @@ const MOCK_EN_STRINGS = {
   reconnect: "Reconnect",
   record_shortcut: "Record Shortcut",
   remove: "Remove",
-  remove_knob_info: "What it does in every profile goes with it.",
   remove_named: "Remove â{name}â?",
   remove_profile: "Remove this profile",
   remove_profile_info: "Its knob choices and shortcut go with it.",

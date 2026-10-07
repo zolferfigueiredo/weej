@@ -1,12 +1,9 @@
 import { connect, send, t } from "./bridge.js";
 import {
-  addControl,
-  controlUsed,
   fitLists,
   moveControl,
   picked,
   pressed,
-  removeControl,
   renderBoards,
   select,
   showValues,
@@ -402,28 +399,9 @@ function onClick(e) {
     case "pick-control-app":
       if (d) send({ type: "pickApp", knob: picked(d) });
       break;
-    case "add-control":
-      if (d) {
-        addControl(d, parseInt(target.dataset.row, 10));
-        render();
-      }
-      break;
-    case "set-kind":
-      if (d) {
-        d.controls[picked(d)].kind = target.dataset.kind;
-        render();
-      }
-      break;
     case "move-control":
       if (d) {
         moveControl(d, picked(d), target.dataset.dir);
-        render();
-      }
-      break;
-    case "remove-control":
-      if (d) {
-        if (controlUsed(d, picked(d))) S.dialog = { kind: "confirm", what: "control", id: d.id, k: picked(d) };
-        else removeControl(d, picked(d));
         render();
       }
       break;
@@ -455,8 +433,6 @@ function confirmDialog() {
   if (dlg.what === "profile") {
     d.profiles.splice(d.profile, 1);
     d.profile = clampIndex(d.profile, d.profiles.length);
-  } else if (dlg.what === "control") {
-    removeControl(d, dlg.k);
   } else if (dlg.what === "board") {
     send({ type: "removeDevice", device: d.id });
   }
@@ -547,22 +523,21 @@ function onChange(e) {
 
 // The drawn controls take Enter and Space as buttons do, and the arrow keys walk between them.
 function onControlKeydown(e) {
-  const ctl = e.target.closest && e.target.closest(".smc .ctl, .smc .add");
+  const ctl = e.target.closest && e.target.closest(".smc .ctl");
   if (!ctl) return;
   const d = board();
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
     e.stopPropagation();
     if (!d) return;
-    if (ctl.classList.contains("add")) addControl(d, parseInt(ctl.dataset.row, 10));
-    else select(d, parseInt(ctl.dataset.control, 10));
+    select(d, parseInt(ctl.dataset.control, 10));
     render();
     return;
   }
   const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
   if (!step) return;
   e.preventDefault();
-  const all = [...document.querySelectorAll(".smc .ctl, .smc .add")];
+  const all = [...document.querySelectorAll(".smc .ctl")];
   const next = all[all.indexOf(ctl) + step];
   if (next) next.focus();
 }

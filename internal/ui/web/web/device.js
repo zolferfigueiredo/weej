@@ -206,17 +206,17 @@ const ROW_GAP = 4;
 const KIND_H = { knob: 16, fader: 41, button: 14 };
 const BOARD_FADER = { top: 2.6, len: 30 };
 
-// opts: as smcSVG's, and layout (rows of knob indices), kind(k), waiting(k), addLabel
+// opts: as smcSVG's, and layout (rows of knob indices), kind(k), waiting(k)
 export function boardSVG(opts) {
   const rows = opts.layout.length ? opts.layout : [[]];
   const heights = rows.map((row) => Math.max(KIND_H.button, ...row.map((k) => KIND_H[opts.kind(k)])));
   const contentH = heights.reduce((a, h) => a + h, 0) + ROW_GAP * (rows.length - 1);
-  const width = Math.max(150, Math.max(...rows.map((row) => row.length + 1)) * CELL + 8);
+  const width = Math.max(150, Math.max(...rows.map((row) => row.length)) * CELL + 8);
   const height = Math.max(69.8, contentH + 8);
   let y = (height - contentH) / 2;
   let out = "";
   rows.forEach((row, r) => {
-    const x0 = (width - (row.length + 1) * CELL) / 2 + CELL / 2;
+    const x0 = (width - row.length * CELL) / 2 + CELL / 2;
     row.forEach((k, i) => {
       const kind = opts.kind(k);
       const v = opts.value(k);
@@ -231,7 +231,6 @@ export function boardSVG(opts) {
       const extra = kind + (v < 0 && kind !== "button" ? " unknown" : "") + (opts.waiting(k) ? " waiting" : "");
       out += controlG(opts, k, extra, body, `translate(${x0 + i * CELL} ${y})`);
     });
-    out += `<g class="add" data-action="add-control" data-row="${r}" role="button" tabindex="0" aria-label="${esc(opts.addLabel)}" transform="translate(${x0 + row.length * CELL} ${y})"><title>${esc(opts.addLabel)}</title><rect class="add-face" x="-4.5" y="0.6" width="9" height="9" rx="1.5"/><path class="add-plus" d="M-1.8 5.1h3.6M0 3.3v3.6"/></g>`;
     y += heights[r] + ROW_GAP;
   });
   return `<svg class="smc board" viewBox="0 0 ${width} ${height}" role="group">${out}</svg>`;

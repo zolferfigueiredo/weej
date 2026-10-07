@@ -212,9 +212,6 @@ function confirmDialog(dlg) {
     const name = d.profiles[d.profile] && d.profiles[d.profile].name;
     title = name ? t("remove_named", { name }) : t("remove_this_profile");
     body = t("remove_profile_info");
-  } else if (dlg.what === "control" && d) {
-    title = t("remove_named", { name: controlName(d, dlg.k) });
-    body = t("remove_knob_info");
   } else if (dlg.what === "board" && d) {
     title = t("remove_named", { name: d.name });
     body = t("device.remove_info");
