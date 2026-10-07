@@ -309,6 +309,8 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 			lights.update()
 		case <-lightsPoke:
 			lights.update()
+		case <-lights.paced:
+			lights.flush()
 		case msg := <-ch:
 			changed := false
 			feed := func(m uint32) {
@@ -346,8 +348,9 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 }
 
 // buttonLights keeps each button's light as the pattern, its mute and a hand on it want it: lit
-// when any of them says so. It sends only what changed, and starts over when the mixer changes
-// mode, since a light is sent differently in each.
+// when any of them says so. It starts over when the mixer changes mode, since a light is sent
+// differently in each, and sends no more than lightsBurst changes every 10 ms: a real SMC-Mixer
+// sent fader moves nobody made after a few dozen at once.
 type buttonLights struct {
 	patterns bool
 	pattern  string
@@ -359,9 +362,14 @@ type buttonLights struct {
 	// strip is an SMC-Mixer's strip buttons, the only ones it lights, and which a pattern from
 	// before may have left on.
 	strip [256]bool
-	// sent is each light as last sent: 0 unknown, 1 off, 2 on.
-	sent [256]int8
+	// want and sent are each light as decided and as last sent: 0 unknown, 1 off, 2 on.
+	want, sent [256]int8
+	next       int
+	pace       *time.Ticker
+	paced      <-chan time.Time
 }
+
+const lightsBurst = 4
 
 func newButtonLights(patterns bool) *buttonLights {
 	l := &buttonLights{patterns: patterns}
@@ -397,42 +405,68 @@ func (l *buttonLights) update() {
 		}
 	}
 	if daw := mode.DAW(); daw != l.daw {
-		l.daw, l.sent = daw, [256]int8{}
+		l.daw, l.want, l.sent = daw, [256]int8{}, [256]int8{}
 	}
 	var lit [256]bool
 	for _, id := range core.LightFrame(pattern, time.Since(l.start).Seconds()) {
 		lit[id] = true
 	}
 	for id := range lit {
-		on := lit[id] || l.held[id] || muteLEDs[id].Load()
-		if l.sent[id] == 0 && !on && !l.strip[id] {
-			continue
+		switch {
+		case lit[id] || l.held[id] || muteLEDs[id].Load():
+			l.want[id] = 2
+		case l.sent[id] != 0 || l.strip[id]:
+			l.want[id] = 1
 		}
-		l.set(id, on)
 	}
+	l.flush()
 }
 
-func (l *buttonLights) set(id int, on bool) {
-	want := int8(1)
-	if on {
-		want = 2
+// flush sends up to lightsBurst of the lights that differ from what was sent, taking turns, and
+// keeps pacing itself until none differ.
+func (l *buttonLights) flush() {
+	budget := lightsBurst
+	for range len(l.want) {
+		id := l.next
+		l.next = (l.next + 1) % len(l.want)
+		if l.want[id] == 0 || l.want[id] == l.sent[id] {
+			continue
+		}
+		if budget == 0 {
+			if l.pace == nil {
+				l.pace = time.NewTicker(10 * time.Millisecond)
+				l.paced = l.pace.C
+			}
+			return
+		}
+		budget--
+		l.sent[id] = l.want[id]
+		if msg, ok := core.SMCButtonLED(id, l.want[id] == 2, l.daw); ok {
+			send(msg)
+		}
 	}
-	if l.sent[id] == want {
-		return
-	}
-	l.sent[id] = want
-	if msg, ok := core.SMCButtonLED(id, on, l.daw); ok {
-		send(msg)
+	if l.pace != nil {
+		l.pace.Stop()
+		l.pace, l.paced = nil, nil
 	}
 }
 
 func (l *buttonLights) clear() {
-	if l.ticker != nil {
-		l.ticker.Stop()
+	for _, t := range []*time.Ticker{l.ticker, l.pace} {
+		if t != nil {
+			t.Stop()
+		}
 	}
+	n := 0
 	for id, state := range l.sent {
-		if state == 2 {
-			l.set(id, false)
+		if state != 2 {
+			continue
+		}
+		if msg, ok := core.SMCButtonLED(id, false, l.daw); ok {
+			send(msg)
+		}
+		if n++; n%lightsBurst == 0 {
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
