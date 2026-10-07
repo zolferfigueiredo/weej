@@ -457,64 +457,79 @@ function mockShortcutKeyJSON(s) {
   return JSON.stringify({ vk: s.vk, mods: s.mods, key: s.key });
 }
 
-// The SMC-Mixer preview (?mock=settings&device=smc): a profile set up the way a real one was.
-function mockSMC(init) {
-  const setup = init.setup;
-  setup.port = "off";
-  setup.mixerPort = "SMC-Mixer";
-  for (const p of setup.profiles) {
-    p.mixerJobs = Array.from({ length: 16 }, () => []);
-    p.buttons = { 174: ["profile.previous"], 175: ["profile.next"] };
-  }
-  const p = setup.profiles[0];
-  p.mixerJobs[0] = [{ kind: "master" }];
-  p.mixerJobs[1] = [{ kind: "brightness", screen: 0 }];
-  p.mixerJobs[2] = [{ kind: "brightness", screen: 1 }];
-  p.mixerJobs[3] = [{ kind: "app", exe: "discord.exe" }, { kind: "app", exe: "spotify.exe" }, { kind: "otherApps" }];
-  p.mixerJobs[5] = [{ kind: "microphone" }];
-  p.mixerJobs[6] = [{ kind: "nightLight" }];
-  p.mixerJobs[8] = [{ kind: "zoom" }];
-  p.mixerJobs[9] = [{ kind: "contrast", screen: 0 }];
-  for (let i = 0; i < 8; i++) p.buttons[144 + i] = [`mute:${i}`];
-  p.buttons[222] = ["media.playpause"];
-  p.buttons[227] = ["settings", "url:https://weej.zolfer.com"];
-  init.connection = { connected: false, busy: false, port: "" };
-  init.mixerConnection = { connected: true, busy: false, port: "SMC-Mixer" };
-  // A mixer frame: CC-mode columns, faders on 40-47 and knobs on 30-37.
-  const frame = Array(144).fill(-1);
-  [1023, 600, 300, -1, -1, 800, 150, -1].forEach((v, i) => (frame[40 + i] = v));
-  frame[30] = 512;
-  init.values = { mixer: frame };
-  return init;
+// Boards for the preview (?mock=settings&devices=diy,smc,midi): one of each kind set up the way
+// a real one was. With no devices the page starts as a first start does, asking how many boards.
+function mockKnob(input, kind = "knob", reverse = false) {
+  return { kind, input, reverse, min: 0, max: 1023 };
 }
 
-// A board with a row of knobs over a row of faders and a button, the button not found yet.
-function mockBoard(init) {
-  const setup = init.setup;
-  setup.columns = [0, 3, 2, 4, 1, -1];
-  setup.boardKinds = ["knob", "knob", "knob", "fader", "fader", "button"];
-  setup.boardLayout = [[0, 1, 2], [3, 4, 5]];
-  for (const p of setup.profiles) while (p.jobs.length < 6) p.jobs.push([]);
-  setup.profiles[0].jobs[3] = [{ kind: "microphone" }];
-  setup.profiles[0].boardButtons = { 5: ["media.playpause"] };
-  init.connection = { connected: true, busy: false, port: "COM6" };
-  init.values = { board: [500, 120, 800, 1023, 300, 0] };
-  return init;
+function mockDIY(id) {
+  return {
+    id,
+    name: "Desk",
+    type: "diy",
+    enabled: true,
+    port: "COM6",
+    baudRate: 9600,
+    speed: "slow",
+    invert: false,
+    controls: [mockKnob(0), mockKnob(3), mockKnob(2), mockKnob(4, "fader"), mockKnob(1, "fader"), mockKnob(-1, "button")],
+    layout: [[0, 1, 2], [3, 4, 5]],
+    view: "draw",
+    profiles: [
+      { name: "Default", jobs: [[{ kind: "master" }], [{ kind: "brightness", screen: 0 }], [], [{ kind: "microphone" }], [], []], buttons: { 5: ["media.playpause"] } },
+      { name: "Gaming", shortcut: { vk: 49, mods: 3, key: "1" }, jobs: [[{ kind: "master" }], [{ kind: "app", exe: "discord.exe" }], [], [], [], []], buttons: {} },
+    ],
+    profile: 0,
+  };
 }
 
-// Moves fader 3 for a moment after the page opens.
-function startSMCDemo(post, frame) {
-  const values = frame.slice();
-  setTimeout(() => {
-    post({ type: "knobMoved", device: "mixer", knob: 2 });
-    let step = 0;
-    const timer = setInterval(() => {
-      values[42] = Math.round(512 + 400 * Math.sin(step / 5));
-      post({ type: "values", device: "mixer", values: values.slice() });
-      if (++step > 30) clearInterval(timer);
-    }, 50);
-  }, 800);
+function mockSMC(id) {
+  const controls = [];
+  for (let i = 0; i < 16; i++) controls.push(mockKnob(i < 8 ? 40 + i : 22 + i, i < 8 ? "fader" : "knob"));
+  const jobs = Array.from({ length: 16 }, () => []);
+  jobs[0] = [{ kind: "master" }];
+  jobs[1] = [{ kind: "brightness", screen: 0 }];
+  jobs[2] = [{ kind: "brightness", screen: 1 }];
+  jobs[3] = [{ kind: "app", exe: "discord.exe" }, { kind: "app", exe: "spotify.exe" }, { kind: "otherApps" }];
+  jobs[5] = [{ kind: "microphone" }];
+  jobs[8] = [{ kind: "zoom" }];
+  const buttons = { 174: ["profile.previous"], 175: ["profile.next"], 222: ["media.playpause"], 227: ["settings", "url:https://weej.zolfer.com"] };
+  for (let i = 0; i < 8; i++) buttons[144 + i] = [`mute:${i}`];
+  return {
+    id,
+    name: "SMC-Mixer",
+    type: "smc",
+    enabled: true,
+    port: "SMC-Mixer",
+    speed: "slow",
+    invert: false,
+    controls,
+    view: "draw",
+    profiles: [{ name: "Default", jobs, buttons }],
+    profile: 0,
+    lights: "eqgame",
+  };
 }
+
+function mockMIDI(id) {
+  return {
+    id,
+    name: "nanoKONTROL",
+    type: "midi",
+    enabled: false,
+    port: "nanoKONTROL2",
+    speed: "slow",
+    invert: false,
+    controls: [mockKnob(16), mockKnob(17), mockKnob(0, "fader"), mockKnob(1, "fader"), mockKnob(171, "button"), mockKnob(-1, "button")],
+    layout: [[0, 1], [2, 3], [4, 5]],
+    view: "list",
+    profiles: [{ name: "Default", jobs: [[{ kind: "master" }], [], [], [], [], []], buttons: { 171: ["media.next"] } }],
+    profile: 0,
+  };
+}
+
+const MOCK_MAKERS = { diy: mockDIY, smc: mockSMC, midi: mockMIDI };
 
 // Served from the repository root, the preview reads the real English catalog, so every string
 // shows; anywhere else it keeps the sample copy above.
@@ -525,25 +540,15 @@ function loadMockStrings(fallback) {
 }
 
 function mockSettingsInit(enStrings) {
-  const profiles = [
-    {
-      name: "Default",
-      jobs: [[{ kind: "master" }], [{ kind: "brightness", screen: 0 }], []],
-      shortcut: null,
-    },
-    {
-      name: "Gaming",
-      jobs: [
-        [{ kind: "master" }],
-        [{ kind: "app", exe: "discord.exe" }],
-        [{ kind: "app", exe: "spotify.exe" }],
-      ],
-      shortcut: { vk: 49, mods: 3, key: "1" },
-    },
-  ];
+  const kinds = (new URLSearchParams(location.search).get("devices") || "").split(",").filter((k) => MOCK_MAKERS[k]);
+  const devices = kinds.map((k, i) => MOCK_MAKERS[k](`d${i + 1}`));
   const labels = {};
-  for (const p of profiles) {
-    if (p.shortcut) labels[mockShortcutKeyJSON(p.shortcut)] = mockShortcutLabel(p.shortcut);
+  for (const d of devices) for (const p of d.profiles) if (p.shortcut) labels[mockShortcutKeyJSON(p.shortcut)] = mockShortcutLabel(p.shortcut);
+  const status = {};
+  const values = {};
+  for (const d of devices) {
+    status[d.id] = { connected: d.enabled, busy: false, port: d.port || "COM6" };
+    values[d.id] = d.controls.map((c, k) => (c.kind === "button" ? -1 : (k * 211) % 1024));
   }
   const catalog = [
     { section: "volume", job: { kind: "master" }, title: "Master volume", short: "Master volume", icon: MOCK_JOB_ICONS.master },
@@ -553,22 +558,23 @@ function mockSettingsInit(enStrings) {
     { section: "brightness", job: { kind: "brightness", screen: 1 }, title: "Screen 2 brightness", short: "Screen 2", icon: MOCK_JOB_ICONS.brightness },
     { section: "contrast", job: { kind: "contrast", screen: 0 }, title: "Screen 1 contrast", short: "Screen 1", icon: MOCK_JOB_ICONS.contrast },
     { section: "nightLight", job: { kind: "nightLight" }, title: "Night light warmth", short: "Warmth", icon: MOCK_JOB_ICONS.nightLight },
-    { section: "keyboard", job: { kind: "externalKeyboard" }, title: "External keyboard backlight", short: "External", icon: MOCK_JOB_ICONS.externalKeyboard },
     { section: "zoom", job: { kind: "zoom" }, title: "Screen zoom", short: "Screen zoom", icon: MOCK_JOB_ICONS.zoom },
     { section: "apps", job: { kind: "otherApps" }, title: "Other apps", short: "Other apps", icon: MOCK_JOB_ICONS.otherApps },
     { section: "apps", job: { kind: "focusedApp" }, title: "Focused app", short: "Focused app", icon: MOCK_JOB_ICONS.focusedApp },
     { section: "apps", job: { kind: "app", exe: "discord.exe" }, title: "Discord", short: "Discord", icon: MOCK_JOB_ICONS.app },
     { section: "apps", job: { kind: "app", exe: "spotify.exe" }, title: "Spotify", short: "Spotify", icon: MOCK_JOB_ICONS.app },
-    { section: "apps", job: { kind: "app", exe: "chrome.exe" }, title: "Google Chrome", short: "Google Chrome", icon: MOCK_JOB_ICONS.app },
   ];
+  const smcButtons = [];
+  for (let s = 0; s < 8; s++) for (const first of [16, 8, 0, 24]) smcButtons.push(128 + first + s);
+  for (const note of [94, 93, 95, 91, 92, 46, 47, 96, 97, 98, 99]) smcButtons.push(128 + note);
   return {
     type: "init",
     lang: "en",
     strings: enStrings,
     theme: { dark: false, accent: "#0078d4" },
     icon: MOCK_APP_ICON,
-    tab: "general",
-    version: "1.0.0",
+    tab: new URLSearchParams(location.search).get("tab") || "general",
+    version: "2.0.0",
     website: "https://weej.zolfer.com",
     madeBy: "https://zolfer.com",
     theej: "https://theej.zolfer.com",
@@ -576,56 +582,113 @@ function mockSettingsInit(enStrings) {
     languages: [
       { code: "en", name: "English" },
       { code: "de", name: "Deutsch" },
-      { code: "fr", name: "Francais" },
       { code: "it", name: "Italiano" },
-      { code: "ja", name: "Japanese" },
     ],
     language: "en",
-    setup: {
-      columns: [0, 1, -1],
-      profiles,
-      profile: 0,
-      nextProfile: null,
-      previousProfile: null,
-      invertKnobs: false,
-      hideTrayIcon: false,
-      showProfileList: true,
-      trayIcon: "mixer",
-      speed: "slow",
-      port: "",
-      mixerPort: "",
-      baudRate: 9600,
-    },
+    settings: { version: 2, devices, added: devices.length, hideTrayIcon: false, showProfileList: true, trayIcon: "mixer", language: "en" },
     catalog,
     iconPreviews: { mixer: svgIcon("#0078d4"), dial: svgIcon("#107c10"), app: svgIcon("#5d5d5d") },
     labels,
     nightLightExperimental: true,
-    connection: { connected: true, busy: false, port: "COM6" },
+    status,
+    values,
+    wizard: null,
     forcedPort: "",
     baudRates: [9600, 19200, 38400, 57600, 115200],
-    lightPatterns: ["off", "on", "random", "eq", "fire", "chase", "bounce", "wave", "sparkle", "blink", "rain", "matrix", "snake", "fill", "explode", "checker", "rise", "zigzag", "orbit", "heartbeat", "stars", "bars", "ball", "comet", "helix", "breathe", "clock"],
+    smcButtons,
+    lightPatterns: ["off", "on", "random", "eq", "eq2", "eqgame", "fire", "chase", "bounce", "wave", "sparkle", "blink", "rain", "matrix", "snake", "fill", "explode", "checker", "rise", "zigzag", "orbit", "heartbeat", "stars", "bars", "ball", "comet", "helix", "breathe", "clock"],
   };
 }
 
+// A scripted calibration: each control is found, swept and held, or pressed three times.
+function mockWizard(post, device, controls) {
+  const steps = [];
+  controls.forEach((k, index) => {
+    const button = device.controls[k].kind === "button";
+    const base = { device: device.id, control: k, kind: device.controls[k].kind, index, total: controls.length, warning: "", other: -1, done: false };
+    if (button) {
+      for (let n = 0; n <= 2; n++) steps.push({ ...base, stage: "press", count: n, need: 3, level: 0 });
+    } else {
+      steps.push({ ...base, stage: "find", count: 0, need: 2, level: 0 });
+      for (let n = 1; n <= 2; n++) for (const level of [300, 700, 1023]) steps.push({ ...base, stage: "sweep", count: n, need: 2, level });
+    }
+  });
+  steps.push({ device: device.id, control: -1, kind: "", stage: "done", count: 0, need: 0, level: 0, warning: "", other: -1, index: controls.length, total: controls.length, done: true });
+  let i = 0;
+  const timer = setInterval(() => {
+    if (i >= steps.length) {
+      clearInterval(timer);
+      return;
+    }
+    post(Object.assign({ type: "wizard" }, steps[i++]));
+  }, 350);
+  return () => clearInterval(timer);
+}
+
 function startSettingsMock(post, enStrings) {
-  let draft = null;
+  let init = null;
+  let stopWizard = null;
+  let wizardDevice = null;
+  const find = (id) => init.settings.devices.find((d) => d.id === id);
+  const saveDevice = (d) => {
+    const i = init.settings.devices.findIndex((x) => x.id === d.id);
+    if (i >= 0) init.settings.devices[i] = d;
+    else init.settings.devices.push(d);
+    post({ type: "deviceSaved", device: JSON.parse(JSON.stringify(d)) });
+  };
   return (msg) => {
     switch (msg.type) {
       case "ready":
         loadMockStrings(enStrings).then((strings) => {
-          draft = mockSettingsInit(strings);
-          const device = new URLSearchParams(location.search).get("device");
-          if (device === "smc") {
-            mockSMC(draft);
-            startSMCDemo(post, draft.values.mixer);
-          }
-          if (device === "board") mockBoard(draft);
-          post(draft);
+          init = mockSettingsInit(strings);
+          post(init);
           window.weejMock = { post };
         });
         break;
       case "save":
-        post({ type: "saved", setup: msg.setup });
+        init.settings = JSON.parse(JSON.stringify(msg.settings));
+        post({ type: "saved", settings: msg.settings });
+        break;
+      case "setDevice":
+        saveDevice(msg.device);
+        break;
+      case "addDevice": {
+        const id = `d${++init.settings.added}`;
+        const controls = [];
+        for (const [kind, n] of [["knob", msg.knobs], ["fader", msg.faders], ["button", msg.buttons]]) {
+          for (let i = 0; i < n; i++) controls.push(mockKnob(-1, kind));
+        }
+        const d =
+          msg.deviceType === "smc"
+            ? Object.assign(mockSMC(id), { name: msg.name, port: msg.port, lights: "" })
+            : { id, name: msg.name, type: msg.deviceType, enabled: true, port: msg.port, baudRate: msg.baudRate, speed: "slow", invert: false, controls, view: "draw", profiles: [{ name: "Default", jobs: controls.map(() => []), buttons: {} }], profile: 0 };
+        saveDevice(d);
+        post({ type: "status", device: id, connected: true, busy: false, port: msg.port || "COM7" });
+        post({ type: "added", device: id });
+        break;
+      }
+      case "removeDevice":
+        init.settings.devices = init.settings.devices.filter((d) => d.id !== msg.device);
+        post({ type: "deviceRemoved", device: msg.device });
+        break;
+      case "calibrate": {
+        const d = find(msg.device);
+        if (!d) break;
+        if (stopWizard) stopWizard();
+        wizardDevice = d;
+        stopWizard = mockWizard(post, d, msg.controls && msg.controls.length ? msg.controls : d.controls.map((_, k) => k));
+        break;
+      }
+      case "wizard":
+        if (stopWizard) stopWizard();
+        stopWizard = null;
+        if (msg.op === "finish" && wizardDevice) {
+          wizardDevice.controls.forEach((c, k) => {
+            if (c.input < 0) c.input = 10 + k;
+          });
+          saveDevice(wizardDevice);
+        }
+        if (msg.op === "finish" || msg.op === "cancel") post({ type: "wizard", device: wizardDevice && wizardDevice.id, end: true });
         break;
       case "listPorts":
         setTimeout(() => {
@@ -635,7 +698,7 @@ function startSettingsMock(post, enStrings) {
               { name: "COM1", product: "", usb: false },
               { name: "COM6", product: "USB Serial", usb: true },
             ],
-            midi: ["SMC-Mixer"],
+            midi: ["SMC-Mixer", "nanoKONTROL2"],
           });
         }, 100);
         break;
@@ -649,23 +712,18 @@ function startSettingsMock(post, enStrings) {
         }, 200);
         break;
       case "importDeej":
-        setTimeout(() => {
-          post({ type: "imported", setup: draft.setup, skipped: ["unknown.exe"] });
-        }, 200);
         break;
       case "setLanguage":
         post({ type: "strings", lang: msg.code, strings: mockMergedStrings(msg.code, enStrings) });
         break;
-      case "record":
-        break;
       case "key": {
         const hasMod = msg.ctrl || msg.alt;
-        if (!hasMod && msg.key !== "Delete" && msg.key !== "Backspace") {
-          post({ type: "rejected", field: msg.field });
-          break;
-        }
         if (msg.key === "Delete" || msg.key === "Backspace") {
           post({ type: "recorded", field: msg.field, shortcut: null, label: null });
+          break;
+        }
+        if (!hasMod && msg.field.indexOf("button:") !== 0) {
+          post({ type: "rejected", field: msg.field });
           break;
         }
         const shortcut = {
@@ -676,81 +734,6 @@ function startSettingsMock(post, enStrings) {
         post({ type: "recorded", field: msg.field, shortcut, label: mockShortcutLabel(shortcut) });
         break;
       }
-      case "stopRecording":
-      case "calibrate":
-      case "checkUpdates":
-      case "openUrl":
-      case "close":
-        break;
-    }
-  };
-}
-
-function startCalibrationMock(post, enStrings) {
-  const T = (key, vars) => applyVars(enStrings[key] || key, vars);
-  const letters = ["A", "B", "C"];
-  let found = [true, false, false];
-  let step = 0;
-  let timers = [];
-  const clear = () => {
-    timers.forEach(clearTimeout);
-    timers = [];
-  };
-  const push = (p) => post(Object.assign({ type: "step" }, p));
-
-  function waitingKnob(i) {
-    push({ title: T("knob", { letter: letters[i] }), body: T("cal.waiting_knob", { letter: letters[i] }), progress: "", warning: false, button: "skip" });
-  }
-  function wrongKnob(i, wrongLetter) {
-    push({
-      title: T("knob", { letter: letters[i] }),
-      body: T("cal.waiting_knob", { letter: letters[i] }),
-      progress: T("cal.wrong", { wrong: wrongLetter, letter: letters[i] }),
-      warning: true,
-      button: "skip",
-    });
-    timers.push(setTimeout(() => waitingKnob(i), 1400));
-  }
-  function turning(i, secondsLeft) {
-    if (secondsLeft <= 0) {
-      found[i] = true;
-      runStep(i + 1);
-      return;
-    }
-    push({
-      title: T("knob", { letter: letters[i] }),
-      body: T("cal.turn", { n: "4" }),
-      progress: T("seconds_left." + (secondsLeft === 1 ? "one" : "other"), { n: String(secondsLeft) }),
-      warning: false,
-      button: "skip",
-    });
-    timers.push(setTimeout(() => turning(i, secondsLeft - 1), 250 * 4));
-  }
-  function runStep(i) {
-    step = i;
-    if (i >= letters.length) {
-      push({ title: T("cal.all_found"), body: T("cal.all_found_text", { n: String(letters.length) }), progress: "", warning: false, button: "finish" });
-      return;
-    }
-    waitingKnob(i);
-    timers.push(setTimeout(() => wrongKnob(i, letters[(i + 1) % letters.length]), 1800));
-    timers.push(setTimeout(() => turning(i, 4), 3600));
-  }
-
-  return (msg) => {
-    switch (msg.type) {
-      case "ready":
-        post({ type: "init", lang: "en", strings: enStrings, theme: { dark: false, accent: "#0078d4" } });
-        timers.push(setTimeout(() => runStep(0), 500));
-        break;
-      case "skip":
-        clear();
-        runStep(step + 1);
-        break;
-      case "finish":
-      case "cancel":
-        clear();
-        break;
     }
   };
 }
@@ -829,9 +812,6 @@ function connectMock(page) {
   let dispatcher;
   const post = (msg) => dispatch(msg);
   switch (page) {
-    case "calibration":
-      dispatcher = startCalibrationMock(post, enStrings);
-      break;
     case "language":
       dispatcher = startLanguageMock(post, enStrings);
       break;

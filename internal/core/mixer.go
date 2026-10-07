@@ -6,22 +6,6 @@ import (
 	"strings"
 )
 
-const midiPortPrefix = "midi:"
-
-func MidiPort(device string) string { return midiPortPrefix + device }
-
-func IsMidiPort(port string) bool { return strings.HasPrefix(port, midiPortPrefix) }
-
-func MidiDevice(port string) string { return strings.TrimPrefix(port, midiPortPrefix) }
-
-// A mixer frame has one column per CC number, so a control's column is its CC and any number of
-// controls fits, then one per pitch-bend channel. Read off a real M-VAVE SMC-Mixer on channel 1:
-//   - CC mode: faders 1-8 send CC 40-47 and the rotary knobs CC 30-37, absolute 0..127, and
-//     buttons send CC 127 on press and 0 on release.
-//   - DAW (Mackie) mode: faders send pitch bend on channels 1-8, the rotary knobs CC 16-23 as
-//     steps (1 up, 65 down), and buttons notes: R 0-7, S 8-15, M 16-23, Square 24-31, the
-//     bottom row 46, 47 and 91-99.
-//
 // DAW mode's faders and knobs land on the CC-mode columns of the same control, so one
 // calibration covers both modes.
 const MixerColumns = 128 + 16
@@ -184,45 +168,6 @@ func DefaultMixerButtons() ButtonMap {
 	return m
 }
 
-// ForMixer is the setup a mixer frame is handled with: Columns come from MixerColumns and every
-// profile's Jobs from its MixerJobs, so the mixer has its own knobs. A fader's top is already its
-// highest value, so only the mixer's own MixerInvert flips it. A mixer never calibrated reads its
-// faders, then its knobs, and an SMC-Mixer always does.
-func (s Setup) ForMixer() Setup {
-	profiles := make([]Profile, len(s.Profiles))
-	for i, p := range s.Profiles {
-		p.Jobs = p.MixerJobs
-		profiles[i] = p
-	}
-	s.Profiles = profiles
-	if s.MixerIsSMC() {
-		s.Columns = append([]int{}, smcColumns...)
-	} else if s.MixerColumns == nil {
-		cols := make([]int, len(s.Columns))
-		for i := range cols {
-			cols[i] = -1
-			if i < len(defaultMixerControls) {
-				cols[i] = defaultMixerControls[i]
-			}
-		}
-		s.Columns = cols
-	} else {
-		s.Columns = append([]int{}, s.MixerColumns...)
-	}
-	s.Invert = !s.MixerInvert
-	s.BoardKinds, s.BoardLayout = nil, nil
-	return s
-}
-
-// MixerButtonOrder is the order Settings lists the mixer's buttons in: Calibrate's, or the
-// SMC-Mixer's own.
-func (s Setup) MixerButtonOrder() []int {
-	if s.ButtonOrder != nil && !s.MixerIsSMC() {
-		return s.ButtonOrder
-	}
-	return SMCButtonOrder()
-}
-
 // MixerState turns MIDI short messages into a frame of 0..1023 values. A control that has not
 // moved yet reads -1, since its position is unknown until the mixer sends it.
 type MixerState struct {
@@ -342,7 +287,7 @@ func (w *MoveWatcher) Moved(values []int) []int {
 	var moved []int
 	for col, v := range values {
 		a := w.anchor[col]
-		if v < 0 || (a >= 0 && absInt(v-a) < moveThreshold) {
+		if v < 0 || (a >= 0 && abs(v-a) < moveThreshold) {
 			continue
 		}
 		w.anchor[col] = v

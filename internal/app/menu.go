@@ -39,28 +39,21 @@ func (app *App) refreshTrayNow() {
 		return
 	}
 	s := app.snapshotSettings()
-	connected, _, port := app.connectionStatus()
-	mixerConnected, _, mixerPort := app.mixerStatus()
-	var ports []string
-	if connected {
-		ports = append(ports, port)
-	}
-	if mixerConnected {
-		ports = append(ports, mixerPort)
+	var names []string
+	for _, d := range s.Devices {
+		if r := app.runnerFor(d.ID); r != nil {
+			if connected, _, _ := r.status(); connected {
+				names = append(names, d.Name+" · "+app.displayProfileName(d.ActiveProfile(), d.Active))
+			}
+		}
 	}
 
-	icon := draw.TrayIcon(draw.IconStyle(s.Icon), len(ports) > 0, app.tray.IconSize(), sys.TaskbarLight())
+	icon := draw.TrayIcon(draw.IconStyle(s.Icon), len(names) > 0, app.tray.IconSize(), sys.TaskbarLight())
 	app.tray.SetIcon(icon)
 
-	var tip string
-	if len(ports) > 0 {
-		name := ""
-		if s.Active >= 0 && s.Active < len(s.Profiles) {
-			name = s.Profiles[s.Active].Name
-		}
-		tip = "WeeJ: " + strings.Join(ports, ", ") + " · " + name
-	} else {
-		tip = "WeeJ: " + app.tr("not_connected")
+	tip := "WeeJ: " + app.tr("not_connected")
+	if len(names) > 0 {
+		tip = "WeeJ: " + strings.Join(names, ", ")
 	}
 	app.tray.SetTooltip(tip)
 
@@ -79,50 +72,59 @@ func (app *App) refreshTrayNow() {
 	}
 }
 
+// buildMenu has a section per board that is on: its name and status, its profiles, and Calibrate
+// for one that can be calibrated.
 func (app *App) buildMenu() []winui.MenuItem {
 	s := app.snapshotSettings()
-	connected, busy, port := app.connectionStatus()
+	labels := app.shortcutLabels(s)
+	label := func(sc *core.Shortcut) string {
+		if sc == nil {
+			return ""
+		}
+		data, err := json.Marshal(sc)
+		if err != nil {
+			return ""
+		}
+		return labels[string(data)]
+	}
 
 	var items []winui.MenuItem
-
-	if s.ShowProfiles {
-		items = append(items, winui.MenuItem{Text: app.tr("profiles"), Disabled: true})
-		labels := app.shortcutLabels(s.Setup)
-		for i := range s.Profiles {
-			i := i
-			p := s.Profiles[i]
-			label := ""
-			if p.Shortcut != nil {
-				if data, err := json.Marshal(p.Shortcut); err == nil {
-					label = labels[string(data)]
-				}
+	for _, d := range s.Devices {
+		if !d.Enabled {
+			continue
+		}
+		id := d.ID
+		connected, busy, port := false, false, ""
+		if r := app.runnerFor(id); r != nil {
+			connected, busy, port = r.status()
+		}
+		items = append(items, winui.MenuItem{
+			Text:     app.trVars("tray.board", map[string]string{"name": core.Clipped(d.Name, 30), "status": app.statusLine(connected, busy, port)}),
+			Disabled: true,
+		})
+		if s.ShowProfiles {
+			for i, p := range d.Profiles {
+				i := i
+				items = append(items, winui.MenuItem{
+					Text:     core.Clipped(app.displayProfileName(p, i), 30),
+					Checked:  i == d.Active,
+					Shortcut: label(p.Shortcut),
+					OnClick:  func() { app.setProfiles([]core.HotkeyTarget{{Device: id, Profile: i}}) },
+				})
 			}
-			items = append(items, winui.MenuItem{
-				Text:     core.Clipped(app.displayProfileName(p, i), 30),
-				Checked:  i == s.Active,
-				Shortcut: label,
-				OnClick:  func() { app.switchProfile(i) },
-			})
+		}
+		if d.Type != core.DeviceSMC {
+			items = append(items, winui.MenuItem{Text: app.tr("calibrate"), OnClick: func() {
+				app.openSettings("boards")
+				app.startWizard(id, nil)
+			}})
 		}
 		items = append(items, winui.MenuItem{Separator: true})
 	}
 
-	board := s.Port != core.PortOff || app.forcedPort != ""
 	items = append(items, winui.MenuItem{Text: app.tr("settings"), OnClick: func() { app.openSettings("") }})
-	if board {
-		items = append(items, winui.MenuItem{Text: app.tr("calibrate"), Disabled: !connected, OnClick: func() { app.startCalibration(false, false) }})
-	}
 	items = append(items, winui.MenuItem{Text: app.tr("language"), Children: app.languageMenuItems(s.Language)})
-
-	items = append(items, winui.MenuItem{Separator: true})
-	if board {
-		items = append(items, winui.MenuItem{Text: app.statusLine(connected, busy, port, ""), Disabled: true})
-	}
-	if s.MixerPort != "" {
-		mixerConnected, mixerBusy, mixerPort := app.mixerStatus()
-		items = append(items, winui.MenuItem{Text: app.statusLine(mixerConnected, mixerBusy, mixerPort, s.MixerPort), Disabled: true})
-	}
-	items = append(items, winui.MenuItem{Text: app.tr("reconnect"), OnClick: app.requestReconnect})
+	items = append(items, winui.MenuItem{Text: app.tr("reconnect"), OnClick: func() { app.requestReconnect("") }})
 
 	items = append(items, winui.MenuItem{Separator: true})
 	items = append(items, winui.MenuItem{
@@ -143,50 +145,22 @@ func (app *App) buildMenu() []winui.MenuItem {
 	return items
 }
 
-func (app *App) displayProfileName(p core.Profile, i int) string {
+func (app *App) displayProfileName(p core.DeviceProfile, i int) string {
 	if strings.TrimSpace(p.Name) != "" {
 		return p.Name
 	}
 	return app.trVars("profile_n", v1("n", strconv.Itoa(i+1)))
 }
 
-func (app *App) switchProfile(i int) {
-	s := app.snapshotSettings()
-	if i < 0 || i >= len(s.Profiles) {
-		return
-	}
-	s.Active = i
-	app.unmuteAll()
-	if err := app.persistSettings(s); err != nil {
-		app.log("Could not save settings: " + err.Error())
-	}
-	app.refreshTray()
-	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "profile", "profile": i})
-	}
-	app.showProfileHUD(s)
-}
-
-// statusLine is a device's line in the menu; waitingFor names a device picked but not found.
-func (app *App) statusLine(connected, busy bool, port, waitingFor string) string {
+// statusLine is a board's status in the tray.
+func (app *App) statusLine(connected, busy bool, port string) string {
 	switch {
 	case connected:
 		return app.trVars("connected", v1("port", port))
 	case busy:
 		return app.trVars("port_busy", v1("port", port))
-	case waitingFor != "":
-		return app.trVars("waiting_for", v1("port", waitingFor))
 	}
 	return app.tr("not_connected")
-}
-
-func (app *App) requestReconnect() {
-	for _, ch := range []chan struct{}{app.reconnectCh, app.mixerReconnectCh} {
-		select {
-		case ch <- struct{}{}:
-		default:
-		}
-	}
 }
 
 func (app *App) toggleLogin() {

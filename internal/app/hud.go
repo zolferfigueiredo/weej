@@ -42,11 +42,16 @@ func (app *App) showHUD(job core.Job, s float64) {
 	})
 }
 
-// showProfileHUD names the profile s has just made active, on the same screen and spot as the
-// volume HUD, so it replaces one that is still showing instead of stacking.
-func (app *App) showProfileHUD(s core.Settings) {
-	if s.Active < 0 || s.Active >= len(s.Profiles) {
+// showProfileHUD names the profile a board has just made active, and the board too when there
+// are several, on the same screen and spot as the volume HUD, so it replaces one that is still
+// showing instead of stacking.
+func (app *App) showProfileHUD(d core.Device, named bool) {
+	if d.Active < 0 || d.Active >= len(d.Profiles) {
 		return
+	}
+	name := app.displayProfileName(d.Profiles[d.Active], d.Active)
+	if named {
+		name = d.Name + " · " + name
 	}
 	app.loop.Invoke(func() {
 		mon := app.monitorFor(core.Job{})
@@ -58,9 +63,9 @@ func (app *App) showProfileHUD(s core.Settings) {
 			Scale:  scale,
 			Dark:   !sys.AppsLight(),
 			Icon:   draw.AppIcon(int(math.Round(20 * scale))),
-			Name:   app.displayProfileName(s.Profiles[s.Active], s.Active),
-			Index:  s.Active,
-			Count:  len(s.Profiles),
+			Name:   name,
+			Index:  d.Active,
+			Count:  len(d.Profiles),
 			Face:   app.faceAt(scale),
 			Accent: sys.Accent(),
 		})

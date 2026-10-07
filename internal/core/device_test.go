@@ -98,8 +98,8 @@ func TestEngineSetupFeedsTheEngineByControl(t *testing.T) {
 	}
 }
 
-func boardFixture() BoardSettings {
-	s := DefaultBoardSettings()
+func boardFixture() Settings {
+	s := DefaultSettings()
 	diy := NewDevice("d1", "Desk", DeviceDIY, 2, 1, 1, "Default")
 	diy.Port, diy.Baud, diy.Speed = "COM6", 115200, SpeedFast
 	diy.Controls[0] = Control{Kind: KindKnob, Input: 3, Reverse: true, Min: 12, Max: 1000}
@@ -119,40 +119,40 @@ func boardFixture() BoardSettings {
 	return s
 }
 
-func TestBoardSettingsRoundTrip(t *testing.T) {
+func TestSettingsRoundTrip(t *testing.T) {
 	s := boardFixture()
-	data, err := EncodeBoardSettings(s)
+	data, err := EncodeSettings(s)
 	if err != nil {
 		t.Fatal(err)
 	}
-	back := DecodeBoardSettings(data, "Default")
+	back := DecodeSettings(data, "Default")
 	if !reflect.DeepEqual(back, s) {
 		t.Errorf("round trip changed the settings:\n got %+v\nwant %+v", back, s)
 	}
-	again, _ := EncodeBoardSettings(back)
+	again, _ := EncodeSettings(back)
 	if !bytes.Equal(again, data) {
 		t.Error("decoding twice changes the file")
 	}
 }
 
-func TestBoardSettingsStartFreshFromAnOldFile(t *testing.T) {
+func TestSettingsStartFreshFromAnOldFile(t *testing.T) {
 	old := []byte(`{"columns":[0,1],"profiles":[{"name":"Default","jobs":[[],[]]}],"port":"COM6"}`)
-	if s := DecodeBoardSettings(old, "Default"); !reflect.DeepEqual(s, DefaultBoardSettings()) {
+	if s := DecodeSettings(old, "Default"); !reflect.DeepEqual(s, DefaultSettings()) {
 		t.Errorf("a file from before boards gave %+v, want the defaults", s)
 	}
-	if s := DecodeBoardSettings([]byte("not json"), "Default"); len(s.Devices) != 0 {
+	if s := DecodeSettings([]byte("not json"), "Default"); len(s.Devices) != 0 {
 		t.Error("a broken file gave boards")
 	}
 }
 
-func TestBoardSettingsDecodeTolerantly(t *testing.T) {
+func TestSettingsDecodeTolerantly(t *testing.T) {
 	data := []byte(`{"version":2,"added":1,"devices":[
 		{"id":"d1","type":"diy","controls":[{"kind":"fader","input":2,"min":900,"max":100},{"kind":"bogus","input":null}],
 		 "layout":[[5,1],[0]],"profiles":[{"name":"A","jobs":[[{"kind":"master"}],null,[{"kind":"microphone"}]]}],"profile":7},
 		{"id":"d1","type":"toaster"},
 		{"id":"d1","type":"smc","controls":[],"lights":"disco","profiles":[]},
 		{"type":"midi"}]}`)
-	s := DecodeBoardSettings(data, "Default")
+	s := DecodeSettings(data, "Default")
 	if len(s.Devices) != 3 {
 		t.Fatalf("got %d boards, want 3: an unknown type is dropped", len(s.Devices))
 	}

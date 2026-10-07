@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// BoardSettings is everything WeeJ saves: its boards, and its own settings.
-type BoardSettings struct {
+// Settings is everything WeeJ saves: its boards, and its own settings.
+type Settings struct {
 	Devices []Device
 	// Added counts every board ever added, so NextDeviceID never hands out an ID again.
 	Added int
@@ -29,12 +29,12 @@ type BoardSettings struct {
 // is not read at all.
 const settingsVersion = 2
 
-func DefaultBoardSettings() BoardSettings {
-	return BoardSettings{ShowProfiles: true, Icon: IconMixer, ShowDataInMenu: true, UpdateEvery: 604800}
+func DefaultSettings() Settings {
+	return Settings{ShowProfiles: true, Icon: IconMixer, ShowDataInMenu: true, UpdateEvery: 604800}
 }
 
-// The on-disk shape, key order fixed so EncodeBoardSettings is deterministic.
-type boardSettingsJSON struct {
+// The on-disk shape, key order fixed so EncodeSettings is deterministic.
+type settingsJSON struct {
 	Version          int          `json:"version"`
 	Devices          []deviceJSON `json:"devices"`
 	Added            int          `json:"added"`
@@ -85,8 +85,8 @@ type profileJSON struct {
 	Buttons  ButtonMap `json:"buttons"`
 }
 
-func EncodeBoardSettings(s BoardSettings) ([]byte, error) {
-	out := boardSettingsJSON{
+func EncodeSettings(s Settings) ([]byte, error) {
+	out := settingsJSON{
 		Version:          settingsVersion,
 		Devices:          make([]deviceJSON, len(s.Devices)),
 		Added:            s.Added,
@@ -146,11 +146,11 @@ func encodeDevice(d Device) deviceJSON {
 	return out
 }
 
-// DecodeBoardSettings never fails: a file from before boards, or one that isn't JSON, gives the
+// DecodeSettings never fails: a file from before boards, or one that isn't JSON, gives the
 // defaults, and a bad value falls back to its default on its own. profileName names the profile
 // a board without any gets.
-func DecodeBoardSettings(data []byte, profileName string) BoardSettings {
-	s := DefaultBoardSettings()
+func DecodeSettings(data []byte, profileName string) Settings {
+	s := DefaultSettings()
 	var raw map[string]json.RawMessage
 	if json.Unmarshal(data, &raw) != nil {
 		return s
@@ -298,4 +298,12 @@ func decodeDevice(data json.RawMessage, profileName string) (Device, bool) {
 		d.Lights = ParseLightPattern(v)
 	}
 	return d, true
+}
+
+// EncodeDevice is one board in the file's shape, which Settings edits it in.
+func EncodeDevice(d Device) ([]byte, error) { return json.Marshal(encodeDevice(d)) }
+
+// DecodeDevice reads one board as the file holds it, as tolerantly as DecodeSettings.
+func DecodeDevice(data []byte, profileName string) (Device, bool) {
+	return decodeDevice(data, profileName)
 }

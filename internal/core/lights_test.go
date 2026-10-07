@@ -87,7 +87,7 @@ func TestRandomChangesPatternEverySixSeconds(t *testing.T) {
 	last := ""
 	for n := range 50 {
 		p := RandomPattern(float64(n)*randomEvery + 1)
-		if p == last || !Animated(p) || p == "eq" || p == "clock" || p == "random" {
+		if p == last || !Animated(p) || IsEQ(p) || p == "clock" || p == "random" {
 			t.Fatalf("random's pattern %d is %q after %q", n, p, last)
 		}
 		if RandomPattern(float64(n)*randomEvery+5.9) != p {
@@ -118,6 +118,7 @@ func TestClockFrameShowsTheTimeInBinary(t *testing.T) {
 
 func TestSpectrumJumpsTheBandThatGetsLouder(t *testing.T) {
 	s := NewSpectrum()
+	eq := NewEQ("eq")
 	tone := func(hz, amp float64) []float32 {
 		out := make([]float32, 1920)
 		for i := range out {
@@ -131,7 +132,7 @@ func TestSpectrumJumpsTheBandThatGetsLouder(t *testing.T) {
 		s.Add(tone(60, 0.05))
 		s.Add(tone(3000, 0.02))
 		now += 0.04
-		s.Bands(now)
+		eq.Columns(s, now)
 	}
 	loud := tone(3000, 0.5)
 	for i := range loud {
@@ -140,12 +141,12 @@ func TestSpectrumJumpsTheBandThatGetsLouder(t *testing.T) {
 	s.Add(loud)
 	s.Add(loud)
 	now += 0.04
-	bands := s.Bands(now)
+	bands := eq.Columns(s, now)
 	if bands[5] < 0.9 || bands[0] > 0.6 {
 		t.Errorf("the high tone jumping gives bands %.2f, want column 6 full and the bass calm", bands)
 	}
 	s.Add(make([]float32, fftSize))
-	if bands := s.Bands(now + 2); bands != [8]float64{} {
+	if bands := eq.Columns(s, now+2); bands != [8]float64{} {
 		t.Errorf("silence two seconds later gives %.2f, want nothing", bands)
 	}
 }
@@ -176,5 +177,35 @@ func TestMixerStateKeepsTheFaderPitch(t *testing.T) {
 	m.Feed(0xB0 | 16<<8 | 1<<16)
 	if m.LastChanged() != 30 {
 		t.Errorf("knob 1's step changed column %d, want 30", m.LastChanged())
+	}
+}
+
+func TestEQGamingShowsEachSideOnItsOwnHalf(t *testing.T) {
+	s := NewSpectrum()
+	eq := NewEQ("eqgame")
+	tone := func(hz, amp float64) []float32 {
+		out := make([]float32, 1920)
+		for i := range out {
+			out[i] = float32(amp * math.Sin(2*math.Pi*hz*float64(i)/48000))
+		}
+		return out
+	}
+	quiet := func(hz float64) []float32 { return tone(hz, 0.01) }
+	now := 0.0
+	for range 100 {
+		s.AddStereo(quiet(200), quiet(12000))
+		now += 0.04
+		eq.Columns(s, now)
+	}
+	// A loud bass on the left only, and loud highs on the right only.
+	s.AddStereo(tone(200, 0.5), quiet(12000))
+	s.AddStereo(tone(200, 0.5), quiet(12000))
+	now += 0.04
+	cols := eq.Columns(s, now)
+	if cols[0] < 0.9 || cols[7] > 0.6 {
+		t.Errorf("a loud bass on the left gives %.2f, want column 1 full and column 8 calm", cols)
+	}
+	if NewEQ("eq2") == nil || NewEQ("wave") != nil || !IsEQ("eqgame") || IsEQ("fire") {
+		t.Error("the EQ patterns aren't told apart")
 	}
 }

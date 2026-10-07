@@ -25,136 +25,6 @@ const (
 	theejURL   = "https://theej.zolfer.com"
 )
 
-type setupJSON struct {
-	Columns          []*int         `json:"columns"`
-	Profiles         []core.Profile `json:"profiles"`
-	Profile          int            `json:"profile"`
-	NextProfile      *core.Shortcut `json:"nextProfile"`
-	PreviousProfile  *core.Shortcut `json:"previousProfile"`
-	InvertKnobs      bool           `json:"invertKnobs"`
-	InvertMixer      bool           `json:"invertMixer"`
-	HideTrayIcon     bool           `json:"hideTrayIcon"`
-	ShowProfileList  bool           `json:"showProfileList"`
-	TrayIcon         string         `json:"trayIcon"`
-	Speed            string         `json:"speed"`
-	Port             string         `json:"port"`
-	MixerPort        string         `json:"mixerPort"`
-	MixerLights      string         `json:"mixerLights"`
-	BaudRate         int            `json:"baudRate"`
-	BoardKinds       []string       `json:"boardKinds"`
-	BoardLayout      [][]int        `json:"boardLayout"`
-	MixerColumns     []*int         `json:"mixerColumns"`
-	MixerButtonOrder []int          `json:"mixerButtonOrder"`
-	Language         string         `json:"language"`
-}
-
-func columnsToJSON(cols []int) []*int {
-	out := make([]*int, len(cols))
-	for i, c := range cols {
-		if c == -1 {
-			continue
-		}
-		v := c
-		out[i] = &v
-	}
-	return out
-}
-
-func columnsFromJSON(ptrs []*int) []int {
-	out := make([]int, len(ptrs))
-	for i, p := range ptrs {
-		if p == nil {
-			out[i] = -1
-		} else {
-			out[i] = *p
-		}
-	}
-	return out
-}
-
-func mixerColumnsFromJSON(ptrs []*int) []int {
-	if ptrs == nil {
-		return nil
-	}
-	return columnsFromJSON(ptrs)
-}
-
-func padJobRows(rows [][]core.Job, knobs int) [][]core.Job {
-	out := make([][]core.Job, max(len(rows), knobs))
-	for j := range out {
-		out[j] = []core.Job{}
-		if j < len(rows) && rows[j] != nil {
-			out[j] = rows[j]
-		}
-	}
-	return out
-}
-
-func setupToJSON(s core.Setup) setupJSON {
-	columns := s.Columns
-	if columns == nil {
-		columns = []int{}
-	}
-	// One jobs row per knob on each device: the page adds and removes knobs by index.
-	profiles := make([]core.Profile, len(s.Profiles))
-	for i, p := range s.Profiles {
-		p.Jobs = padJobRows(p.Jobs, len(columns))
-		p.MixerJobs = padJobRows(p.MixerJobs, len(s.ForMixer().Columns))
-		profiles[i] = p
-	}
-	return setupJSON{
-		Columns:          columnsToJSON(columns),
-		Profiles:         profiles,
-		Profile:          s.Active,
-		NextProfile:      s.Next,
-		PreviousProfile:  s.Previous,
-		InvertKnobs:      s.Invert,
-		InvertMixer:      s.MixerInvert,
-		HideTrayIcon:     s.HideIcon,
-		ShowProfileList:  s.ShowProfiles,
-		TrayIcon:         string(s.Icon),
-		Speed:            string(s.Speed),
-		Port:             s.Port,
-		MixerPort:        s.MixerPort,
-		MixerLights:      s.MixerLights,
-		BaudRate:         s.BaudRate(),
-		BoardKinds:       core.EncodeKinds(s.BoardKinds),
-		BoardLayout:      s.BoardLayout,
-		MixerColumns:     core.EncodeMixerColumns(s.MixerColumns),
-		MixerButtonOrder: s.ButtonOrder,
-	}
-}
-
-func setupToJSONWithLanguage(s core.Settings) setupJSON {
-	j := setupToJSON(s.Setup)
-	j.Language = s.Language
-	return j
-}
-
-func setupFromJSON(j setupJSON) core.Setup {
-	return core.Setup{
-		Columns:      columnsFromJSON(j.Columns),
-		Profiles:     j.Profiles,
-		Active:       j.Profile,
-		Next:         j.NextProfile,
-		Previous:     j.PreviousProfile,
-		Invert:       j.InvertKnobs,
-		MixerInvert:  j.InvertMixer,
-		HideIcon:     j.HideTrayIcon,
-		ShowProfiles: j.ShowProfileList,
-		Icon:         core.ParseIconStyle(j.TrayIcon),
-		Speed:        core.ParseSpeed(j.Speed),
-		Port:         j.Port,
-		MixerPort:    j.MixerPort,
-		MixerLights:  core.ParseLightPattern(j.MixerLights),
-		Baud:         j.BaudRate,
-		MixerColumns: mixerColumnsFromJSON(j.MixerColumns),
-		ButtonOrder:  j.MixerButtonOrder,
-		BoardKinds:   core.DecodeKinds(j.BoardKinds),
-		BoardLayout:  core.CleanLayout(j.BoardLayout, len(j.Columns)),
-	}
-}
-
 func (app *App) openSettings(tab string) {
 	app.mu.Lock()
 	win := app.settingsWin
@@ -180,7 +50,7 @@ func (app *App) openSettings(tab string) {
 			app.settingsWin = nil
 			app.mu.Unlock()
 			// Closing mid-recording would otherwise leave the saved hotkeys switched off.
-			app.registerHotkeys(app.snapshotSettings().Setup)
+			app.registerHotkeys(app.snapshotSettings())
 		},
 	}, app.onSettingsMessage)
 	if err != nil {
@@ -200,7 +70,8 @@ func (app *App) closeSettings() {
 
 func (app *App) onSettingsMessage(data []byte) {
 	var probe struct {
-		Type string `json:"type"`
+		Type   string `json:"type"`
+		Device string `json:"device"`
 	}
 	if err := json.Unmarshal(data, &probe); err != nil {
 		return
@@ -213,12 +84,24 @@ func (app *App) onSettingsMessage(data []byte) {
 		app.loop.Invoke(app.prepareJobMenu)
 	case "save":
 		app.handleSettingsSave(data)
+	case "setDevice":
+		app.handleSetDevice(data)
+	case "addDevice":
+		app.handleAddDevice(data)
+	case "removeDevice":
+		app.handleRemoveDevice(probe.Device)
 	case "calibrate":
 		var msg struct {
-			Device string `json:"device"`
+			Controls []int `json:"controls"`
 		}
 		_ = json.Unmarshal(data, &msg)
-		app.loop.Invoke(func() { app.startCalibration(msg.Device == "mixer", false) })
+		app.loop.Invoke(func() { app.startWizard(probe.Device, msg.Controls) })
+	case "wizard":
+		var msg struct {
+			Op string `json:"op"`
+		}
+		_ = json.Unmarshal(data, &msg)
+		app.loop.Invoke(func() { app.wizardOp(msg.Op) })
 	case "openJobMenu":
 		app.loop.Invoke(func() { app.openJobMenu(data) })
 	case "pickApp":
@@ -236,7 +119,7 @@ func (app *App) onSettingsMessage(data []byte) {
 	case "listPorts":
 		app.sendPorts()
 	case "reconnect":
-		app.requestReconnect()
+		app.requestReconnect(probe.Device)
 	case "checkUpdates":
 		app.manualCheckUpdate()
 	case "openUrl":
@@ -244,6 +127,23 @@ func (app *App) onSettingsMessage(data []byte) {
 	case "close":
 		app.closeSettings()
 	}
+}
+
+// settingsJSON is the settings as the page edits them: the file's own shape.
+func settingsJSON(s core.Settings) json.RawMessage {
+	data, err := core.EncodeSettings(s)
+	if err != nil {
+		return json.RawMessage("null")
+	}
+	return data
+}
+
+func deviceJSON(d core.Device) json.RawMessage {
+	data, err := core.EncodeDevice(d)
+	if err != nil {
+		return json.RawMessage("null")
+	}
+	return data
 }
 
 func (app *App) sendSettingsInit() {
@@ -258,6 +158,14 @@ func (app *App) sendSettingsInit() {
 	if tab == "" {
 		tab = "general"
 	}
+	values := map[string][]int{}
+	status := map[string]any{}
+	for _, d := range s.Devices {
+		status[d.ID] = app.statusPayload(d.ID)
+		if r := app.runnerFor(d.ID); r != nil {
+			values[d.ID] = r.live.frame()
+		}
+	}
 
 	payload := app.baseInitFields()
 	payload["tab"] = tab
@@ -269,92 +177,153 @@ func (app *App) sendSettingsInit() {
 	payload["icon"] = appIconDataURL(64)
 	payload["languages"] = languagesPayload()
 	payload["language"] = s.Language
-	payload["setup"] = setupToJSONWithLanguage(s)
-	payload["catalog"] = app.buildCatalog(s.Setup)
+	payload["settings"] = settingsJSON(s)
+	payload["catalog"] = app.buildCatalog(s.Devices)
 	payload["iconPreviews"] = app.iconPreviews()
-	payload["labels"] = app.shortcutLabels(s.Setup)
+	payload["labels"] = app.shortcutLabels(s)
 	payload["nightLightExperimental"] = true
-	payload["connection"] = app.connectionPayload(false)
-	payload["mixerConnection"] = app.connectionPayload(true)
-	payload["calibrating"] = app.isCalibrating()
+	payload["status"] = status
+	payload["values"] = values
+	payload["wizard"] = app.wizardPayload()
 	payload["forcedPort"] = app.forcedPort
 	payload["baudRates"] = core.BaudRates
-	payload["mixerButtonDefaults"] = core.SMCButtonOrder()
+	payload["smcButtons"] = core.SMCButtonOrder()
 	payload["lightPatterns"] = core.LightPatterns
-	payload["values"] = map[string][]int{"board": app.boardLive.frame(), "mixer": app.mixerLive.frame()}
 	payload["ctrlName"] = app.ctrlLabelName()
 	win.Send(payload)
 }
 
+// applySettings saves new settings and makes everything follow them: the boards that run, their
+// lights, the shortcuts and the tray. A board whose profile changed gets its mutes back first.
+func (app *App) applySettings(next core.Settings) {
+	cur := app.snapshotSettings()
+	for _, d := range cur.Devices {
+		if i := deviceIndex(next, d.ID); i < 0 || next.Devices[i].Active != d.Active {
+			app.unmuteDevice(d)
+		}
+	}
+	for i := range next.Devices {
+		d := &next.Devices[i]
+		for j := range d.Profiles {
+			if strings.TrimSpace(d.Profiles[j].Name) == "" {
+				d.Profiles[j].Name = app.trVars("profile_n", v1("n", strconv.Itoa(j+1)))
+			}
+		}
+		if strings.TrimSpace(d.Name) == "" {
+			d.Name = app.tr("device.type." + string(d.Type))
+		}
+	}
+	if err := app.persistSettings(next); err != nil {
+		app.log("Could not save settings: " + err.Error())
+		return
+	}
+	app.syncRunners(next.Devices)
+	app.applyLights(next.Devices)
+	app.registerHotkeys(next)
+	app.refreshTray()
+}
+
+func (app *App) profileName() string { return app.tr("default_profile") }
+
 func (app *App) handleSettingsSave(data []byte) {
 	var msg struct {
-		Setup setupJSON `json:"setup"`
+		Settings json.RawMessage `json:"settings"`
 	}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return
 	}
-	newSetup := setupFromJSON(msg.Setup)
-	if len(newSetup.Profiles) == 0 {
-		app.log("Ignored a Settings save with no profiles")
-		return
-	}
-	if newSetup.Active < 0 || newSetup.Active >= len(newSetup.Profiles) {
-		newSetup.Active = 0
-	}
-	// Switching to an SMC-Mixer drops the calibration it had before WeeJ knew it.
-	core.MigrateSMC(&newSetup)
-
-	for i := range newSetup.Profiles {
-		if strings.TrimSpace(newSetup.Profiles[i].Name) == "" {
-			newSetup.Profiles[i].Name = app.trVars("profile_n", v1("n", strconv.Itoa(i+1)))
-		}
-	}
-
-	cur := app.snapshotSettings()
-	old := cur.Setup
-	if old.Active != newSetup.Active {
-		app.unmuteAll()
-	}
-	cur.Setup = newSetup
-	if err := app.persistSettings(cur); err != nil {
-		app.log("Could not save settings: " + err.Error())
-	}
-	if old.Port != newSetup.Port || old.BaudRate() != newSetup.BaudRate() {
-		app.startSerial()
-	}
-	app.applyLights(newSetup)
-	if old.MixerPort != newSetup.MixerPort {
-		app.startMixer()
-	}
-
-	app.registerHotkeys(cur.Setup)
-	app.refreshTray()
-
+	page := core.DecodeSettings(msg.Settings, app.profileName())
+	next := app.snapshotSettings()
+	next.Devices = page.Devices
+	next.HideIcon, next.ShowProfiles, next.Icon = page.HideIcon, page.ShowProfiles, page.Icon
+	app.applySettings(next)
 	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "saved", "setup": setupToJSONWithLanguage(cur)})
-	}
-
-	for _, mixer := range []bool{false, true} {
-		if hasUncalibratedColumn(deviceColumns(cur.Setup, mixer)) && app.deviceConnected(mixer) {
-			app.loop.Invoke(func() { app.startCalibration(mixer, true) })
-			break
-		}
+		win.Send(map[string]any{"type": "saved", "settings": settingsJSON(app.snapshotSettings())})
 	}
 }
 
-func hasUncalibratedColumn(cols []int) bool {
-	for _, c := range cols {
-		if c == -1 {
-			return true
-		}
+// handleSetDevice saves one board at once, as the gear's dialog, the on and off switch, the
+// Draw or List choice and calibrating do, leaving the rest of the page's edits for Apply.
+func (app *App) handleSetDevice(data []byte) {
+	var msg struct {
+		Device json.RawMessage `json:"device"`
 	}
-	return false
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return
+	}
+	d, ok := core.DecodeDevice(msg.Device, app.profileName())
+	if !ok {
+		return
+	}
+	next := app.snapshotSettings()
+	i := deviceIndex(next, d.ID)
+	if i < 0 {
+		return
+	}
+	next.Devices[i] = d
+	app.applySettings(next)
+	app.sendDevice(app.snapshotSettings().Devices[i])
+}
+
+func (app *App) sendDevice(d core.Device) {
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "deviceSaved", "device": deviceJSON(d)})
+	}
+}
+
+func (app *App) handleAddDevice(data []byte) {
+	var msg struct {
+		Name     string `json:"name"`
+		Type     string `json:"deviceType"`
+		Port     string `json:"port"`
+		BaudRate int    `json:"baudRate"`
+		Knobs    int    `json:"knobs"`
+		Faders   int    `json:"faders"`
+		Buttons  int    `json:"buttons"`
+	}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return
+	}
+	t, ok := core.ParseDeviceType(msg.Type)
+	if !ok {
+		return
+	}
+	clamp := func(n int) int { return min(max(n, 0), 64) }
+	next := app.snapshotSettings()
+	d := core.NewDevice(core.NextDeviceID(next.Added), strings.TrimSpace(msg.Name), t, clamp(msg.Knobs), clamp(msg.Faders), clamp(msg.Buttons), app.profileName())
+	d.Port, d.Baud = msg.Port, msg.BaudRate
+	next.Added++
+	next.Devices = append(next.Devices, d)
+	app.applySettings(next)
+	saved := app.snapshotSettings()
+	if i := deviceIndex(saved, d.ID); i >= 0 {
+		app.sendDevice(saved.Devices[i])
+	}
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "added", "device": d.ID})
+	}
+}
+
+func (app *App) handleRemoveDevice(id string) {
+	next := app.snapshotSettings()
+	i := deviceIndex(next, id)
+	if i < 0 {
+		return
+	}
+	if w := app.wizardFor(id); w != nil {
+		app.endWizard(false)
+	}
+	next.Devices = append(next.Devices[:i:i], next.Devices[i+1:]...)
+	app.applySettings(next)
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "deviceRemoved", "device": id})
+	}
 }
 
 func (app *App) handleSettingsPickApp(data []byte) {
 	var msg struct {
 		Knob int `json:"knob"`
-		// Button is set when a mixer button's Open or Close an app asks; Mode says which.
+		// Button is set when a button's Open or Close an app asks; Mode says which.
 		Button *int   `json:"button"`
 		Mode   string `json:"mode"`
 	}
@@ -395,6 +364,8 @@ func (app *App) handleSettingsPickApp(data []byte) {
 	}
 }
 
+// handleSettingsImportDeej adds a DIY board made from a deej config: its sliders in their order,
+// already found, and a profile with their jobs.
 func (app *App) handleSettingsImportDeej() {
 	initialDir := `C:\deej`
 	if p := runningProcessPath("deej.exe"); p != "" {
@@ -415,21 +386,28 @@ func (app *App) handleSettingsImportDeej() {
 		return
 	}
 
-	cur := app.snapshotSettings()
-	cur.Profiles = append(cur.Profiles, core.Profile{Name: imp.Name, Jobs: imp.Jobs})
-	cur.Columns = imp.Columns
-	cur.Invert = imp.Invert
-	if imp.Baud > 0 {
-		cur.Baud = imp.Baud
+	next := app.snapshotSettings()
+	d := core.NewDevice(core.NextDeviceID(next.Added), imp.Name, core.DeviceDIY, len(imp.Columns), 0, 0, imp.Name)
+	for i, col := range imp.Columns {
+		// deej reads a slider as it comes, and core.ImportDeej keeps WeeJ's old flip in Invert.
+		d.Controls[i].Input, d.Controls[i].Reverse = col, !imp.Invert
 	}
-	cur.Active = len(cur.Profiles) - 1
-
+	d.Profiles[0].Jobs = imp.Jobs
+	for len(d.Profiles[0].Jobs) < len(d.Controls) {
+		d.Profiles[0].Jobs = append(d.Profiles[0].Jobs, []core.Job{})
+	}
+	if imp.Baud > 0 {
+		d.Baud = imp.Baud
+	}
+	next.Added++
+	next.Devices = append(next.Devices, d)
+	app.applySettings(next)
+	saved := app.snapshotSettings()
+	if i := deviceIndex(saved, d.ID); i >= 0 {
+		app.sendDevice(saved.Devices[i])
+	}
 	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{
-			"type":    "imported",
-			"setup":   setupToJSONWithLanguage(cur),
-			"skipped": imp.Skipped,
-		})
+		win.Send(map[string]any{"type": "imported", "device": d.ID, "skipped": imp.Skipped})
 	}
 }
 
@@ -469,7 +447,7 @@ func (app *App) openWebWindows() []*web.Window {
 	app.mu.Lock()
 	defer app.mu.Unlock()
 	var out []*web.Window
-	for _, w := range []*web.Window{app.settingsWin, app.jobMenuWin, app.calibWin, app.updateWin} {
+	for _, w := range []*web.Window{app.settingsWin, app.jobMenuWin, app.updateWin} {
 		if w != nil {
 			out = append(out, w)
 		}
@@ -481,9 +459,6 @@ func (app *App) retitleWebWindows() {
 	if w := app.settingsWin; w != nil {
 		w.SetTitle(app.tr("settings"))
 	}
-	if w := app.calibWin; w != nil {
-		w.SetTitle(app.tr("calibration_title"))
-	}
 }
 
 func (app *App) handleSettingsRecord() {
@@ -491,9 +466,11 @@ func (app *App) handleSettingsRecord() {
 }
 
 func (app *App) handleSettingsStopRecording() {
-	app.registerHotkeys(app.snapshotSettings().Setup)
+	app.registerHotkeys(app.snapshotSettings())
 }
 
+// recordDraft is one board's shortcuts as the page has them: a shortcut only clashes on its own
+// board, since the same one may switch several.
 type recordDraft struct {
 	Profiles []*core.Shortcut `json:"profiles"`
 	Next     *core.Shortcut   `json:"next"`
@@ -549,8 +526,8 @@ func (app *App) handleSettingsKey(data []byte) {
 		win.Send(map[string]any{"type": "rejected", "field": msg.Field})
 	}
 
-	// A mixer button presses its keys rather than listening for them, so any key will do and
-	// nothing has to be free to register.
+	// A button presses its keys rather than listening for them, so any key will do and nothing
+	// has to be free to register.
 	if strings.HasPrefix(msg.Field, "button:") {
 		win.Send(map[string]any{"type": "recorded", "field": msg.Field, "shortcut": shortcut, "label": core.Label(shortcut, app.ctrlLabelName())})
 		return
@@ -621,19 +598,20 @@ func languagesPayload() []map[string]string {
 	return out
 }
 
-func (app *App) connectionPayload(mixer bool) map[string]any {
-	connected, busy, port := app.connectionStatus()
-	if mixer {
-		connected, busy, port = app.mixerStatus()
+func (app *App) statusPayload(id string) map[string]any {
+	out := map[string]any{"connected": false, "busy": false, "port": ""}
+	if r := app.runnerFor(id); r != nil {
+		connected, busy, port := r.status()
+		out["connected"], out["busy"], out["port"] = connected, busy, port
 	}
-	return map[string]any{"connected": connected, "busy": busy, "port": port}
+	return out
 }
 
-func (app *App) pushConnection(mixer bool) {
+func (app *App) pushStatus(id string) {
 	if win := app.settingsWin; win != nil {
-		payload := app.connectionPayload(mixer)
-		payload["type"] = "connection"
-		payload["device"] = deviceName(mixer)
+		payload := app.statusPayload(id)
+		payload["type"] = "status"
+		payload["device"] = id
 		win.Send(payload)
 	}
 }

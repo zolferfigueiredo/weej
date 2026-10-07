@@ -28,10 +28,10 @@ type Loopback struct {
 // 200 ms of buffer, in REFERENCE_TIME's 100 ns units; it is read every 20 ms.
 const loopbackBuffer = 2_000_000
 
-// Sink takes what Loopback hears: the sample rate, then mono samples from -1 to 1.
+// Sink takes what Loopback hears: the sample rate, then each side's samples from -1 to 1.
 type Sink interface {
 	SetRate(hz float64)
-	Add(samples []float32)
+	AddStereo(left, right []float32)
 }
 
 var _ Sink = (*core.Spectrum)(nil)
@@ -126,7 +126,7 @@ func (l *Loopback) capture() error {
 	check := time.NewTicker(2 * time.Second)
 	defer check.Stop()
 	channels, align := int(wfx.NChannels), int(wfx.NBlockAlign)
-	var mono []float32
+	var left, right []float32
 	for {
 		select {
 		case <-l.stop:
@@ -148,16 +148,17 @@ func (l *Loopback) capture() error {
 				if err := acc.GetBuffer(&data, &frames, &flags, nil, nil); err != nil {
 					return err
 				}
-				mono = mono[:0]
+				left, right = left[:0], right[:0]
 				if flags&wca.AUDCLNT_BUFFERFLAGS_SILENT != 0 || data == nil {
-					mono = append(mono, make([]float32, frames)...)
+					left = append(left, make([]float32, frames)...)
+					right = append(right, make([]float32, frames)...)
 				} else {
-					mono = mixDown(mono, unsafe.Slice(data, int(frames)*align), channels, align, float)
+					left, right = sides(left, right, unsafe.Slice(data, int(frames)*align), channels, align, float)
 				}
 				if err := acc.ReleaseBuffer(frames); err != nil {
 					return err
 				}
-				l.sink.Add(mono)
+				l.sink.AddStereo(left, right)
 			}
 		}
 	}
@@ -193,18 +194,19 @@ func sampleFormat(wfx *wca.WAVEFORMATEX) (float, ok bool) {
 	return false, false
 }
 
-// mixDown appends each frame of data as one sample, the average of its channels.
-func mixDown(out []float32, data []byte, channels, align int, float bool) []float32 {
-	for f := 0; f+align <= len(data); f += align {
-		sum := float32(0)
-		for c := range channels {
-			if float {
-				sum += math.Float32frombits(binary.LittleEndian.Uint32(data[f+4*c:]))
-			} else {
-				sum += float32(int16(binary.LittleEndian.Uint16(data[f+2*c:]))) / 32768
-			}
+// sides appends each frame of data's first two channels, left then right; a mono mix gives its
+// one channel to both.
+func sides(left, right []float32, data []byte, channels, align int, float bool) ([]float32, []float32) {
+	sample := func(f, c int) float32 {
+		if float {
+			return math.Float32frombits(binary.LittleEndian.Uint32(data[f+4*c:]))
 		}
-		out = append(out, sum/float32(channels))
+		return float32(int16(binary.LittleEndian.Uint16(data[f+2*c:]))) / 32768
 	}
-	return out
+	r := min(1, channels-1)
+	for f := 0; f+align <= len(data); f += align {
+		left = append(left, sample(f, 0))
+		right = append(right, sample(f, r))
+	}
+	return left, right
 }

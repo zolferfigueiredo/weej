@@ -27,8 +27,6 @@ func IsSMCName(device string) bool {
 	return strings.Contains(strings.ToLower(device), "smc-mixer")
 }
 
-func (s Setup) MixerIsSMC() bool { return IsSMCName(s.MixerPort) }
-
 // SMCButtonID is the id of the button that sends cc in CC mode.
 func SMCButtonID(cc int) (int, bool) {
 	switch {
@@ -133,6 +131,9 @@ type SMCMode struct{ daw atomic.Bool }
 
 func (m *SMCMode) DAW() bool { return m.daw.Load() }
 
+// Assume sets the mode before the mixer has sent anything to tell it by.
+func (m *SMCMode) Assume(daw bool) { m.daw.Store(daw) }
+
 func (m *SMCMode) Seen(msg uint32) {
 	status := msg & 0xF0
 	cc := int(msg>>8) & 0x7F
@@ -143,107 +144,4 @@ func (m *SMCMode) Seen(msg uint32) {
 	case status == 0xB0:
 		m.daw.Store(false)
 	}
-}
-
-// MigrateSMC moves mixer data saved before WeeJ knew the SMC-Mixer onto its fixed ids. Buttons
-// saved under their CC-mode CC move to their ids. An SMC's own calibration goes: each knob's jobs,
-// and the mutes pointing at it, move to the control the calibration had found for it. Running it
-// again changes nothing.
-func MigrateSMC(s *Setup) {
-	for i := range s.Profiles {
-		s.Profiles[i].Buttons = smcButtonKeys(s.Profiles[i].Buttons)
-	}
-	if !s.MixerIsSMC() {
-		if s.ButtonOrder != nil {
-			order := []int{}
-			for _, id := range s.ButtonOrder {
-				if to, ok := SMCButtonID(id); ok {
-					id = to
-				}
-				if !slices.Contains(order, id) {
-					order = append(order, id)
-				}
-			}
-			s.ButtonOrder = order
-		}
-		return
-	}
-	if s.MixerColumns != nil {
-		for i := range s.Profiles {
-			remapSMCKnobs(&s.Profiles[i], s.MixerColumns)
-		}
-	}
-	s.MixerColumns = nil
-	s.ButtonOrder = nil
-}
-
-// Canonical keys go first, so a CC-mode key's actions follow the same button's own.
-func smcButtonKeys(m ButtonMap) ButtonMap {
-	if m == nil {
-		return nil
-	}
-	out := ButtonMap{}
-	for id, actions := range m {
-		if _, ok := SMCButtonID(id); !ok {
-			out[id] = slices.Clone(actions)
-		}
-	}
-	for cc, actions := range m {
-		id, ok := SMCButtonID(cc)
-		if !ok {
-			continue
-		}
-		for _, a := range actions {
-			if !slices.Contains(out[id], a) {
-				out[id] = append(out[id], a)
-			}
-		}
-	}
-	return out
-}
-
-func remapSMCKnobs(p *Profile, calibrated []int) {
-	to := func(knob int) (int, bool) {
-		if knob < 0 || knob >= len(calibrated) {
-			return 0, false
-		}
-		i := slices.Index(smcColumns, calibrated[knob])
-		return i, i >= 0
-	}
-	jobs := make([][]Job, len(smcColumns))
-	for knob, row := range p.MixerJobs {
-		if i, ok := to(knob); ok && jobs[i] == nil {
-			jobs[i] = row
-		}
-	}
-	for i, row := range jobs {
-		if row == nil {
-			jobs[i] = []Job{}
-		}
-	}
-	p.MixerJobs = jobs
-
-	if p.Buttons == nil {
-		return
-	}
-	buttons := ButtonMap{}
-	for id, actions := range p.Buttons {
-		var kept []ButtonAction
-		for _, a := range actions {
-			if knob, ok := a.MuteKnob(); ok {
-				i, ok := to(knob)
-				if !ok {
-					continue
-				}
-				a = MuteAction(i)
-			}
-			if !slices.Contains(kept, a) {
-				kept = append(kept, a)
-			}
-		}
-		if len(kept) > 0 {
-			buttons[id] = kept
-		}
-	}
-	p.Buttons = buttons
 }

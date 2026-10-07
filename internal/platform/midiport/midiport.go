@@ -115,10 +115,10 @@ func findOutput(name string) (uintptr, bool) {
 	return 0, false
 }
 
-// spectrum is the sound every SMC-Mixer's "eq" pattern follows.
+// spectrum is the sound every SMC-Mixer's EQ patterns follow.
 var spectrum atomic.Pointer[core.Spectrum]
 
-// SetSpectrum is the sound the "eq" pattern follows.
+// SetSpectrum is the sound the EQ patterns follow.
 func SetSpectrum(s *core.Spectrum) { spectrum.Store(s) }
 
 type Config struct {
@@ -150,6 +150,9 @@ type Port struct {
 
 func New(cfg Config) *Port {
 	p := &Port{cfg: cfg, key: nextKey.Add(1), poke: make(chan struct{}, 1)}
+	// DAW mode is how an SMC-Mixer is used with WeeJ, and its lights take that mode's messages
+	// until the mixer says otherwise.
+	p.mode.Assume(cfg.Lights)
 	inputs.Store(p.key, &p.in)
 	return p
 }
@@ -412,6 +415,9 @@ type buttonLights struct {
 	// keeping each blinking, 0 when none was sent.
 	knobUntil [8]time.Time
 	blink     [8]uint32
+	// eq is the EQ pattern eqPattern names, which keeps each band's recent level.
+	eq        *core.EQ
+	eqPattern string
 }
 
 const (
@@ -484,12 +490,15 @@ func (l *buttonLights) update() {
 		}
 	}
 	frame := core.LightFrame(pattern, time.Since(l.start).Seconds())
-	switch pattern {
-	case "eq":
-		if sp := spectrum.Load(); sp != nil {
-			frame = core.EQFrame(sp.Bands(time.Since(l.start).Seconds()))
+	switch {
+	case core.IsEQ(pattern):
+		if l.eqPattern != pattern {
+			l.eq, l.eqPattern = core.NewEQ(pattern), pattern
 		}
-	case "clock":
+		if sp := spectrum.Load(); sp != nil {
+			frame = core.EQFrame(l.eq.Columns(sp, time.Since(l.start).Seconds()))
+		}
+	case pattern == "clock":
 		frame = core.ClockFrame(time.Now())
 	}
 	var lit [256]bool
