@@ -17,7 +17,7 @@ import {
 } from "./state.js";
 
 // A 1x1 transparent GIF, for a menu entry with no icon.
-const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 const SECTION_LABEL_KEY = {
   volume: "section.volume",
@@ -192,10 +192,23 @@ export function buttonParams(d, key) {
     .join("");
 }
 
+// An action's icon, by the action or by the prefix of one that takes a setting; "" for none.
+function actionIcon(action) {
+  const icons = (S.init && S.init.actionIcons) || {};
+  if (icons[action]) return icons[action];
+  const colon = action.indexOf(":");
+  return (colon >= 0 && icons[action.slice(0, colon + 1)]) || "";
+}
+
 export function buttonLines(d, key) {
   const actions = actionsOf(d, key);
   if (!actions.length) return `<span class="job-line muted">${esc(t("job.empty"))}</span>`;
-  return actions.map((a) => `<span class="job-line"><span>${esc(actionLabel(d, a))}</span></span>`).join("");
+  return actions
+    .map((a) => {
+      const icon = actionIcon(a);
+      return `<span class="job-line">${icon ? `<img src="${icon}" alt="" />` : ""}<span>${esc(actionLabel(d, a))}</span></span>`;
+    })
+    .join("");
 }
 
 // The label under a drawn control: its first job or action and how many more it has. A screen's
@@ -243,7 +256,7 @@ export function actionPicks(d, key) {
   const kinds = new Set(actions.map(actionKind));
   let n = 0;
   const row = ([value, title]) => {
-    const html = pickRow(n++, kinds.has(value), `data-pick="action" data-value="${escAttr(value)}"`, title);
+    const html = pickRow(n++, kinds.has(value), `data-pick="action" data-value="${escAttr(value)}"`, title, actionIcon(value));
     const action = PARAM_KINDS.includes(value) && actions.find((a) => actionKind(a) === value);
     return action ? html + `<div class="pick-param">${paramControl(d, key, action)}</div>` : html;
   };
@@ -318,7 +331,7 @@ export function openJobMenu(d, k, row) {
 export function openButtonMenu(d, key, row) {
   const r = row.getBoundingClientRect();
   const kinds = new Set(actionsOf(d, key).map(actionKind));
-  const item = (action, title) => ({ job: { action }, title, icon: TRANSPARENT_PIXEL, checked: kinds.has(action) });
+  const item = (action, title) => ({ job: { action }, title, icon: actionIcon(action) || TRANSPARENT_PIXEL, checked: kinds.has(action) });
   const sections = BUTTON_GROUPS.map(([gk, items]) => ({ title: t(gk), items: items.map(([v, k]) => item(v, t(k))) }));
   const weej = sections[sections.length - 1];
   weej.items.splice(2, 0, ...d.profiles.map((_, i) => item(`profile:${i}`, t("action.go_profile", { name: profileLabel(d, i) }))));

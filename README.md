@@ -38,7 +38,7 @@
 3. Open WeeJ. It asks which language to use, starting from Windows' own. Its icon sits in the tray: if you don't see it, open **Show hidden icons** on the taskbar and drag it next to the clock.
 4. Plug in your boards. Settings opens and asks how many you have, then adds each in turn: its name and type, and for an Arduino or another MIDI controller, its port and a short calibration. An SMC-Mixer needs none. The Boards tab then sets what each knob, fader and button does.
 
-Coming from deej? **Import from deej…** in Settings turns your `config.yaml` into a board, its sliders already found and their jobs in its first profile.
+Coming from deej? Add your Arduino, then **Import…** under its profile in the Boards tab reads your `config.yaml` as a profile, each slider's jobs on the knob of its input.
 
 Coming from WeeJ 1.x? 2.0 starts fresh: it doesn't read 1.x settings, so add your boards again.
 
@@ -60,13 +60,13 @@ You need:
 - **One knob, several jobs.** The volume of Windows, your mic, one app, the focused app or every other app, a screen's brightness or contrast, Night light, a keyboard backlight, screen zoom. Tick several, of any kind, and they all follow the knob. A fader does the same.
 - **Buttons that do things.** Play, pause and skip, mute an app or the mic, press a shortcut, open an app or a website, lock the PC, turn off the screens or switch profiles, from any button on a board.
 - **An on-screen indicator.** A flyout in the style of Windows 11's own shows up on the display the knob controls, with the app's own icon for an app's volume. Switching profiles shows the new profile's name.
-- **A short calibration.** Adding an Arduino or a MIDI board walks through each control: turn a knob or fader from 0% to 100% twice, or press a button three times. WeeJ learns which input it is, which way it turns and where its ends are.
+- **A short calibration.** Adding an Arduino or a MIDI board takes every knob and fader to 0%, then to 100%, then each back to 0% in turn, and each button pressed three times. WeeJ learns which input each one is, which way it turns and where its ends are.
 - **Profiles on a shortcut.** Each board has its own profiles, switched from the tray or with a shortcut from any app. One shortcut can switch several boards at once.
 - **No jumps.** A knob takes up a new job the next time you move it, so switching profiles never jumps the volume or a screen.
 - **Real per-app volume.** Windows keeps a volume for every app, and WeeJ turns that same slider you see in the Volume mixer. Nothing is captured or delayed.
 - **Follows your audio device.** Switch outputs or inputs, Bluetooth headphones included, and the knobs follow.
 - **Button lights on the SMC-Mixer.** 29 patterns, from Fire and Rain to a binary clock, and three EQs that move with whatever your PC plays. A button lights up while you hold it, and a strip's LED blinks while you turn its knob.
-- **Any number of knobs.** As many as your sketch sends, named A to Z, then A2, B2 and on. Invert flips a board's knobs for pots wired the other way round.
+- **Any number of knobs.** As many as your sketch sends, named A to Z, then A2, B2 and on. Pots wired the other way round need nothing: calibration sees which way each one turns.
 - **Same firmware.** Speaks the deej serial protocol, unchanged, at 9600 baud or whatever your sketch uses.
 - **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in the menu and in Settings changes it at once, open windows included.
 - **Lives in the tray.** A left click opens Settings and a right click opens the menu. It reconnects on its own, can launch at login, and installs updates in one click.
@@ -113,13 +113,7 @@ Upstream deej already runs on Windows; WeeJ is a different take on the same idea
 <details>
 <summary><b>The tray icon</b></summary>
 
-The icon shows whether any board is connected. Settings offers three looks:
-
-- **Mixer**, the default: five fader caps that trace a W. Disconnected, they drop to a flat line.
-- **Dial**: a knob in a track, lit up to its pointer. Disconnected, the pointer drops to the minimum and the track dims.
-- **App icon**: the app icon itself, the same whether connected or not.
-
-Mixer and Dial follow a light or dark taskbar. All three are drawn in code in [internal/draw](internal/draw).
+The icon is WeeJ's app icon, drawn in code in [internal/draw](internal/draw). Pointing at it names each connected board with its profile.
 
 A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut, and Calibrate (not on an SMC-Mixer). Then Settings, Language and Reconnect, then Launch at login, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
 
@@ -130,26 +124,27 @@ A left click, or Enter on the focused icon, opens Settings. A right click opens 
 
 **Settings** has three tabs, laid out in groups as Windows Settings is: **General** for your boards and the app, **Boards** for what each board's controls do, and **About**.
 
-**General** lists your boards. Each row has a switch on the left that turns the board on or off, its name, its status (Connected in green, Disconnected or Off) and a gear for its settings. The very first time, with no boards yet, it asks how many you have and adds each in turn. Below the list, **Add board** adds one more and **Import from deej…** turns a deej `config.yaml` into a DIY board, its sliders already found and their jobs in its first profile (its `com_port` is left out on purpose, because WeeJ finds the board by itself and Windows can renumber ports). Then come **Language** and the **Tray icon** group: **Hide tray icon** removes the icon (open WeeJ again to get back to Settings), **Icon** picks Mixer, Dial or App icon, and **Profile list** puts each board's profiles in the menu.
+**General** has **Language** at the top left and your boards under it. Each board's row has a switch on the left that turns the board on or off, its name, its status (Connected in green, Disconnected or Off) and a gear for its settings. The very first time, with no boards yet, it asks how many you have and adds each in turn, and **Add board** adds one more. On the right is the **Tray icon** group: **Hide tray icon** removes the icon (open WeeJ again to get back to Settings), and **Profile list** puts each board's profiles in the menu.
 
 **Add board** asks for a name and a type: **DIY (Arduino)**, **SMC-Mixer** or **Other MIDI**. A DIY board also asks for its COM port and baud rate, an Other MIDI board for its MIDI input, and both for how many knobs, faders and buttons it has; calibration follows. A port or input another board uses says so. An SMC-Mixer's controls are known, so it is ready at once.
 
-**The gear** opens a board's settings: its name, its type (fixed once added), its port with Refresh and Reconnect, and its status. **Port** is Automatic, which finds the board among the ports no other board uses, or a fixed one. A DIY board adds **Baud rate**, which must match `Serial.begin()` in your sketch, and **Speed**, how long a knob has to be still before its change lands: Slow (0.3 seconds, recommended), Medium (0.22), Fast (0.18) or Super fast (0.15). The volumes are not affected; they always follow the knob. Every board has **Invert**, which flips its knobs for pots wired the other way round, and an SMC-Mixer has **Button lights**. **Next profile** and **Previous profile** take a shortcut each. **Calibrate** runs the calibration again (not on an SMC-Mixer), and **Remove board** asks first, since the board's profiles and calibration go with it.
+**The gear** opens a board's settings: its name, its type (fixed once added), its port with Refresh and Reconnect, and its status. **Port** is Automatic, which finds the board among the ports no other board uses, or a fixed one. A DIY board adds **Baud rate**, which must match `Serial.begin()` in your sketch, and **Speed**, how long a knob has to be still before its change lands: Slow (0.3 seconds, recommended), Medium (0.22), Fast (0.18) or Super fast (0.15). The volumes are not affected; they always follow the knob. An SMC-Mixer has **Button lights**. **Next profile** and **Previous profile** take a shortcut each. **Calibrate** runs the calibration again (not on an SMC-Mixer), and **Remove board** asks first, since the board's profiles and calibration go with it.
 
-**Boards** has a tab per board. At the top is the board's **profile**: a name, the jobs of every control, and an optional keyboard shortcut. The menu picks the profile you are editing, + adds one, and - removes the one shown. To set a shortcut, click Record Shortcut and press it: it needs Ctrl or Alt with a key, Delete clears it and Escape cancels. Several boards can share a shortcut, and one press then switches all of them; each one notes "Also used by" and the other boards. A board that is off shows only its status and its gear.
+**Boards** lists the boards that are connected on the left, each with its gear, and shows the one picked on the right, starting with its **profile**: a name, the jobs of every control, and an optional keyboard shortcut. The menu picks the profile you are editing, + adds one, and - removes the one shown. To set a shortcut, click Record Shortcut and press it: it needs Ctrl or Alt with a key, Delete clears it and Escape cancels. Several boards can share a shortcut, and one press then switches all of them; each one notes "Also used by" and the other boards. **Export…** saves the profile shown to a file, and **Import…** reads such a file, or a deej `config.yaml`, as a new profile of the board, kept with Apply. A deej config's sliders land on the knobs on their inputs (its `com_port` is left out on purpose, because WeeJ finds the board by itself and Windows can renumber ports).
 
-Below the profile, **Draw** and **List** show the board two ways. **Draw** shows it as it sits on your desk: an SMC-Mixer as itself, and a DIY or MIDI board as you lay it out, with + to add a knob, fader or button where it sits, arrows to move one, **Find it** to find its input and - to remove it (a control with nothing on it goes without asking). **List** shows three cards side by side: Knobs, Faders and Buttons. Either way, clicking a knob or fader opens a menu of the jobs under [What a knob can do](#what-a-knob-can-do), each with its icon. Clicking a job ticks it and clicking it again unticks it, so one knob can do several at once, of any kind: two screens' brightness, or an app's volume and a keyboard backlight. Clear unticks them all. Clicking a button opens the actions under [What a button can do](#what-a-button-can-do) in the same way. Moving or pressing a control lights it up on the page, so you can tell which is which.
+Below the profile, **Draw** and **List** show the board two ways. **Draw** shows it as it sits on your desk: an SMC-Mixer as itself, and a DIY or MIDI board with the controls it was set up with. The gear beside Draw shows arrows that move the control picked to where it sits on your desk. **List** shows three cards side by side, Knobs, Faders and Buttons, each showing ten at a time and scrolling past that. Either way, clicking a knob or fader opens a menu of the jobs under [What a knob can do](#what-a-knob-can-do), each with its icon. Clicking a job ticks it and clicking it again unticks it, so one knob can do several at once, of any kind: two screens' brightness, or an app's volume and a keyboard backlight. Clear unticks them all. Clicking a button opens the actions under [What a button can do](#what-a-button-can-do) in the same way. Moving or pressing a control lights it up on the page, so you can tell which is which.
 
 **About** shows the version, with Check for updates…, and links to the website, to zolfer.com and to TheeJ, WeeJ's sibling on macOS.
 
 **Apply** saves at once, makes each board's profile shown its active one, and leaves the window open. It stays greyed out until something differs from what's saved, and goes grey again once applied or when a change is undone. The switch, Add board, Remove board, the gear's own Save and the language take effect at once, without Apply. A knob given a new job, by Apply or by switching profiles, takes it over the next time you move it.
 
-**Calibration** learns each control of a DIY or MIDI board: which input it is, which way it turns and where its ends are. It runs after Add board, and **Calibrate** on the board's tab, in its gear or in the tray menu runs it again. It starts with every knob and fader at 0%, then asks for one control at a time:
+**Calibration** learns each control of a DIY or MIDI board: which input it is, which way it turns and where its ends are. It runs after Add board, and **Calibrate** in the board's gear or in the tray menu runs it again:
 
-1. A knob or fader: move it from 0% to 100%, which tells WeeJ which one it is, and leave it there for a moment. Then back to 0% and up to 100% again.
-2. A button: press it three times. A press on another button starts the count again.
+1. Turn every knob and fader to 0%, and press **Next**.
+2. Turn every knob and fader to 100%, and press **Next**. Each one's two ends give its travel and which way it turns, so a pot wired the other way round just works.
+3. Then one control at a time: turn a knob or fader back to 0%, which tells WeeJ which one it is, or press a button three times. A press on another button starts the count again.
 
-A level bar follows the control as it moves. Moving a control that is already found says which one it is. Skip leaves a control as it was, Start again redoes the one shown, and Cancel leaves everything as it was. Once every control is found, Finish keeps them. The board's controls hold still for the whole run.
+Moving a control that is already found says which one it is. Skip leaves a control as it was, Start again goes back to the 0% step, and Cancel leaves everything as it was. Once every control is found, Finish keeps them. The board's controls hold still for the whole run.
 
 </details>
 
@@ -203,7 +198,7 @@ Your boards, what each control does and which input it is on live in Settings, n
 Constants, then rebuild:
 
 - `Speed.Settle`, in [setup.go](internal/core/setup.go): `0.3`, `0.22`, `0.18` and `0.15` seconds, the waits behind the Speed setting. Every knob but the volumes applies only once it has been still this long. This is also what hides wiper contact bounce, where a moving pot briefly reports its neighbour's value for up to about 0.11s, so keep every one above that.
-- The `cal…` constants, in [calwizard.go](internal/core/calwizard.go): how far a control has to move for calibration to find it, and how far and how long a sweep has to go.
+- The `cal…` constants, in [calwizard.go](internal/core/calwizard.go): how far apart an input's 0% and 100% readings have to be for calibration to take it as a knob or fader, and how far a control has to move to be found.
 
 Turning a brightness knob fully down sets the backlight to 0, and a contrast knob at 0 leaves a screen close to black. The knob is the way back.
 

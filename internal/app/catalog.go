@@ -14,7 +14,6 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/draw"
 	"github.com/zolferfigueiredo/weej/internal/platform/display"
-	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 )
 
@@ -68,6 +67,42 @@ func assignedAnywhere(devices []core.Device, kind core.JobKind) bool {
 		}
 	}
 	return false
+}
+
+// actionIcons is each button action's icon, by the action, or by the prefix of one that takes a
+// setting (pickers.js actionIcon).
+func (app *App) actionIcons() map[string]string {
+	ink := app.glyphInk()
+	icon := func(kind draw.GlyphKind) string { return pngDataURL(draw.Glyph(kind, 32, ink)) }
+	return map[string]string{
+		string(core.ActionPlayPause):       icon(draw.GlyphPlayPause),
+		string(core.ActionPlay):            icon(draw.GlyphPlay),
+		string(core.ActionPause):           icon(draw.GlyphPause),
+		string(core.ActionStop):            icon(draw.GlyphStop),
+		string(core.ActionPreviousTrack):   icon(draw.GlyphPreviousTrack),
+		string(core.ActionNextTrack):       icon(draw.GlyphNextTrack),
+		string(core.ActionVolumeUp):        icon(draw.GlyphVolumeUp),
+		string(core.ActionVolumeDown):      icon(draw.GlyphVolumeDown),
+		string(core.ActionMuteAll):         icon(draw.GlyphSpeakerMuted),
+		string(core.ActionMuteMic):         icon(draw.GlyphMicMuted),
+		string(core.ActionNightLight):      icon(draw.GlyphMoon),
+		string(core.ActionScreensOff):      icon(draw.GlyphScreen),
+		string(core.ActionLockPC):          icon(draw.GlyphLock),
+		string(core.ActionSleepPC):         icon(draw.GlyphPower),
+		string(core.ActionPreviousProfile): icon(draw.GlyphArrowLeft),
+		string(core.ActionNextProfile):     icon(draw.GlyphArrowRight),
+		string(core.ActionOpenSettings):    icon(draw.GlyphGear),
+		string(core.ActionNextLights):      icon(draw.GlyphBulb),
+		string(core.ActionPreviousLights):  icon(draw.GlyphBulb),
+		string(core.ActionLightsOn):        icon(draw.GlyphBulbOn),
+		string(core.ActionLightsOff):       icon(draw.GlyphBulbOff),
+		"open:":                            icon(draw.GlyphApp),
+		"close:":                           icon(draw.GlyphCloseApp),
+		"url:":                             icon(draw.GlyphGlobe),
+		"keys:":                            icon(draw.GlyphKeyboard),
+		"profile:":                         icon(draw.GlyphList),
+		"mute:":                            icon(draw.GlyphSpeakerMuted),
+	}
 }
 
 func (app *App) buildCatalog(devices []core.Device) []catalogEntry {
@@ -238,15 +273,6 @@ func (app *App) forgetApp(exe string) {
 	delete(app.appName, exe)
 	delete(app.appIcon, exe)
 	app.appCacheMu.Unlock()
-}
-
-func (app *App) iconPreviews() map[string]string {
-	light := sys.TaskbarLight()
-	out := map[string]string{}
-	for _, style := range []core.IconStyle{core.IconMixer, core.IconDial, core.IconApp} {
-		out[string(style)] = pngDataURL(draw.TrayIcon(draw.IconStyle(style), true, 32, light))
-	}
-	return out
 }
 
 func (app *App) shortcutLabels(s core.Settings) map[string]string {

@@ -14,7 +14,6 @@ type Settings struct {
 
 	HideIcon         bool
 	ShowProfiles     bool
-	Icon             IconStyle
 	Language         string
 	ShowDataInMenu   bool
 	UpdateEvery      int
@@ -30,7 +29,7 @@ type Settings struct {
 const settingsVersion = 2
 
 func DefaultSettings() Settings {
-	return Settings{ShowProfiles: true, Icon: IconMixer, ShowDataInMenu: true, UpdateEvery: 604800}
+	return Settings{ShowProfiles: true, ShowDataInMenu: true, UpdateEvery: 604800}
 }
 
 // The on-disk shape, key order fixed so EncodeSettings is deterministic.
@@ -40,7 +39,6 @@ type settingsJSON struct {
 	Added            int          `json:"added"`
 	HideTrayIcon     bool         `json:"hideTrayIcon"`
 	ShowProfileList  bool         `json:"showProfileList"`
-	TrayIcon         string       `json:"trayIcon"`
 	Language         string       `json:"language"`
 	ShowDataInMenu   bool         `json:"showDataInMenu"`
 	UpdateEvery      int          `json:"updateEvery"`
@@ -59,7 +57,6 @@ type deviceJSON struct {
 	Port            string        `json:"port"`
 	BaudRate        int           `json:"baudRate,omitempty"`
 	Speed           string        `json:"speed"`
-	Invert          bool          `json:"invert"`
 	Controls        []controlJSON `json:"controls"`
 	Layout          [][]int       `json:"layout,omitempty"`
 	View            string        `json:"view"`
@@ -92,7 +89,6 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		Added:            s.Added,
 		HideTrayIcon:     s.HideIcon,
 		ShowProfileList:  s.ShowProfiles,
-		TrayIcon:         string(s.Icon),
 		Language:         s.Language,
 		ShowDataInMenu:   s.ShowDataInMenu,
 		UpdateEvery:      s.UpdateEvery,
@@ -119,7 +115,6 @@ func encodeDevice(d Device) deviceJSON {
 		Port:            d.Port,
 		BaudRate:        d.Baud,
 		Speed:           string(d.Speed),
-		Invert:          d.Invert,
 		Controls:        make([]controlJSON, len(d.Controls)),
 		Layout:          d.Layout,
 		View:            d.View,
@@ -191,9 +186,6 @@ func DecodeSettings(data []byte, profileName string) Settings {
 	if v, ok := take[bool](raw, "showProfileList"); ok {
 		s.ShowProfiles = v
 	}
-	if v, ok := take[string](raw, "trayIcon"); ok {
-		s.Icon = ParseIconStyle(v)
-	}
 	if v, ok := take[string](raw, "language"); ok {
 		s.Language = v
 	}
@@ -245,7 +237,6 @@ func decodeDevice(data json.RawMessage, profileName string) (Device, bool) {
 	if v, ok := take[string](raw, "speed"); ok {
 		d.Speed = ParseSpeed(v)
 	}
-	d.Invert, _ = take[bool](raw, "invert")
 
 	if t == DeviceSMC {
 		d.Controls = SMCControls()

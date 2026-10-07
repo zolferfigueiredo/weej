@@ -26,7 +26,7 @@ var (
 	plugInk   = hexColor(0x2e2a26, 1)
 )
 
-// In design-grid units: 1024 for the app icon, 24 for the tray.
+// In design-grid units of 1024.
 type faderLayout struct {
 	left, gap        float64 // first track's centre x, distance between track centres
 	top, bottom      float64
@@ -107,7 +107,7 @@ func paintPlate(canvas *image.NRGBA, work int, s, x, y, w, h, r float64) {
 
 func drawFaders(canvas *image.NRGBA, work int, s float64, l faderLayout) {
 	p := func(v float64) float32 { return float32(v * s) }
-	caps := l.capCentres(false)
+	caps := l.capCentres()
 
 	tracks := mask(work, func(z *vector.Rasterizer) {
 		for _, c := range caps {
@@ -133,15 +133,11 @@ func drawFaders(canvas *image.NRGBA, work int, s float64, l faderLayout) {
 	fillMask(canvas, grips, gripInk)
 }
 
-func (l faderLayout) capCentres(parked bool) [5]pt {
+func (l faderLayout) capCentres() [5]pt {
 	ys := [5]float64{l.high, l.low, l.mid, l.low, l.high}
 	var out [5]pt
 	for i := range out {
-		y := ys[i]
-		if parked {
-			y = l.low
-		}
-		out[i] = pt{l.left + float64(i)*l.gap, y}
+		out[i] = pt{l.left + float64(i)*l.gap, ys[i]}
 	}
 	return out
 }

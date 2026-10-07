@@ -264,23 +264,6 @@ func ParseSpeed(s string) Speed {
 	}
 }
 
-type IconStyle string
-
-const (
-	IconMixer IconStyle = "mixer"
-	IconDial  IconStyle = "dial"
-	IconApp   IconStyle = "app"
-)
-
-func ParseIconStyle(s string) IconStyle {
-	switch IconStyle(s) {
-	case IconDial, IconApp:
-		return IconStyle(s)
-	default:
-		return IconMixer
-	}
-}
-
 // Letter names knob i as on the box: A to Z, then A2 to Z2, A3 and so on, with no limit.
 func Letter(i int) string {
 	s := string(rune('A' + i%26))
@@ -291,13 +274,12 @@ func Letter(i int) string {
 }
 
 // Setup is one board as the Engine reads it (Device.EngineSetup): a column per control, -1 for
-// one with no jobs to run, and Invert the Engine's own, which flips unless set.
+// one with no jobs to run.
 type Setup struct {
 	Columns  []int
 	Profiles []Profile
 	Active   int
 	Speed    Speed
-	Invert   bool
 }
 
 func (s Setup) activeJobs() [][]Job {

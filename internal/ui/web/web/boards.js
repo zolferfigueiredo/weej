@@ -1,7 +1,6 @@
 // The Boards tab: a tab of its own for each board, with its profiles, and the board drawn or
 // listed with what each control does.
-import { send, t } from "./bridge.js";
-import { pageHeight, roomHeight } from "./bridge.js";
+import { pageHeight, roomHeight, send, t } from "./bridge.js";
 import { boardSVG, showValue, smcButtonIcon, smcSVG } from "./device.js";
 import { actionPicks, buttonLines, buttonParams, controlLabel, jobLines, jobPicks, shortcutControl } from "./pickers.js";
 import {
@@ -23,6 +22,7 @@ import {
   jobsOf,
   kindOf,
   profileLabel,
+  shownBoards,
   statusOf,
   valueAt,
 } from "./state.js";
@@ -56,44 +56,45 @@ export function statusText(d) {
 
 export function renderBoards() {
   const panel = document.getElementById("panel");
-  if (!devices().length) {
+  const d = currentBoard();
+  if (!d) {
     panel.innerHTML = `
     <div class="tabpanel" role="tabpanel">
       <div class="empty-state">
-        <p>${esc(t("boards.none"))}</p>
-        <button class="btn btn-primary" type="button" data-action="switch-tab" data-tab="general">${esc(t("boards.set_up"))}</button>
+        <p>${esc(t(devices().length ? "boards.none_connected" : "boards.none"))}</p>
+        ${devices().length ? "" : `<button class="btn btn-primary" type="button" data-action="switch-tab" data-tab="general">${esc(t("boards.set_up"))}</button>`}
       </div>
     </div>`;
     return;
   }
-  const d = currentBoard();
-  const tabs = devices()
-    .map((b) => `<button class="subtab" type="button" role="tab" data-action="board-tab" data-board="${escAttr(b.id)}" aria-selected="${b.id === d.id}">${esc(clip(b.name, 24))}</button>`)
+  const picks = shownBoards()
+    .map(
+      (b) => `
+          <div class="row board-pick${b.id === d.id ? " on" : ""}">
+            <button class="pick-board" type="button" role="tab" data-action="board-tab" data-board="${escAttr(b.id)}" aria-selected="${b.id === d.id}">
+              <span class="row-title">${esc(clip(b.name, 30))}</span>
+              <span class="row-desc">${esc(t("device.type." + b.type))}</span>
+            </button>
+            <button class="btn btn-icon" type="button" data-action="gear" data-board="${escAttr(b.id)}" title="${escAttr(t("boards.settings_of", { name: b.name }))}" aria-label="${escAttr(t("boards.settings_of", { name: b.name }))}">${GEAR_ICON}</button>
+          </div>`
+    )
     .join("");
-  const st = statusText(d);
-  const view = d.view === "list" ? "list" : "draw";
-  const viewSwitch = ["draw", "list"]
-    .map((v) => `<button class="btn${v === view ? " on" : ""}" type="button" data-action="set-view" data-view="${v}" aria-pressed="${v === view}">${esc(t("view." + v))}</button>`)
-    .join("");
-  const calibrate = isSMC(d) ? "" : `<button class="btn" type="button" data-action="calibrate-board">${esc(t("calibrate"))}</button>`;
-  const head = `
-      <div class="board-bar">
-        <span class="row-desc${st.cls}">${esc(st.text)}</span>
-        <span class="spacer"></span>
-        ${d.enabled ? `<span class="segmented">${viewSwitch}</span>${calibrate}` : ""}
-        <button class="btn btn-icon" type="button" data-action="gear" data-board="${escAttr(d.id)}" title="${escAttr(t("boards.settings"))}" aria-label="${escAttr(t("boards.settings"))}">${GEAR_ICON}</button>
-      </div>`;
-  let body;
-  if (!d.enabled) body = `<div class="empty-state"><p>${esc(t("boards.off"))}</p></div>`;
-  else if (view === "list") body = listView(d);
-  else body = drawView(d);
+  const body = d.view === "list" ? `<div class="board-bar">${viewBar(d)}</div>${listView(d)}` : drawView(d);
   keepScroll(() => {
     panel.innerHTML = `
     <div class="tabpanel" role="tabpanel">
-      <div class="subtabs" role="tablist">${tabs}</div>
       <div class="general-grid">
-        ${profileCard(d)}
-        <div class="group">${head}</div>
+        <div class="general-col">
+          <div class="group"><div class="card" role="tablist">${picks}</div></div>
+        </div>
+        <div class="general-col">
+          ${profileCard(d)}
+          <div class="group-foot">
+            <button class="btn" type="button" data-action="import-profile">${esc(t("profile.import"))}</button>
+            <button class="btn" type="button" data-action="export-profile">${esc(t("profile.export"))}</button>
+            ${S.importNote ? `<span class="group-note">${esc(S.importNote)}</span>` : ""}
+          </div>
+        </div>
       </div>
       ${body}
     </div>`;
@@ -101,19 +102,32 @@ export function renderBoards() {
   });
 }
 
-// When the List view would make the page taller than the window can grow, its cards scroll
-// inside themselves instead, so the page never scrolls as a whole.
+const LIST_ROWS = 10;
+
+// Each List card shows LIST_ROWS rows and scrolls past them, and less when the page would
+// still be taller than the window can grow, so the page never scrolls as a whole.
 export function fitLists() {
   const columns = document.querySelector(".list-columns");
   if (!columns) return;
   const cards = [...columns.querySelectorAll(".card")];
   const scrolled = cards.map((c) => c.scrollTop);
-  columns.style.removeProperty("--list-max");
+  cards.forEach((c) => (c.style.maxHeight = ""));
+  const limits = cards.map((c) => {
+    const rows = c.querySelectorAll(":scope > .row");
+    if (rows.length <= LIST_ROWS) return Infinity;
+    const border = parseFloat(getComputedStyle(c).borderBottomWidth) || 0;
+    return Math.ceil(rows[LIST_ROWS - 1].getBoundingClientRect().bottom - c.getBoundingClientRect().top + border);
+  });
+  cards.forEach((c, i) => {
+    if (limits[i] < Infinity) c.style.maxHeight = `${limits[i]}px`;
+  });
   const room = roomHeight();
   const over = Math.ceil(pageHeight() - room);
   if (room > 0 && over > 0) {
-    const tallest = Math.max(...cards.map((c) => c.offsetHeight));
-    columns.style.setProperty("--list-max", `${Math.max(tallest - over, 160)}px`);
+    const cap = Math.max(Math.max(...cards.map((c) => c.offsetHeight)) - over, 160);
+    cards.forEach((c) => {
+      if (c.offsetHeight > cap) c.style.maxHeight = `${cap}px`;
+    });
   }
   cards.forEach((c, i) => (c.scrollTop = scrolled[i]));
 }
@@ -158,6 +172,19 @@ function profileCard(d) {
 
 // --- Draw --------------------------------------------------------------------
 
+// Draw | List, with a gear beside Draw that turns on moving a DIY or MIDI board's controls.
+function viewBar(d) {
+  const view = d.view === "list" ? "list" : "draw";
+  const button = (v) =>
+    `<button class="btn${v === view ? " on" : ""}" type="button" data-action="set-view" data-view="${v}" aria-pressed="${v === view}">${esc(t("view." + v))}</button>`;
+  const arranging = !!S.arrange[d.id];
+  const gear =
+    view === "draw" && !isSMC(d) && d.controls.length
+      ? `<button class="btn btn-icon${arranging ? " on" : ""}" type="button" data-action="arrange" aria-pressed="${arranging}" title="${escAttr(t("board.arrange"))}" aria-label="${escAttr(t("board.arrange"))}">${GEAR_ICON}</button>`
+      : "";
+  return `<span class="segmented">${button("draw")}${gear}${button("list")}</span>`;
+}
+
 function drawView(d) {
   const k = picked(d);
   const opts = {
@@ -181,12 +208,12 @@ function drawView(d) {
       assigned: (c) => isButton(d, c) && actionsOf(d, buttonKey(d, c)).length > 0,
       waiting: (c) => d.controls[c].input < 0,
       value: (c) => valueAt(d, c),
-      addLabel: t("board.add"),
     });
   }
   return `
       <div class="device-row">
         <div class="group">
+          <div class="group-head">${viewBar(d)}</div>
           <div class="card device-card">${svg}</div>
         </div>
         ${isSMC(d) ? smcInspector(d, k) : boardInspector(d, k)}
@@ -219,13 +246,6 @@ function boardInspector(d, k) {
   const button = kind === "button";
   const key = buttonKey(d, k);
   const empty = button ? !actionsOf(d, key).length : !jobsOf(d, k).length;
-  const kinds = ["knob", "fader", "button"]
-    .map((kd) => `<button class="btn${kd === kind ? " on" : ""}" type="button" data-action="set-kind" data-kind="${kd}" aria-pressed="${kd === kind}">${esc(t("board.kind_" + kd))}</button>`)
-    .join("");
-  const found = d.controls[k].input >= 0;
-  const input = found
-    ? `<span class="row-desc">${esc(t("board.found"))}</span><button class="btn btn-icon btn-subtle" type="button" data-action="find-control" title="${escAttr(t("board.find_again"))}" aria-label="${escAttr(t("board.find_again"))}">&#x21bb;</button>`
-    : `<span class="waiting-note">${esc(t("board.not_found"))}</span><button class="btn" type="button" data-action="find-control">${esc(t("board.find"))}</button>`;
   const moves = [
     ["up", "&#x2191;"],
     ["left", "&#x2190;"],
@@ -240,15 +260,8 @@ function boardInspector(d, k) {
             <h2 class="group-title">${esc(controlName(d, k))}</h2>
             <span class="spacer"></span>
             <button class="btn" type="button" data-action="clear-control"${empty ? " disabled" : ""}>${esc(t("clear"))}</button>
-            <button class="btn btn-icon" type="button" data-action="remove-control" title="${escAttr(t("remove"))}" aria-label="${escAttr(t("remove"))}">&minus;</button>
           </div>
-          <div class="card board-edit">
-            <div class="edit-main">
-              <div class="edit-row"><span class="segmented">${kinds}</span></div>
-              <div class="edit-row">${input}</div>
-            </div>
-            <div class="arrow-keys">${moves}</div>
-          </div>
+          ${S.arrange[d.id] ? `<div class="card board-edit"><div class="arrow-keys">${moves}</div></div>` : ""}
           <div class="card inspector-card" data-keep-scroll="board-${d.id}-${k}">${button ? actionPicks(d, key) : jobPicks(d, k)}</div>
         </div>`;
 }
@@ -391,21 +404,6 @@ function editableLayout(d) {
   return d.layout;
 }
 
-export function addControl(d, row) {
-  const layout = editableLayout(d);
-  const k = d.controls.length;
-  const last = layout[row] && layout[row][layout[row].length - 1];
-  const kind = last === undefined ? "knob" : kindOf(d, last);
-  d.controls.push({ kind, input: -1, reverse: false, min: 0, max: 1023 });
-  if (!layout[row]) layout[row] = [];
-  layout[row].push(k);
-  for (const p of d.profiles) {
-    p.jobs = p.jobs || [];
-    while (p.jobs.length < d.controls.length) p.jobs.push([]);
-  }
-  S.selected[d.id] = k;
-}
-
 export function canMove(d, k, dir) {
   const layout = boardLayout(d);
   const r = layout.findIndex((row) => row.includes(k));
@@ -436,42 +434,3 @@ export function moveControl(d, k, dir) {
   }
 }
 
-// Whether removing control k loses anything: jobs or actions in any profile, or a mute pointing
-// at it.
-export function controlUsed(d, k) {
-  const key = String(buttonKey(d, k));
-  return d.profiles.some(
-    (p) =>
-      ((p.jobs || [])[k] || []).length > 0 ||
-      Object.entries(p.buttons || {}).some(([id, actions]) => (id === key && actions.length > 0) || actions.includes(`mute:${k}`))
-  );
-}
-
-// Takes control k off the board: its place, jobs and actions go, and every later control moves
-// down one, its mutes with it. A DIY board's buttons go by control, so their keys move too.
-export function removeControl(d, k) {
-  const shift = (i) => (i > k ? i - 1 : i);
-  const key = buttonKey(d, k);
-  const wasButton = isButton(d, k);
-  d.layout = boardLayout(d)
-    .map((row) => row.filter((i) => i !== k).map(shift))
-    .filter((row) => row.length);
-  d.controls.splice(k, 1);
-  const muteOf = (a) => (a.startsWith("mute:") ? parseInt(a.slice(5), 10) : -1);
-  for (const p of d.profiles) {
-    if (p.jobs) p.jobs.splice(k, 1);
-    const buttons = {};
-    for (const [id, actions] of Object.entries(p.buttons || {})) {
-      let n = parseInt(id, 10);
-      if (wasButton && n === key) continue;
-      if (d.type === "diy") {
-        if (n === k) continue;
-        n = shift(n);
-      }
-      const kept = actions.filter((a) => muteOf(a) !== k).map((a) => (muteOf(a) > k ? `mute:${muteOf(a) - 1}` : a));
-      if (kept.length) buttons[n] = kept;
-    }
-    p.buttons = buttons;
-  }
-  S.selected[d.id] = Math.max(0, Math.min(k, d.controls.length - 1));
-}

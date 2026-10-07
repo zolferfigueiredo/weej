@@ -52,10 +52,6 @@ func TestNormalizeScalesEachControlToItsTravel(t *testing.T) {
 	if ends := d.Normalize([]int{1015, 0, 110, 0}); ends[0] != 0 || ends[1] != 0 {
 		t.Errorf("near an end is that end, got %v", ends)
 	}
-	d.Invert = true
-	if shown := d.Shown([]int{200, 0, 500, -1}); shown[0] != 1023-511 || shown[2] != -1 {
-		t.Errorf("Shown flips for Invert, got %v", shown)
-	}
 }
 
 type recordedApply struct {
@@ -86,16 +82,6 @@ func TestEngineSetupFeedsTheEngineByControl(t *testing.T) {
 			t.Errorf("%s got %v, want %v", c.job.Kind, c.u, want[c.job.Kind])
 		}
 	}
-
-	d.Invert = true
-	rec.calls = nil
-	e = NewEngine(rec)
-	e.Handle(d.Normalize([]int{0, 1023, 0, 0, 1023}), d.EngineSetup(), false)
-	for _, c := range rec.calls {
-		if c.job.Kind == JobMaster && c.u != 0 {
-			t.Errorf("an inverted board's knob at its top gives %v, want 0", c.u)
-		}
-	}
 }
 
 func boardFixture() Settings {
@@ -111,11 +97,11 @@ func boardFixture() Settings {
 	diy.Next = &Shortcut{VK: 0x71, Mods: 2, Key: "F2"}
 	diy.View = ViewList
 	smc := NewDevice("d3", "SMC", DeviceSMC, 0, 0, 0, "Default")
-	smc.Port, smc.Lights, smc.Invert = "SMC-Mixer", "wave", true
+	smc.Port, smc.Lights = "SMC-Mixer", "wave"
 	smc.Profiles[0].Shortcut = &Shortcut{VK: 0x70, Mods: 2, Key: "F1"}
 	s.Devices = []Device{diy, smc}
 	s.Added = 3
-	s.Language, s.ShowProfiles, s.Icon = "it", false, IconDial
+	s.Language, s.ShowProfiles = "it", false
 	return s
 }
 

@@ -48,8 +48,7 @@ func (app *App) refreshTrayNow() {
 		}
 	}
 
-	icon := draw.TrayIcon(draw.IconStyle(s.Icon), len(names) > 0, app.tray.IconSize(), sys.TaskbarLight())
-	app.tray.SetIcon(icon)
+	app.tray.SetIcon(draw.AppIcon(app.tray.IconSize()))
 
 	tip := "WeeJ: " + app.tr("not_connected")
 	if len(names) > 0 {

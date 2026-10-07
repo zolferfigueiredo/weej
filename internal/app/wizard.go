@@ -53,9 +53,6 @@ func (app *App) startWizard(id string, controls []int) {
 			case <-w.stop:
 				return
 			case <-tick.C:
-				w.mu.Lock()
-				w.cal.Tick(app.now())
-				w.mu.Unlock()
 				app.pushWizard()
 			}
 		}
@@ -63,10 +60,10 @@ func (app *App) startWizard(id string, controls []int) {
 	app.pushWizard()
 }
 
-func (w *wizardRun) feed(raw []int, now float64) {
+func (w *wizardRun) feed(raw []int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.cal.Feed(raw, now)
+	w.cal.Feed(raw)
 }
 
 func (w *wizardRun) press(id int) {
@@ -88,7 +85,7 @@ func (app *App) wizardPayload() map[string]any {
 	w.mu.Unlock()
 	return map[string]any{
 		"device": w.device, "control": s.Control, "kind": s.Kind, "stage": s.Stage, "count": s.Count,
-		"need": s.Need, "level": s.Level, "warning": s.Warning, "other": s.Other, "index": s.Index,
+		"need": s.Need, "warning": s.Warning, "other": s.Other, "index": s.Index,
 		"total": s.Total, "done": done,
 	}
 }
@@ -104,7 +101,7 @@ func (app *App) pushWizard() {
 	}
 }
 
-// wizardOp is a button in the wizard: skip, redo, cancel or finish.
+// wizardOp is a button in the wizard: next, skip, redo, cancel or finish.
 func (app *App) wizardOp(op string) {
 	app.mu.Lock()
 	w := app.wizard
@@ -113,6 +110,11 @@ func (app *App) wizardOp(op string) {
 		return
 	}
 	switch op {
+	case "next":
+		w.mu.Lock()
+		w.cal.Next()
+		w.mu.Unlock()
+		app.pushWizard()
 	case "skip":
 		w.mu.Lock()
 		w.cal.Skip()

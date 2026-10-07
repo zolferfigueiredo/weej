@@ -58,11 +58,9 @@ type Device struct {
 	Enabled bool
 	// Port is a COM port on a DIY board, "" to find it automatically, and the input's name on a
 	// MIDI one.
-	Port  string
-	Baud  int
-	Speed Speed
-	// Invert flips every control, on top of each one's Reverse.
-	Invert   bool
+	Port     string
+	Baud     int
+	Speed    Speed
 	Controls []Control
 	// Layout is how Settings draws a DIY or Other MIDI board: rows of control indices.
 	Layout   [][]int
@@ -222,8 +220,7 @@ func (d Device) Calibrated() bool {
 const potDeadZone = 20
 
 // Normalize turns a raw frame into one value per control, 0 for 0% to 1023 for 100%. Buttons,
-// controls not found yet and inputs that haven't reported read -1. Invert is left to the Engine
-// (EngineSetup), which keeps a flip from jumping the volume.
+// controls not found yet and inputs that haven't reported read -1.
 func (d Device) Normalize(raw []int) []int {
 	out := make([]int, len(d.Controls))
 	for i, c := range d.Controls {
@@ -247,22 +244,8 @@ func (d Device) Normalize(raw []int) []int {
 	return out
 }
 
-// Shown is Normalize with Invert applied, so Settings draws each control the way its volume
-// moves.
-func (d Device) Shown(raw []int) []int {
-	out := d.Normalize(raw)
-	if d.Invert {
-		for i, v := range out {
-			if v >= 0 {
-				out[i] = 1023 - v
-			}
-		}
-	}
-	return out
-}
-
 // EngineSetup is the board as the Engine reads it: frames from Normalize, so each control is its
-// own column, buttons have no jobs, and Invert is the Engine's own, which flips unless set.
+// own column, and buttons have no jobs.
 func (d Device) EngineSetup() Setup {
 	cols := make([]int, len(d.Controls))
 	for i, c := range d.Controls {
@@ -275,7 +258,7 @@ func (d Device) EngineSetup() Setup {
 	for i, p := range d.Profiles {
 		profiles[i] = Profile{Name: p.Name, Jobs: p.Jobs}
 	}
-	return Setup{Columns: cols, Profiles: profiles, Active: d.Active, Speed: d.Speed, Invert: !d.Invert}
+	return Setup{Columns: cols, Profiles: profiles, Active: d.Active, Speed: d.Speed}
 }
 
 // Apps lists the apps every profile of the board turns up and down.

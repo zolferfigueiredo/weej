@@ -65,6 +65,17 @@ function portSelect(id, type, value, exceptId) {
   return `<button class="btn btn-icon btn-subtle" type="button" data-action="refresh-ports" title="${escAttr(t("refresh"))}" aria-label="${escAttr(t("refresh"))}">&#x21bb;</button><select class="select" id="${id}">${options}</select>`;
 }
 
+// Fills the open gear's port list in place when the ports arrive: drawing the dialog again would
+// close a list that is open in it, such as Button lights, and lose the pick.
+export function refreshGearPorts() {
+  const dlg = S.dialog;
+  const el = document.getElementById("dlg-port");
+  if (!dlg || dlg.kind !== "gear" || !el) return;
+  const tpl = document.createElement("template");
+  tpl.innerHTML = portSelect("dlg-port", dlg.dev.type, dlg.dev.port, dlg.dev.id);
+  el.innerHTML = tpl.content.querySelector("select").innerHTML;
+}
+
 function baudSelect(id, value) {
   const rates = (S.init.baudRates || [9600]).slice();
   const v = value || 9600;
@@ -101,7 +112,6 @@ function gearDialog(dlg) {
           ${field(t("port"), forced ? `<span class="row-desc">${esc(S.init.forcedPort)}</span>` : portSelect("dlg-port", d.type, d.port, d.id), forced ? t("port_forced", { port: S.init.forcedPort }) : t(d.type === "diy" ? "port_note" : "mixer_port_note"))}
           ${d.type === "diy" ? field(t("baud_rate"), baudSelect("dlg-baud", d.baudRate), t("baud_note")) : ""}
           ${d.type === "diy" ? field(t("speed"), `<select class="select" id="dlg-speed">${speedOptions}</select>`, t("speed_note")) : ""}
-          ${field(t("invert"), `<input class="toggle" id="dlg-invert" type="checkbox" role="switch"${d.invert ? " checked" : ""} />`, t("invert_note"))}
           ${d.type === "smc" ? field(t("lights"), `<select class="select" id="dlg-lights">${lightOptions}</select>`, t("lights_note")) : ""}
           ${shortcutRow("next", t("next_profile"), d.nextProfile)}
           ${shortcutRow("previous", t("previous_profile"), d.previousProfile)}
@@ -152,44 +162,46 @@ function wizardDialog(dlg) {
   } else if (w.done) {
     body = `<p class="wizard-text">${esc(t("wizard.done"))}</p>`;
   } else {
-    const control = controlName(d, w.control);
-    const pot = w.kind !== "button";
+    const control = w.control >= 0 ? controlName(d, w.control) : "";
     let text;
-    if (w.stage === "find") text = t("wizard.find", { name: control });
-    else if (w.stage === "sweep") text = t(w.count >= 2 ? "wizard.hold" : "wizard.sweep");
+    if (w.stage === "zero") text = t("wizard.zero");
+    else if (w.stage === "full") text = t("wizard.full");
+    else if (w.stage === "find") text = t("wizard.find", { name: control });
     else text = t("wizard.press", { name: control });
     let warning = "";
     if (w.warning === "wrong" && w.other >= 0) warning = t("wizard.wrong", { other: controlName(d, w.other), name: control });
     if (w.warning === "mismatch") warning = t("wizard.mismatch", { name: control });
-    const counter = w.stage === "find" ? "" : t("wizard.count", { n: String(w.count), of: String(w.need) });
+    if (w.warning === "nothing") warning = t("wizard.nothing");
+    if (w.warning === "unswept") warning = t("wizard.unswept");
+    const step = w.stage === "find" || w.stage === "press";
+    const counter = w.stage === "press" ? t("wizard.count", { n: String(w.count), of: String(w.need) }) : "";
     const connected = statusOf(d.id).connected;
     body = `
-          ${w.index === 0 && pot ? `<p class="wizard-note">${esc(t("wizard.zero"))}</p>` : ""}
-          <p class="wizard-step">${esc(t("wizard.step", { i: String(w.index + 1), n: String(w.total) }))}: <strong>${esc(control)}</strong></p>
+          ${step ? `<p class="wizard-step">${esc(t("wizard.step", { i: String(w.index + 1), n: String(w.total) }))}: <strong>${esc(control)}</strong></p>` : ""}
           <p class="wizard-text">${esc(text)}</p>
-          ${pot ? `<div class="level"><div class="level-fill" id="wizard-level"></div></div>` : ""}
           ${counter ? `<p class="wizard-count">${esc(counter)}</p>` : ""}
           ${warning ? `<p class="wizard-warning">${esc(warning)}</p>` : ""}
           ${connected ? "" : `<p class="wizard-note">${esc(t("wizard.waiting", { name }))}</p>`}`;
   }
   const done = w && w.done;
+  const reading = w && (w.stage === "zero" || w.stage === "full");
+  const left = [];
+  if (w && !done && w.stage !== "zero") left.push(`<button class="btn" type="button" data-action="wizard-op" data-op="redo">${esc(t("wizard.redo"))}</button>`);
+  if (w && !done && !reading) left.push(`<button class="btn" type="button" data-action="wizard-op" data-op="skip">${esc(t("wizard.skip"))}</button>`);
+  let primary = "";
+  if (reading) primary = `<button class="btn btn-primary" type="button" data-action="wizard-op" data-op="next">${esc(t("wizard.next"))}</button>`;
+  if (done) primary = `<button class="btn btn-primary" type="button" data-action="wizard-op" data-op="finish">${esc(t("wizard.finish"))}</button>`;
   return `
       <div class="dialog dialog-wide" role="dialog" aria-modal="true">
         <div class="dialog-title">${esc(t("wizard.title", { name }))}</div>
         <div class="dialog-body">${body}</div>
         <div class="dialog-actions">
-          ${done ? "" : `<button class="btn" type="button" data-action="wizard-op" data-op="redo">${esc(t("wizard.redo"))}</button><button class="btn" type="button" data-action="wizard-op" data-op="skip">${esc(t("wizard.skip"))}</button>`}
+          ${left.join("")}
           <span class="spacer"></span>
           <button class="btn" type="button" data-action="wizard-op" data-op="cancel">${esc(t("cancel"))}</button>
-          ${done ? `<button class="btn btn-primary" type="button" data-action="wizard-op" data-op="finish">${esc(t("wizard.finish"))}</button>` : ""}
+          ${primary}
         </div>
       </div>`;
-}
-
-// The level bar follows the pot without drawing the dialog again.
-export function showWizardLevel() {
-  const bar = document.getElementById("wizard-level");
-  if (bar && S.wizard) bar.style.width = `${Math.round((S.wizard.level / 1023) * 100)}%`;
 }
 
 function confirmDialog(dlg) {
@@ -200,9 +212,6 @@ function confirmDialog(dlg) {
     const name = d.profiles[d.profile] && d.profiles[d.profile].name;
     title = name ? t("remove_named", { name }) : t("remove_this_profile");
     body = t("remove_profile_info");
-  } else if (dlg.what === "control" && d) {
-    title = t("remove_named", { name: controlName(d, dlg.k) });
-    body = t("remove_knob_info");
   } else if (dlg.what === "board" && d) {
     title = t("remove_named", { name: d.name });
     body = t("device.remove_info");

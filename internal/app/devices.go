@@ -216,11 +216,11 @@ func (app *App) onRawFrame(r *runner, raw []int) {
 	calibrating := false
 	if w := app.wizardFor(r.id); w != nil {
 		calibrating = true
-		w.feed(raw, now)
+		w.feed(raw)
 	}
 	norm := d.Normalize(raw)
 	r.engine.Handle(norm, d.EngineSetup(), calibrating)
-	app.showValues(r, d.Shown(raw))
+	app.showValues(r, d.Normalize(raw))
 	if calibrating {
 		return
 	}

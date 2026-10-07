@@ -60,20 +60,6 @@ func writePreview(dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	for _, style := range []draw.IconStyle{draw.StyleMixer, draw.StyleDial} {
-		for _, px := range []int{16, 32} {
-			for _, light := range []bool{true, false} {
-				for _, connected := range []bool{true, false} {
-					name := fmt.Sprintf("tray-%s-%d-%s-%s.png", style, px,
-						boolName(light, "light", "dark"), boolName(connected, "connected", "parked"))
-					if err := savePNG(filepath.Join(dir, name), draw.TrayIcon(style, connected, px, light)); err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-
 	face, err := loadGoRegular(28)
 	if err != nil {
 		return err

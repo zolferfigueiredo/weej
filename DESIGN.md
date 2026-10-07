@@ -102,7 +102,7 @@ The three windows share one visual system (one stylesheet, one component set) bu
 Restrained by the brief, not by default: a single accent carries every call to action, every selection state and nothing else.
 
 ### Primary
-- **Windows Accent** (`#0078d4` fallback; the real value arrives live from `sys.Accent()` via the `theme` message): the Apply/Continue/Next/Finish primary buttons, the active tab's underline, a checked toggle or checkbox, the outline of the control picked on a drawn board, the calibration level bar, and the focus ring on interactive controls. Never used for body text or decoration.
+- **Windows Accent** (`#0078d4` fallback; the real value arrives live from `sys.Accent()` via the `theme` message): the Apply/Continue/Next/Finish primary buttons, the active tab's underline, a checked toggle or checkbox, the outline of the control picked on a drawn board, and the focus ring on interactive controls. Never used for body text or decoration.
 
 ### Neutral
 - **Mica Ground** (`#f3f3f3` light / `#202020` dark): the window background, standing in for the native Mica backdrop the host applies to the HWND itself (see Elevation & Depth).
@@ -110,7 +110,7 @@ Restrained by the brief, not by default: a single accent carries every call to a
 - **Control Surface** (`#ffffff` light / `#2c2c2c` dark): text inputs, selects, and secondary buttons, one step brighter than the card they usually sit inside.
 - **Primary Text** (`#1a1a1a` light / `#ffffff` dark) and **Secondary Text** (`#5d5d5d` light / `#c5c5c5` dark): row titles versus row descriptions/hints; both verified at or above 4.5:1 against their surface.
 - **Danger** (`#c42b1c` light / `#ff99a4` dark): Remove board and the remove dialogs' destructive action, and a port another app holds.
-- **Warning** (`#9d5d00` light / `#ffb956` dark): the calibration dialog's warning line (a control already found, a press on another button).
+- **Warning** (`#9d5d00` light / `#ffb956` dark): the calibration dialog's warning line (a control already found, a press on another button, nothing moved between 0% and 100%).
 - **Success** (`#0f7b0f` light / `#6ccb5f` dark): a board's Connected status, the one place a state is shown in color as well as words.
 
 ### Named Rules
@@ -136,7 +136,7 @@ Restrained by the brief, not by default: a single accent carries every call to a
 
 Each window stacks its children top to bottom with a consistent gap: `.app` (Settings) or `.center-page` (the other two). Settings is the one window that can be resized and maximized. Until the user does either, the page reports its own rendered height to the host after every change and the host resizes the window's client area to match, capped to the work area; once sized by hand or maximized, it keeps its size and the page scrolls. Its one breakpoint, at 760px, folds the side-by-side layouts (General's two columns, a board's rows, List's three cards) into a single column.
 
-Settings uses a persistent two-button footer (`position: sticky; bottom: 0`) so Close/Apply stay reachable regardless of tab content length. The two single-purpose windows center their content both axes, with a fixed 320px measure for body copy so translated strings with longer average length (German, Russian, Polish) still read comfortably.
+Settings fills its window, and its two-button footer sits at the bottom of it (`position: sticky; bottom: 0`), so Close/Apply stay in the same place whatever the tab's length. The two single-purpose windows center their content both axes, with a fixed 320px measure for body copy so translated strings with longer average length (German, Russian, Polish) still read comfortably.
 
 ## Elevation & Depth
 
@@ -187,16 +187,16 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - A row in the Boards card: the on/off toggle at its left, the board's name, its status (Connected in Success, Disconnected or Off in secondary text) and an icon-button gear at its right that opens the board's settings.
 
 ### Drawn board (Boards tab, Draw)
-- An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. An inspector card edits the control picked: its kind, finding its input, four arrows laid out as a keyboard's (up above left, down and right), Clear and remove.
+- An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. Draw | List heads the drawing, level with the inspector's head, which names the control picked beside Clear. On a DIY or MIDI board a gear between Draw and List turns on four arrows laid out as a keyboard's (up above left, down and right) that move the control picked.
 
 ### List (Boards tab, List)
-- Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions; a row takes the selection tint while its control moves or is pressed.
+- Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions, ten rows at most before the card scrolls; a row takes the selection tint while its control moves or is pressed.
 
 ### Calibration dialog
-- One control at a time: the step count, the instruction in subtitle type, a level bar in the accent that follows the control live, a sweep or press counter, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.
+- First the 0% and the 100% readings, each an instruction in subtitle type with Next as the primary button. Then one control at a time: the step count, the instruction, a press counter for a button, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.
 
 ### Tabs (Settings' Pivot)
-- Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab has a second row of tabs, one per board, and a segmented Draw | List switch.
+- Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab lists the connected boards in a card on the left, the one picked marked by the hover tint and a 3px accent bar at its left edge, beside that board's profile on the right.
 
 ### Dialog (confirm sheets, a board's settings, Add board, calibration)
 - Centered over the Scrim color (`rgba(0, 0, 0, 0.35)`, the one color in the system not tied to light/dark since a dimming layer reads the same over either), Card Surface, the system's one shadow, title (subtitle type) + body (secondary text) + right-aligned Cancel/destructive-action button pair.

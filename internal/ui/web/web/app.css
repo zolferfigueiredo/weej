@@ -180,7 +180,10 @@ p {
   margin: 0;
 }
 
+/* Settings fills its window, so Close and Apply sit at the bottom however short a tab is;
+   pageHeight measures it without this. */
 .app {
+  min-height: 100vh;
   padding: 20px 24px 24px;
   display: flex;
   flex-direction: column;
@@ -292,15 +295,22 @@ p {
   cursor: pointer;
 }
 
-.tabpanel.general-grid {
+.general-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
   gap: 14px 20px;
 }
 
+.general-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
 @media (max-width: 760px) {
-  .tabpanel.general-grid {
+  .general-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -915,7 +925,7 @@ button.popover-item {
 }
 
 .footer {
-  margin: 4px -20px 0;
+  margin: auto -20px 0;
   padding: 10px 20px;
 }
 
@@ -956,6 +966,7 @@ select.select,
 .inspector-card {
   flex: 1 1 auto;
   height: 0;
+  min-height: 240px;
   overflow-y: auto;
   padding-bottom: 6px;
 }
@@ -1152,17 +1163,8 @@ select.select,
 
 .board-edit {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  justify-content: center;
   padding: 8px 12px;
-}
-
-.edit-main {
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
 }
 
 .arrow-keys {
@@ -1190,23 +1192,10 @@ select.select,
   grid-area: right;
 }
 
-.edit-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  min-height: 26px;
-}
-
 .segmented .btn.on {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-text);
-}
-
-.waiting-note {
-  color: var(--accent);
-  font-weight: 600;
 }
 
 .inspector-empty {
@@ -1218,34 +1207,6 @@ select.select,
 .smc .waiting .well {
   stroke: var(--accent);
   stroke-dasharray: 1 0.8;
-}
-
-.smc .add {
-  cursor: pointer;
-}
-
-.smc .add:focus,
-.smc .add:focus-visible {
-  outline: none;
-}
-
-.smc .add-face {
-  fill: transparent;
-  stroke: var(--text-disabled);
-  stroke-width: 0.3;
-  stroke-dasharray: 1 0.8;
-}
-
-.smc .add:hover .add-face,
-.smc .add:focus-visible .add-face {
-  fill: var(--card-bg-hover);
-  stroke: var(--accent);
-}
-
-.smc .add-plus {
-  stroke: var(--text-secondary);
-  stroke-width: 0.45;
-  stroke-linecap: round;
 }
 
 /* --- Boards ---------------------------------------------------------------- */
@@ -1299,31 +1260,25 @@ select.select,
   stroke-linejoin: round;
 }
 
-.subtabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.subtab {
-  appearance: none;
-  border: 1px solid var(--border);
-  background: var(--card-bg);
-  color: var(--text-secondary);
-  border-radius: 999px;
-  padding: 5px 14px;
-  font: inherit;
-  cursor: pointer;
-}
-
-.subtab:hover {
+/* A board in the Boards tab's list: its name picks it, and its gear opens its settings. */
+.board-pick.on {
   background: var(--card-bg-hover);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.subtab[aria-selected="true"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
+.pick-board {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .board-bar {
@@ -1331,7 +1286,6 @@ select.select,
   align-items: center;
   gap: 8px;
   min-height: 32px;
-  padding-top: 30px;
 }
 
 .empty-state {
@@ -1344,9 +1298,8 @@ select.select,
   text-align: center;
 }
 
-/* --list-max is set by fitLists when the page would be taller than the window can grow. */
+/* fitLists sets each card's max-height. */
 .list-columns .card {
-  max-height: var(--list-max, none);
   overflow-y: auto;
 }
 
@@ -1379,12 +1332,6 @@ select.select,
 
 .setup-counts .btn {
   min-width: 44px;
-}
-
-.tray-preview {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
 }
 
 .about {
@@ -1436,21 +1383,6 @@ select.select,
 
 .input-count {
   width: 72px;
-}
-
-.level {
-  height: 8px;
-  border-radius: 4px;
-  background: var(--control-border);
-  overflow: hidden;
-  margin: 10px 0;
-}
-
-.level-fill {
-  height: 100%;
-  width: 0;
-  background: var(--accent);
-  transition: width 80ms linear;
 }
 
 .wizard-step,

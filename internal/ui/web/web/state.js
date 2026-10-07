@@ -14,6 +14,8 @@ export const S = {
   // board is the ID of the board the Boards tab shows; selected is each board's picked control.
   board: null,
   selected: {},
+  // Per board, whether the Draw view's controls are being moved.
+  arrange: {},
   dialog: null,
   // recording is { field, device, dialog }: dialog when the gear's dialog owns the shortcut.
   recording: null,
@@ -66,13 +68,15 @@ export function deviceById(id, from = S.draft) {
   return devices(from).find((d) => d.id === id) || null;
 }
 
-// The board the Boards tab shows: the one picked, else the first.
+// The boards the Boards tab lists: the connected ones.
+export function shownBoards() {
+  return devices().filter((d) => statusOf(d.id).connected);
+}
+
+// The board the Boards tab shows: the one picked while it is connected, else the first that is.
 export function currentBoard() {
-  const d = deviceById(S.board);
-  if (d) return d;
-  const first = devices()[0] || null;
-  S.board = first ? first.id : null;
-  return first;
+  const shown = shownBoards();
+  return shown.find((d) => d.id === S.board) || shown[0] || null;
 }
 
 export function isSMC(d) {

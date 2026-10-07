@@ -1,18 +1,15 @@
 import { connect, send, t } from "./bridge.js";
 import {
-  addControl,
-  controlUsed,
   fitLists,
   moveControl,
   picked,
   pressed,
-  removeControl,
   renderBoards,
   select,
   showValues,
   touched,
 } from "./boards.js";
-import { openAdd, openGear, renderDialog, showWizardLevel } from "./dialogs.js";
+import { openAdd, openGear, refreshGearPorts, renderDialog } from "./dialogs.js";
 import { renderGeneral } from "./general.js";
 import {
   BUTTON_MENU_BASE,
@@ -41,7 +38,7 @@ import {
 
 // A 1x1 transparent GIF: the About tab's icon falls back to this rather than an empty src, which
 // some browsers render as a visible broken-image box.
-const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 // --- Rendering ------------------------------------------------------------
 
@@ -59,10 +56,7 @@ function render() {
   else if (S.tab === "about") renderAbout();
   else renderGeneral();
 
-  if (S.dialog) {
-    renderDialog();
-    showWizardLevel();
-  }
+  if (S.dialog) renderDialog();
 
   if (focusedId) {
     const el = document.getElementById(focusedId);
@@ -330,8 +324,11 @@ function onClick(e) {
       if (dev) calibrate(dev);
       break;
     }
-    case "find-control":
-      if (d) calibrate(d, [picked(d)]);
+    case "arrange":
+      if (d) {
+        S.arrange[d.id] = !S.arrange[d.id];
+        render();
+      }
       break;
     case "wizard-op":
       send({ type: "wizard", op: target.dataset.op });
@@ -405,28 +402,9 @@ function onClick(e) {
     case "pick-control-app":
       if (d) send({ type: "pickApp", knob: picked(d) });
       break;
-    case "add-control":
-      if (d) {
-        addControl(d, parseInt(target.dataset.row, 10));
-        render();
-      }
-      break;
-    case "set-kind":
-      if (d) {
-        d.controls[picked(d)].kind = target.dataset.kind;
-        render();
-      }
-      break;
     case "move-control":
       if (d) {
         moveControl(d, picked(d), target.dataset.dir);
-        render();
-      }
-      break;
-    case "remove-control":
-      if (d) {
-        if (controlUsed(d, picked(d))) S.dialog = { kind: "confirm", what: "control", id: d.id, k: picked(d) };
-        else removeControl(d, picked(d));
         render();
       }
       break;
@@ -436,8 +414,11 @@ function onClick(e) {
     case "reconnect":
       send({ type: "reconnect", device: target.dataset.board || (d && d.id) });
       break;
-    case "import-deej":
-      send({ type: "importDeej" });
+    case "import-profile":
+      if (d) send({ type: "importProfile", device: d.id });
+      break;
+    case "export-profile":
+      if (d) send({ type: "exportProfile", device: d.id, profile: activeProfile(d) });
       break;
     case "check-updates":
       send({ type: "checkUpdates" });
@@ -458,8 +439,6 @@ function confirmDialog() {
   if (dlg.what === "profile") {
     d.profiles.splice(d.profile, 1);
     d.profile = clampIndex(d.profile, d.profiles.length);
-  } else if (dlg.what === "control") {
-    removeControl(d, dlg.k);
   } else if (dlg.what === "board") {
     send({ type: "removeDevice", device: d.id });
   }
@@ -522,10 +501,6 @@ function onChange(e) {
       S.draft.hideTrayIcon = el.checked;
       render();
       break;
-    case "tray-icon-style":
-      S.draft.trayIcon = el.value;
-      render();
-      break;
     case "show-profile-list":
       S.draft.showProfileList = el.checked;
       break;
@@ -537,9 +512,6 @@ function onChange(e) {
       break;
     case "dlg-speed":
       S.dialog.dev.speed = el.value;
-      break;
-    case "dlg-invert":
-      S.dialog.dev.invert = el.checked;
       break;
     case "dlg-lights":
       S.dialog.dev.lights = el.value === "off" ? "" : el.value;
@@ -557,22 +529,21 @@ function onChange(e) {
 
 // The drawn controls take Enter and Space as buttons do, and the arrow keys walk between them.
 function onControlKeydown(e) {
-  const ctl = e.target.closest && e.target.closest(".smc .ctl, .smc .add");
+  const ctl = e.target.closest && e.target.closest(".smc .ctl");
   if (!ctl) return;
   const d = board();
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
     e.stopPropagation();
     if (!d) return;
-    if (ctl.classList.contains("add")) addControl(d, parseInt(ctl.dataset.row, 10));
-    else select(d, parseInt(ctl.dataset.control, 10));
+    select(d, parseInt(ctl.dataset.control, 10));
     render();
     return;
   }
   const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
   if (!step) return;
   e.preventDefault();
-  const all = [...document.querySelectorAll(".smc .ctl, .smc .add")];
+  const all = [...document.querySelectorAll(".smc .ctl")];
   const next = all[all.indexOf(ctl) + step];
   if (next) next.focus();
 }
@@ -646,9 +617,19 @@ function onMessage(msg) {
       removeDevice(msg.device);
       render();
       break;
-    case "imported":
+    case "profileImported": {
+      const d = deviceById(msg.device);
+      if (d && msg.profile) {
+        d.profiles.push(msg.profile);
+        d.profile = d.profiles.length - 1;
+        S.board = d.id;
+      }
       S.importNote = msg.skipped && msg.skipped.length ? t("import_skipped", { items: msg.skipped.join(", ") }) : "";
-      S.board = msg.device;
+      render();
+      break;
+    }
+    case "exportFailed":
+      S.importNote = t("profile.export_failed");
       render();
       break;
     case "importFailed":
@@ -699,15 +680,15 @@ function onMessage(msg) {
       const same =
         before &&
         ["device", "control", "stage", "count", "warning", "other", "index", "done"].every((k) => before[k] === msg[k]);
-      if (same) showWizardLevel();
-      else render();
+      if (!same) render();
       break;
     }
     case "ports":
       S.ports = msg.ports || [];
       S.midiInputs = msg.midi || [];
-      if (S.dialog && (S.dialog.kind === "add" || S.dialog.kind === "gear")) {
-        if (S.dialog.kind === "add" && S.dialog.type === "smc" && !S.dialog.port) {
+      if (S.dialog && S.dialog.kind === "gear") refreshGearPorts();
+      if (S.dialog && S.dialog.kind === "add") {
+        if (S.dialog.type === "smc" && !S.dialog.port) {
           S.dialog.port = S.midiInputs.find((n) => n.toLowerCase().includes("smc-mixer")) || "";
         }
         render();

@@ -108,7 +108,6 @@ func TestEngineSkipsUnknownMixerValues(t *testing.T) {
 		Columns:  []int{0, 1},
 		Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}, {{Kind: JobMicrophone}}}}},
 		Speed:    SpeedSuperFast,
-		Invert:   true,
 	}
 	e.Handle([]int{-1, 512}, setup, false)
 
@@ -138,7 +137,6 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 		Columns:  []int{0},
 		Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}},
 		Speed:    SpeedSuperFast,
-		Invert:   true,
 	}
 
 	e.Handle([]int{1023}, setup, false)
@@ -159,7 +157,7 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 
 func TestEngineResetUnmutes(t *testing.T) {
 	e := NewEngine(&fakeApplier{})
-	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}, Invert: true}
+	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}}
 	e.ToggleMute(0, setup)
 	e.Reset()
 	if !e.ToggleMute(0, setup) {
@@ -236,7 +234,6 @@ func TestEngineUnmuteAllRestoresWithoutAHUD(t *testing.T) {
 		Columns:  []int{0},
 		Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}},
 		Speed:    SpeedSuperFast,
-		Invert:   true,
 	}
 	e.Handle([]int{1023}, setup, false)
 	e.ToggleMute(0, setup)
