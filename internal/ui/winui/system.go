@@ -136,7 +136,7 @@ func processExe(pid uint32) string {
 	if err != nil {
 		return ""
 	}
-	defer windows.CloseHandle(h)
+	defer func() { _ = windows.CloseHandle(h) }()
 	buf := make([]uint16, windows.MAX_PATH)
 	n := uint32(len(buf))
 	if err := windows.QueryFullProcessImageName(h, 0, &buf[0], &n); err != nil {

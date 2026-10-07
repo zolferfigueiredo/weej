@@ -29,7 +29,7 @@ func (app *App) activeColumns(s core.Setup) []int {
 }
 
 func (app *App) onMixerValues(values []int) {
-	app.handleValues(values, app.snapshotSettings().Setup.ForMixer())
+	app.handleValues(values, app.snapshotSettings().ForMixer())
 }
 
 // pointOutMovedKnobs lights up a knob's row in Settings while its control moves, so it is easy
