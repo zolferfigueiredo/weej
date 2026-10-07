@@ -86,7 +86,8 @@ export function renderBoards() {
   if (!d.enabled) body = `<div class="empty-state"><p>${esc(t("boards.off"))}</p></div>`;
   else if (view === "list") body = listView(d);
   else body = drawView(d);
-  panel.innerHTML = `
+  keepScroll(() => {
+    panel.innerHTML = `
     <div class="tabpanel" role="tabpanel">
       <div class="subtabs" role="tablist">${tabs}</div>
       <div class="general-grid">
@@ -95,6 +96,7 @@ export function renderBoards() {
       </div>
       ${body}
     </div>`;
+  });
 }
 
 export const GEAR_ICON = `<svg class="gear" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.6 1h2.8l.4 1.9 1.1.6 1.8-.7 1.4 2.4-1.4 1.3v1.2l1.4 1.3-1.4 2.4-1.8-.7-1.1.6-.4 1.9H6.6l-.4-1.9-1.1-.6-1.8.7-1.4-2.4 1.4-1.3V7.8L1.9 6.5l1.4-2.4 1.8.7 1.1-.6z"/><circle cx="8" cy="8" r="2.2"/></svg>`;
@@ -183,7 +185,7 @@ function smcInspector(d, id) {
             <span class="spacer"></span>
             <button class="btn" type="button" data-action="clear-control"${empty ? " disabled" : ""}>${esc(t("clear"))}</button>
           </div>
-          <div class="card inspector-card">${button ? actionPicks(d, id) : jobPicks(d, id)}</div>
+          <div class="card inspector-card" data-keep-scroll="control-${d.id}-${id}">${button ? actionPicks(d, id) : jobPicks(d, id)}</div>
         </div>`;
 }
 
@@ -228,7 +230,7 @@ function boardInspector(d, k) {
             </div>
             <div class="arrow-keys">${moves}</div>
           </div>
-          <div class="card inspector-card">${button ? actionPicks(d, key) : jobPicks(d, k)}</div>
+          <div class="card inspector-card" data-keep-scroll="board-${d.id}-${k}">${button ? actionPicks(d, key) : jobPicks(d, k)}</div>
         </div>`;
 }
 
@@ -276,6 +278,22 @@ function listView(d) {
 }
 
 // --- Live --------------------------------------------------------------------
+
+// A redraw keeps where each list was scrolled to; a list opened fresh starts on the first thing
+// its control already does.
+function keepScroll(draw) {
+  const scrolled = new Map();
+  document.querySelectorAll("[data-keep-scroll]").forEach((el) => scrolled.set(el.dataset.keepScroll, el.scrollTop));
+  draw();
+  document.querySelectorAll("[data-keep-scroll]").forEach((el) => {
+    if (scrolled.has(el.dataset.keepScroll)) {
+      el.scrollTop = scrolled.get(el.dataset.keepScroll);
+      return;
+    }
+    const first = el.querySelector(".chk:checked");
+    if (first) el.scrollTop = first.getBoundingClientRect().top - el.getBoundingClientRect().top - 40;
+  });
+}
 
 function showing(d) {
   return S.tab === "boards" && currentBoard() && currentBoard().id === d.id && d.enabled;

@@ -951,7 +951,11 @@ select.select,
   padding: 4px 6px;
 }
 
+/* No height of its own, so the drawing sets the row's and the list scrolls inside it. */
 .inspector-card {
+  flex: 1 1 auto;
+  height: 0;
+  overflow-y: auto;
   padding-bottom: 6px;
 }
 
