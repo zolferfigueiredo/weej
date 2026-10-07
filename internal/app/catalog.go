@@ -264,9 +264,11 @@ func (app *App) shortcutLabels(setup core.Setup) map[string]string {
 	add(setup.Previous)
 	for _, p := range setup.Profiles {
 		add(p.Shortcut)
-		for _, a := range p.Buttons {
-			if s, ok := a.Keys(); ok {
-				add(&s)
+		for _, actions := range p.Buttons {
+			for _, a := range actions {
+				if s, ok := a.Keys(); ok {
+					add(&s)
+				}
 			}
 		}
 	}

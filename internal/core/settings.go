@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -91,45 +92,68 @@ func EncodeMixerColumns(cols []int) []*int {
 	return columnsToJSON(cols)
 }
 
-// ButtonMap is a profile's button functions by button id. A bad entry in a saved file is dropped
-// on its own instead of failing the whole profile list.
-type ButtonMap map[int]ButtonAction
+// ButtonMap is a profile's button functions by button id; a button may do several things at once.
+// Saved as an object of id to list of actions. A bad entry in a saved file is dropped on its own
+// instead of failing the whole profile list, and a single action, as files before lists held,
+// still reads.
+type ButtonMap map[int][]ButtonAction
 
-func (m ButtonMap) MarshalJSON() ([]byte, error) { return json.Marshal(EncodeButtons(m)) }
+func (m ButtonMap) MarshalJSON() ([]byte, error) {
+	out := map[string][]ButtonAction{}
+	for id, actions := range m {
+		if len(actions) > 0 {
+			out[strconv.Itoa(id)] = actions
+		}
+	}
+	return json.Marshal(out)
+}
 
 func (m *ButtonMap) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
 		return nil
 	}
-	var raw map[string]string
+	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(data, &raw); err != nil {
 		*m = ButtonMap{}
 		return nil
 	}
-	*m = DecodeButtons(raw)
+	out := ButtonMap{}
+	for k, v := range raw {
+		var list []ButtonAction
+		if err := json.Unmarshal(v, &list); err != nil {
+			var one ButtonAction
+			if json.Unmarshal(v, &one) != nil {
+				continue
+			}
+			list = []ButtonAction{one}
+		}
+		out.set(k, list)
+	}
+	*m = out
 	return nil
 }
 
-func EncodeButtons(buttons map[int]ButtonAction) map[string]string {
-	out := map[string]string{}
-	for cc, a := range buttons {
-		if a != ActionNone {
-			out[strconv.Itoa(cc)] = string(a)
+func (m ButtonMap) set(key string, actions []ButtonAction) {
+	id, err := strconv.Atoi(key)
+	if err != nil || id < 0 || id > 255 {
+		return
+	}
+	var kept []ButtonAction
+	for _, a := range actions {
+		if a != ActionNone && a.Valid() && !slices.Contains(kept, a) {
+			kept = append(kept, a)
 		}
 	}
-	return out
+	if len(kept) > 0 {
+		m[id] = kept
+	}
 }
 
-// A saved map replaces the defaults whole, so a button set to Nothing stays that way.
-func DecodeButtons(raw map[string]string) map[int]ButtonAction {
-	out := map[int]ButtonAction{}
+// DecodeButtons reads the one shared set of button functions that came before lists and profiles.
+func DecodeButtons(raw map[string]string) ButtonMap {
+	out := ButtonMap{}
 	for k, v := range raw {
-		cc, err := strconv.Atoi(k)
-		a := ButtonAction(v)
-		if err != nil || cc < 0 || cc > 255 || a == ActionNone || !a.Valid() {
-			continue
-		}
-		out[cc] = a
+		out.set(k, []ButtonAction{ButtonAction(v)})
 	}
 	return out
 }

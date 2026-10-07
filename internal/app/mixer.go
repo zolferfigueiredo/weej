@@ -4,6 +4,7 @@ package app
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
@@ -57,9 +58,11 @@ func (app *App) unmuteAll() {
 	if app.engine.UnmuteAll(setup.ForMixer()) == 0 || !app.usesMixer() {
 		return
 	}
-	for id, a := range setup.ActiveButtons() {
-		if _, ok := a.MuteKnob(); ok {
-			midiport.SetLED(id, false)
+	for id, actions := range setup.ActiveButtons() {
+		for _, a := range actions {
+			if _, ok := a.MuteKnob(); ok {
+				midiport.SetLED(id, false)
+			}
 		}
 	}
 }
@@ -85,13 +88,26 @@ func (app *App) onMixerButton(cc int) {
 		return
 	}
 	setup := app.snapshotSettings().Setup
-	action := setup.ActiveButtons()[cc]
-	if action == core.ActionNone {
-		app.log(fmt.Sprintf("Mixer button %s pressed: nothing set", mixerButtonName(cc)))
+	actions := setup.ActiveButtons()[cc]
+	if len(actions) == 0 {
+		app.log(fmt.Sprintf("Mixer button %s pressed: empty", mixerButtonName(cc)))
 	} else {
-		app.log(fmt.Sprintf("Mixer button %s pressed: %s", mixerButtonName(cc), action))
+		names := make([]string, len(actions))
+		for i, a := range actions {
+			names[i] = string(a)
+		}
+		app.log(fmt.Sprintf("Mixer button %s pressed: %s", mixerButtonName(cc), strings.Join(names, ", ")))
+	}
+	for _, action := range actions {
+		app.runButtonAction(cc, action, setup)
 	}
 
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "mixerButton", "cc": cc})
+	}
+}
+
+func (app *App) runButtonAction(cc int, action core.ButtonAction, setup core.Setup) {
 	if knob, ok := action.MuteKnob(); ok {
 		mixer := setup.ForMixer()
 		if knob < len(mixer.Columns) && mixer.Columns[knob] >= 0 {
@@ -151,9 +167,5 @@ func (app *App) onMixerButton(cc int) {
 		app.loop.Invoke(func() { app.onHotkey(previousProfileHotkeyID) })
 	case core.ActionOpenSettings:
 		app.loop.Invoke(func() { app.openSettings("") })
-	}
-
-	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "mixerButton", "cc": cc})
 	}
 }

@@ -120,12 +120,12 @@ func (app *App) printStartupSummary() {
 	for i, col := range s.Columns {
 		letter := core.Letter(i)
 		if col < 0 {
-			app.log(fmt.Sprintf("knob %s, not calibrated: %s", letter, app.tr("job.nothing")))
+			app.log(fmt.Sprintf("knob %s, not calibrated: %s", letter, app.tr("job.empty")))
 			continue
 		}
 		jobs := active.JobsOf(i)
 		if len(jobs) == 0 {
-			app.log(fmt.Sprintf("knob %s, input %d: %s", letter, col, app.tr("job.nothing")))
+			app.log(fmt.Sprintf("knob %s, input %d: %s", letter, col, app.tr("job.empty")))
 			continue
 		}
 		titles := make([]string, len(jobs))

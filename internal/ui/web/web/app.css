@@ -317,6 +317,11 @@ p {
   width: 100%;
 }
 
+.button-param .param-label {
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+}
+
 .list-group > .card {
   max-height: var(--list-max, 420px);
   overflow-y: auto;

@@ -126,8 +126,8 @@ func (app *App) finishCalibration() {
 		for i, p := range cur.Profiles {
 			kept := core.ButtonMap{}
 			for _, cc := range buttons {
-				if a, ok := p.Buttons[cc]; ok {
-					kept[cc] = a
+				if actions, ok := p.Buttons[cc]; ok {
+					kept[cc] = actions
 				}
 			}
 			p.Buttons = kept

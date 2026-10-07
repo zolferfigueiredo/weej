@@ -308,7 +308,7 @@ const MOCK_EN_STRINGS = {
   "job.master": "Master volume",
   "job.microphone": "Microphone volume",
   "job.night_light": "Night light warmth",
-  "job.nothing": "Nothing",
+  "job.empty": "Empty",
   "job.other_apps": "Other apps",
   "job.system_sounds": "System sounds",
   "job.zoom": "Screen zoom",

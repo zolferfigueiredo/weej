@@ -123,7 +123,7 @@ func TestMixerButtonsSurviveSaving(t *testing.T) {
 
 	s := DefaultSettings("Default")
 	s.Profiles = []Profile{
-		{Name: "One", Buttons: ButtonMap{20: ActionNone, 52: ActionPlayPause, MixerNoteButton(24): ActionStop}},
+		{Name: "One", Buttons: ButtonMap{20: {ActionNone}, 52: {ActionPlayPause, ActionMuteMic}, MixerNoteButton(24): {ActionStop}}},
 		{Name: "Two", Buttons: ButtonMap{}},
 	}
 	data, err := EncodeSettings(s)
@@ -131,7 +131,7 @@ func TestMixerButtonsSurviveSaving(t *testing.T) {
 		t.Fatal(err)
 	}
 	back, _ := DecodeSettings(data, "Default")
-	want := ButtonMap{52: ActionPlayPause, MixerNoteButton(24): ActionStop}
+	want := ButtonMap{52: {ActionPlayPause, ActionMuteMic}, MixerNoteButton(24): {ActionStop}}
 	if !reflect.DeepEqual(back.Profiles[0].Buttons, want) {
 		t.Errorf("profile one = %v, want %v (CC 20 set to nothing stays nothing)", back.Profiles[0].Buttons, want)
 	}
@@ -139,9 +139,9 @@ func TestMixerButtonsSurviveSaving(t *testing.T) {
 		t.Errorf("profile two = %v, want still cleared, not the defaults", b)
 	}
 
-	bad, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[],"buttons":{"52":"bogus","x":"settings","61":"settings"}}]}`), "Default")
-	if !reflect.DeepEqual(bad.ActiveButtons(), ButtonMap{61: ActionOpenSettings}) {
-		t.Errorf("bad entries = %v, want only CC 61", bad.ActiveButtons())
+	bad, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[],"buttons":{"52":"bogus","x":["settings"],"61":"settings","62":["pc.lock","bogus","pc.lock"]}}]}`), "Default")
+	if !reflect.DeepEqual(bad.ActiveButtons(), ButtonMap{61: {ActionOpenSettings}, 62: {ActionLockPC}}) {
+		t.Errorf("bad entries = %v, want CC 61 read from a single action and CC 62 cleaned", bad.ActiveButtons())
 	}
 }
 
@@ -149,15 +149,15 @@ func TestSharedButtonsMoveIntoEveryProfile(t *testing.T) {
 	old, _ := DecodeSettings([]byte(`{"profiles":[{"name":"A","jobs":[]},{"name":"B","jobs":[]}],"profile":1,`+
 		`"mixerButtons":{"20":"media.stop"}}`), "Default")
 	for i, p := range old.Profiles {
-		if !reflect.DeepEqual(p.Buttons, ButtonMap{20: ActionStop}) {
+		if !reflect.DeepEqual(p.Buttons, ButtonMap{20: {ActionStop}}) {
 			t.Errorf("profile %d = %v, want the shared set", i, p.Buttons)
 		}
 	}
-	old.Profiles[0].Buttons[21] = ActionNextTrack
+	old.Profiles[0].Buttons[21] = []ButtonAction{ActionNextTrack}
 	if _, ok := old.Profiles[1].Buttons[21]; ok {
 		t.Error("profiles share one map, want a copy each")
 	}
-	if !reflect.DeepEqual(old.ActiveButtons(), ButtonMap{20: ActionStop}) {
+	if !reflect.DeepEqual(old.ActiveButtons(), ButtonMap{20: {ActionStop}}) {
 		t.Errorf("active buttons = %v, want profile B's", old.ActiveButtons())
 	}
 }
