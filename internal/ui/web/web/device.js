@@ -22,12 +22,12 @@ const FADER_LABEL_Y = 50.9;
 // Matches .smc .label's font-size; a label may take a strip's width, less a gap.
 const LABEL_SIZE = 2.6;
 const LABEL_MAX = 17;
-// M, S, R and LED (the Square button, which WeeJ lights while the strip moves), top to bottom to the right of the fader, by the first note of each row.
+// M, S, R and Square, top to bottom to the right of the fader, by the first note of each row.
 const STRIP_BUTTONS = [
   { first: 16, glyph: "M", y: 20.1 },
   { first: 8, glyph: "S", y: 27.7 },
   { first: 0, glyph: "R", y: 35.4 },
-  { first: 24, glyph: "LED", y: 42.6 },
+  { first: 24, glyph: "", y: 42.6 },
 ];
 const BUTTON = { x: 8.8, size: 4.6 };
 const BOTTOM = { y: 57, w: 7.4, h: 4.2, x0: 5.04, pitch: 12.574 };
@@ -78,7 +78,7 @@ export function smcControlName(id, t) {
   if (note >= 0 && note < 32) {
     const n = String((note % 8) + 1);
     const row = STRIP_BUTTONS.find((b) => note >= b.first && note < b.first + 8);
-    return row.glyph + n;
+    return row.glyph ? row.glyph + n : t("smc.square", { n });
   }
   const bottom = SMC_BOTTOM.find((b) => b.note === note);
   return bottom ? t(bottom.name) : String(id);
@@ -171,7 +171,9 @@ export function smcSVG(opts) {
     for (const b of STRIP_BUTTONS) {
       const id = 128 + b.first + s;
       const half = BUTTON.size / 2;
-      const glyph = `<text class="glyph${b.glyph.length > 1 ? " small" : ""}" y="${b.glyph.length > 1 ? 0.6 : 0.95}">${b.glyph}</text>`;
+      const glyph = b.glyph
+        ? `<text class="glyph" y="0.95">${b.glyph}</text>`
+        : `<rect class="glyph-box" x="-0.9" y="-0.9" width="1.8" height="1.8" rx="0.35"/>`;
       out += controlG(
         opts,
         id,
