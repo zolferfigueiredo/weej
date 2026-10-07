@@ -99,9 +99,46 @@ func (app *App) onMixerButton(cc int) {
 			midiport.SetLED(cc, muted)
 		}
 	}
+	if path, ok := action.OpenApp(); ok && !winui.FocusApp(core.ExeName(path)) {
+		launch(path)
+	}
+	if exe, ok := action.CloseApp(); ok {
+		winui.CloseApp(exe)
+	}
+	if url, ok := action.URL(); ok {
+		openURL(url)
+	}
+	if keys, ok := action.Keys(); ok {
+		winui.SendShortcut(keys.Mods, keys.VK)
+	}
+	if i, ok := action.Profile(); ok {
+		app.loop.Invoke(func() { app.onHotkey(i) })
+	}
 	switch action {
 	case core.ActionPlayPause:
 		winui.MediaKey(winui.VKMediaPlayPause)
+	case core.ActionPlay:
+		winui.AppCommand(winui.AppCommandMediaPlay)
+	case core.ActionPause:
+		winui.AppCommand(winui.AppCommandMediaPause)
+	case core.ActionVolumeUp:
+		winui.MediaKey(winui.VKVolumeUp)
+	case core.ActionVolumeDown:
+		winui.MediaKey(winui.VKVolumeDown)
+	case core.ActionMuteAll:
+		winui.MediaKey(winui.VKVolumeMute)
+	case core.ActionMuteMic:
+		if app.audio != nil {
+			app.audio.ToggleMicMute()
+		}
+	case core.ActionNightLight:
+		app.nightlight.Toggle()
+	case core.ActionScreensOff:
+		winui.ScreensOff()
+	case core.ActionLockPC:
+		winui.LockPC()
+	case core.ActionSleepPC:
+		winui.SleepPC()
 	case core.ActionStop:
 		winui.MediaKey(winui.VKMediaStop)
 	case core.ActionPreviousTrack:

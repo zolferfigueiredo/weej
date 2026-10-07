@@ -452,29 +452,135 @@ function padJobRows(setup) {
   }
 }
 
-const MIXER_ACTIONS = [
-  ["media.playpause", "action.play_pause"],
-  ["media.stop", "action.stop"],
-  ["media.previous", "action.previous_track"],
-  ["media.next", "action.next_track"],
-  ["profile.previous", "previous_profile"],
-  ["profile.next", "next_profile"],
-  ["settings", "action.open_settings"],
+// The values are core.ButtonAction strings; the ones ending in ":" take a setting after it, which
+// the row asks for with an extra control.
+const MIXER_ACTION_GROUPS = [
+  [
+    "action.group.media",
+    [
+      ["media.playpause", "action.play_pause"],
+      ["media.play", "action.play"],
+      ["media.pause", "action.pause"],
+      ["media.stop", "action.stop"],
+      ["media.previous", "action.previous_track"],
+      ["media.next", "action.next_track"],
+      ["volume.up", "action.volume_up"],
+      ["volume.down", "action.volume_down"],
+      ["mute.all", "action.mute_all"],
+    ],
+  ],
+  [
+    "action.group.apps",
+    [
+      ["open:", "action.open_app"],
+      ["close:", "action.close_app"],
+      ["url:", "action.open_url"],
+    ],
+  ],
+  [
+    "action.group.system",
+    [
+      ["mute.mic", "action.mute_mic"],
+      ["keys:", "action.keys"],
+      ["nightlight", "action.night_light"],
+      ["screens.off", "action.screens_off"],
+      ["pc.lock", "action.lock"],
+      ["pc.sleep", "action.sleep"],
+    ],
+  ],
+  [
+    "action.group.weej",
+    [
+      ["profile.previous", "previous_profile"],
+      ["profile.next", "next_profile"],
+      ["profile:", "action.go_profile"],
+      ["settings", "action.open_settings"],
+    ],
+  ],
 ];
+const PARAM_KINDS = ["open:", "close:", "url:", "keys:", "profile:"];
 
-function mixerActionOptions(current) {
-  const options = [["", t("job.nothing")]];
-  for (let i = 0; i < knobCount(); i++) {
-    options.push([`mute:${i}`, t("action.mute", { letter: letterFor(i) })]);
+// Windows has no key past F24, so after F13 to F24 the list goes on with the same keys under
+// Ctrl, Shift, Alt and their mixes: every button can have a key of its own for other apps to bind.
+const FKEY_MODS = [0, 2, 4, 1, 6, 3, 5, 7];
+
+function functionKeys(count) {
+  const out = [];
+  for (let i = 0; i < count && i < 12 * FKEY_MODS.length; i++) {
+    const n = 13 + (i % 12);
+    const mods = FKEY_MODS[Math.floor(i / 12)];
+    const parts = [];
+    if (mods & 2) parts.push(init.ctrlName || "Ctrl");
+    if (mods & 1) parts.push("Alt");
+    if (mods & 4) parts.push("Shift");
+    parts.push(`F${n}`);
+    out.push([`keys:${mods}:${0x7c + n - 13}:F${n}`, parts.join("+")]);
   }
-  for (const [value, key] of MIXER_ACTIONS) options.push([value, t(key)]);
+  return out;
+}
+
+function actionKind(action, fkeys) {
+  if (fkeys.some(([value]) => value === action)) return action;
+  return PARAM_KINDS.find((kind) => action.startsWith(kind)) || action;
+}
+
+function mixerActionOptions(current, fkeys) {
+  const kind = actionKind(current, fkeys);
+  const option = (value, label) => `<option value="${escAttr(value)}"${value === kind ? " selected" : ""}>${esc(label)}</option>`;
+  const group = (key, items) => `<optgroup label="${escAttr(t(key))}">${items.map(([v, l]) => option(v, l)).join("")}</optgroup>`;
+
+  const mutes = [];
+  for (let i = 0; i < knobCount(); i++) mutes.push([`mute:${i}`, t("action.mute", { letter: letterFor(i) })]);
   // A mute for a knob that has since been removed still shows, so opening Settings never drops it.
-  if (!options.some(([value]) => value === current) && current.startsWith("mute:")) {
-    options.push([current, t("action.mute", { letter: letterFor(parseInt(current.slice(5), 10)) })]);
+  if (kind.startsWith("mute:") && !mutes.some(([v]) => v === kind)) {
+    mutes.push([kind, t("action.mute", { letter: letterFor(parseInt(kind.slice(5), 10)) })]);
   }
-  return options
-    .map(([value, label]) => `<option value="${escAttr(value)}"${value === current ? " selected" : ""}>${esc(label)}</option>`)
-    .join("");
+  return (
+    option("", t("job.nothing")) +
+    MIXER_ACTION_GROUPS.map(([key, items]) => group(key, items.map(([v, k]) => [v, t(k)]))).join("") +
+    group("action.group.fkeys", fkeys) +
+    group("action.group.knobs", mutes)
+  );
+}
+
+let appNames = {}; // an app's path or exe, as an action holds it, to the name the picker found
+
+function baseName(path) {
+  return path.split(/[\\/]/).pop();
+}
+
+// "keys:<mods>:<vk>:<key>", as core.KeysAction writes it.
+function keysShortcut(value) {
+  const [mods, vk, ...key] = value.split(":");
+  return vk ? { vk: parseInt(vk, 10), mods: parseInt(mods, 10), key: key.join(":") } : null;
+}
+
+function buttonParamControl(cc, action, fkeys) {
+  const kind = actionKind(action, fkeys);
+  const value = action.slice(kind.length);
+  switch (kind) {
+    case "open:":
+    case "close:": {
+      const label = value ? appNames[value] || baseName(value) : t("choose");
+      return `<button class="btn" type="button" data-action="pick-button-app" data-cc="${cc}" data-mode="${kind.slice(0, -1)}">${esc(label)}</button>`;
+    }
+    case "url:":
+      return `<input class="input" type="text" data-button-url="${cc}" value="${escAttr(value)}" placeholder="https://" spellcheck="false" />`;
+    case "keys:":
+      return shortcutControl(`button:${cc}`, keysShortcut(value));
+    case "profile:":
+      return `<select class="select" data-button-profile="${cc}">${draft.profiles
+        .map((p, i) => `<option value="${i}"${String(i) === value ? " selected" : ""}>${esc(p.name || t("profile_n", { n: String(i + 1) }))}</option>`)
+        .join("")}</select>`;
+  }
+  return "";
+}
+
+function setButtonAction(cc, action) {
+  const profile = activeProfile();
+  profile.buttons = profile.buttons || {};
+  if (action) profile.buttons[cc] = action;
+  else delete profile.buttons[cc];
 }
 
 function buttonOrder() {
@@ -491,17 +597,21 @@ function renderMixerButtons() {
   const mixer = usesMixer();
   const order = mixer ? buttonOrder() : [];
   const actions = activeProfile().buttons || {};
+  const fkeys = functionKeys(order.length + 1);
   const rows = order.length
     ? order
         .map((cc, i) => {
           const pending = cc < 0;
+          const action = actions[cc] || "";
+          const param = pending ? "" : buttonParamControl(cc, action, fkeys);
           return `
           <div class="row"${pending ? "" : ` data-cc="${cc}"`}>
             <div class="row-main">
               <span class="row-title">${esc(t("mixer.button", { n: String(i + 1) }))}</span>
               ${pending ? `<span class="row-desc warning">${esc(t("mixer.press"))}</span>` : ""}
+              ${param ? `<div class="button-param">${param}</div>` : ""}
             </div>
-            <div class="row-control"><select class="select" data-mixer-cc="${cc}"${pending ? " disabled" : ""}>${mixerActionOptions(actions[cc] || "")}</select></div>
+            <div class="row-control"><select class="select" data-mixer-cc="${cc}"${pending ? " disabled" : ""}>${mixerActionOptions(action, fkeys)}</select></div>
           </div>`;
         })
         .join("")
@@ -862,6 +972,9 @@ function applyRecorded(field, shortcut) {
   else if (field && field.indexOf("profile:") === 0) {
     const i = parseInt(field.slice("profile:".length), 10);
     if (draft.profiles[i]) draft.profiles[i].shortcut = shortcut;
+  } else if (field && field.indexOf("button:") === 0) {
+    const cc = field.slice("button:".length);
+    setButtonAction(cc, shortcut ? `keys:${shortcut.mods}:${shortcut.vk}:${shortcut.key}` : "keys:");
   }
 }
 
@@ -888,7 +1001,8 @@ function onRecordKeydown(e) {
   // Holding Ctrl or Alt fires a keydown for the modifier itself; wait for the real key.
   if (MODIFIER_KEYS.has(e.key)) return;
   const isClear = (e.key === "Delete" || e.key === "Backspace") && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
-  if (!isClear && !e.ctrlKey && !e.altKey) return; // wait for a real Ctrl/Alt chord
+  // A hotkey needs a Ctrl/Alt chord; a key a mixer button presses can be any key.
+  if (!isClear && !e.ctrlKey && !e.altKey && recording.field.indexOf("button:") !== 0) return;
   send({
     type: "key",
     field: recording.field,
@@ -983,6 +1097,9 @@ function onClick(e) {
       else startRecording(field);
       break;
     }
+    case "pick-button-app":
+      send({ type: "pickApp", button: parseInt(target.dataset.cc, 10), mode: target.dataset.mode });
+      break;
     case "add-button":
       addButton();
       break;
@@ -1024,6 +1141,7 @@ function onInput(e) {
     // time something else forces a redraw.
     activeProfile().name = e.target.value;
   }
+  if (e.target.dataset.buttonUrl) setButtonAction(e.target.dataset.buttonUrl, `url:${e.target.value.trim()}`);
   updateSaveButton();
 }
 
@@ -1064,11 +1182,11 @@ function onChange(e) {
       break;
   }
   if (el.dataset.mixerCc) {
-    const profile = activeProfile();
-    profile.buttons = profile.buttons || {};
-    if (el.value) profile.buttons[el.dataset.mixerCc] = el.value;
-    else delete profile.buttons[el.dataset.mixerCc];
+    // Picking "Go to a profile" lands on the profile shown, so it does something right away.
+    setButtonAction(el.dataset.mixerCc, el.value === "profile:" ? `profile:${draft.profile}` : el.value);
+    render();
   }
+  if (el.dataset.buttonProfile) setButtonAction(el.dataset.buttonProfile, `profile:${el.value}`);
   updateSaveButton();
 }
 
@@ -1115,6 +1233,14 @@ function onMessage(msg) {
       calibrating = !!msg.on;
       render();
       break;
+    case "buttonAppPicked": {
+      const value = msg.mode === "open" ? msg.path : msg.exe;
+      appNames[value] = msg.name;
+      setButtonAction(String(msg.button), `${msg.mode}:${value}`);
+      render();
+      updateSaveButton();
+      break;
+    }
     case "mixerButton":
       onMixerButtonPressed(msg.cc);
       break;

@@ -306,6 +306,17 @@ p {
 }
 
 /* The knob and button lists scroll on their own, so the page itself stays put. */
+.button-param {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.button-param .input {
+  width: 100%;
+}
+
 .list-group > .card {
   max-height: var(--list-max, 420px);
   overflow-y: auto;

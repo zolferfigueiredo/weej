@@ -263,6 +263,7 @@ func (app *App) sendSettingsInit() {
 	payload["forcedPort"] = app.forcedPort
 	payload["baudRates"] = core.BaudRates
 	payload["mixerButtonDefaults"] = core.DefaultMixerButtonOrder
+	payload["ctrlName"] = app.ctrlLabelName()
 	win.Send(payload)
 }
 
@@ -325,6 +326,9 @@ func hasUncalibratedColumn(cols []int) bool {
 func (app *App) handleSettingsPickApp(data []byte) {
 	var msg struct {
 		Knob int `json:"knob"`
+		// Button is set when a mixer button's Open or Close an app asks; Mode says which.
+		Button *int   `json:"button"`
+		Mode   string `json:"mode"`
 	}
 	_ = json.Unmarshal(data, &msg)
 
@@ -344,6 +348,12 @@ func (app *App) handleSettingsPickApp(data []byte) {
 	app.appCacheMu.Unlock()
 
 	name := app.resolveApp(exe)
+	if msg.Button != nil {
+		if win := app.settingsWin; win != nil {
+			win.Send(map[string]any{"type": "buttonAppPicked", "button": *msg.Button, "mode": msg.Mode, "path": path, "exe": exe, "name": name})
+		}
+		return
+	}
 	job := core.Job{Kind: core.JobApp, Exe: exe}
 	entry := catalogEntry{
 		Section: sectionName(job.Section()),
@@ -509,6 +519,13 @@ func (app *App) handleSettingsKey(data []byte) {
 	reject := func() {
 		winui.Beep()
 		win.Send(map[string]any{"type": "rejected", "field": msg.Field})
+	}
+
+	// A mixer button presses its keys rather than listening for them, so any key will do and
+	// nothing has to be free to register.
+	if strings.HasPrefix(msg.Field, "button:") {
+		win.Send(map[string]any{"type": "recorded", "field": msg.Field, "shortcut": shortcut, "label": core.Label(shortcut, app.ctrlLabelName())})
+		return
 	}
 
 	if !core.Valid(shortcut) {

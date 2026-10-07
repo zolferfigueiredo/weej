@@ -482,3 +482,45 @@ func TestInvertIsPerDevice(t *testing.T) {
 		t.Errorf("round trip invert = board %v, mixer %v, want false and true", back.Invert, back.MixerInvert)
 	}
 }
+
+func TestButtonActionsWithASetting(t *testing.T) {
+	cases := []struct {
+		action ButtonAction
+		valid  bool
+	}{
+		{OpenAppAction(`C:\Program Files\Spotify\Spotify.exe`), true},
+		{"open:", false},
+		{CloseAppAction("spotify.exe"), true},
+		{URLAction("https://weej.zolfer.com"), true},
+		{URLAction("HTTP://example.com"), true},
+		{URLAction("file:///C:/x"), false},
+		{KeysAction(Shortcut{VK: 0x4D, Mods: ModControl | ModShift, Key: "m"}), true},
+		{KeysAction(Shortcut{VK: 0xBA, Key: ":"}), true},
+		{"keys:2:0:x", false},
+		{"keys:", false},
+		{ProfileAction(2), true},
+		{"profile:-1", false},
+		{ActionPlay, true},
+		{ActionMuteMic, true},
+		{"pc.reboot", false},
+	}
+	for _, c := range cases {
+		if got := c.action.Valid(); got != c.valid {
+			t.Errorf("%q valid = %v, want %v", c.action, got, c.valid)
+		}
+	}
+
+	s, ok := KeysAction(Shortcut{VK: 0xBA, Mods: ModShift, Key: ":"}).Keys()
+	if !ok || s.VK != 0xBA || s.Mods != ModShift || s.Key != ":" {
+		t.Errorf("Keys round trip = %+v, %v", s, ok)
+	}
+	if path, ok := OpenAppAction(`C:\Apps\c.exe`).OpenApp(); !ok || path != `C:\Apps\c.exe` {
+		t.Errorf("OpenApp = %q, %v", path, ok)
+	}
+	if i, ok := ProfileAction(3).Profile(); !ok || i != 3 {
+		t.Errorf("Profile = %d, %v", i, ok)
+	}
+	if _, ok := MuteAction(1).Profile(); ok {
+		t.Error("a mute action read as a profile")
+	}
+}

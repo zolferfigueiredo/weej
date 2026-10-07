@@ -24,7 +24,10 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/updater"
 )
 
-type NightLight interface{ Set(s float64) }
+type NightLight interface {
+	Set(s float64)
+	Toggle()
+}
 
 type Zoom interface {
 	Set(s float64)

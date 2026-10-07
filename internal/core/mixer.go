@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -57,39 +58,124 @@ type ButtonAction string
 const (
 	ActionNone            ButtonAction = ""
 	ActionPlayPause       ButtonAction = "media.playpause"
+	ActionPlay            ButtonAction = "media.play"
+	ActionPause           ButtonAction = "media.pause"
 	ActionStop            ButtonAction = "media.stop"
 	ActionPreviousTrack   ButtonAction = "media.previous"
 	ActionNextTrack       ButtonAction = "media.next"
+	ActionVolumeUp        ButtonAction = "volume.up"
+	ActionVolumeDown      ButtonAction = "volume.down"
+	ActionMuteAll         ButtonAction = "mute.all"
+	ActionMuteMic         ButtonAction = "mute.mic"
+	ActionNightLight      ButtonAction = "nightlight"
+	ActionScreensOff      ButtonAction = "screens.off"
+	ActionLockPC          ButtonAction = "pc.lock"
+	ActionSleepPC         ButtonAction = "pc.sleep"
 	ActionNextProfile     ButtonAction = "profile.next"
 	ActionPreviousProfile ButtonAction = "profile.previous"
 	ActionOpenSettings    ButtonAction = "settings"
-	muteActionPrefix                   = "mute:"
+
+	// These carry a setting after the prefix; settings.js keys its controls off the same prefixes.
+	muteActionPrefix    = "mute:"
+	openActionPrefix    = "open:"
+	closeActionPrefix   = "close:"
+	urlActionPrefix     = "url:"
+	keysActionPrefix    = "keys:"
+	profileActionPrefix = "profile:"
 )
 
 func MuteAction(knob int) ButtonAction {
 	return ButtonAction(muteActionPrefix + strconv.Itoa(knob))
 }
 
-func (a ButtonAction) MuteKnob() (int, bool) {
-	rest, ok := strings.CutPrefix(string(a), muteActionPrefix)
-	if !ok {
-		return 0, false
-	}
-	n, err := strconv.Atoi(rest)
-	if err != nil || n < 0 || strconv.Itoa(n) != rest {
+func OpenAppAction(path string) ButtonAction { return ButtonAction(openActionPrefix + path) }
+
+func CloseAppAction(exe string) ButtonAction { return ButtonAction(closeActionPrefix + exe) }
+
+func URLAction(url string) ButtonAction { return ButtonAction(urlActionPrefix + url) }
+
+// KeysAction is "keys:<mods>:<vk>:<key>"; the key name goes last since it may hold a colon.
+func KeysAction(s Shortcut) ButtonAction {
+	return ButtonAction(fmt.Sprintf("%s%d:%d:%s", keysActionPrefix, s.Mods, s.VK, s.Key))
+}
+
+func ProfileAction(i int) ButtonAction {
+	return ButtonAction(profileActionPrefix + strconv.Itoa(i))
+}
+
+func (a ButtonAction) param(prefix string) (string, bool) {
+	rest, ok := strings.CutPrefix(string(a), prefix)
+	return rest, ok && rest != ""
+}
+
+func index(s string) (int, bool) {
+	n, err := strconv.Atoi(s)
+	if err != nil || n < 0 || strconv.Itoa(n) != s {
 		return 0, false
 	}
 	return n, true
 }
 
+func (a ButtonAction) MuteKnob() (int, bool) {
+	rest, ok := a.param(muteActionPrefix)
+	if !ok {
+		return 0, false
+	}
+	return index(rest)
+}
+
+// OpenApp is the full path of the app to start.
+func (a ButtonAction) OpenApp() (string, bool) { return a.param(openActionPrefix) }
+
+// CloseApp is the file name of the app to close, such as "spotify.exe".
+func (a ButtonAction) CloseApp() (string, bool) { return a.param(closeActionPrefix) }
+
+func (a ButtonAction) URL() (string, bool) {
+	u, ok := a.param(urlActionPrefix)
+	lower := strings.ToLower(u)
+	return u, ok && (strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "http://"))
+}
+
+func (a ButtonAction) Keys() (Shortcut, bool) {
+	rest, ok := a.param(keysActionPrefix)
+	if !ok {
+		return Shortcut{}, false
+	}
+	parts := strings.SplitN(rest, ":", 3)
+	if len(parts) != 3 {
+		return Shortcut{}, false
+	}
+	mods, err1 := strconv.ParseUint(parts[0], 10, 16)
+	vk, err2 := strconv.ParseUint(parts[1], 10, 16)
+	if err1 != nil || err2 != nil || vk == 0 {
+		return Shortcut{}, false
+	}
+	return Shortcut{VK: uint16(vk), Mods: uint16(mods), Key: parts[2]}, true
+}
+
+func (a ButtonAction) Profile() (int, bool) {
+	rest, ok := a.param(profileActionPrefix)
+	if !ok {
+		return 0, false
+	}
+	return index(rest)
+}
+
 func (a ButtonAction) Valid() bool {
 	switch a {
-	case ActionNone, ActionPlayPause, ActionStop, ActionPreviousTrack, ActionNextTrack,
-		ActionNextProfile, ActionPreviousProfile, ActionOpenSettings:
+	case ActionNone, ActionPlayPause, ActionPlay, ActionPause, ActionStop, ActionPreviousTrack,
+		ActionNextTrack, ActionVolumeUp, ActionVolumeDown, ActionMuteAll, ActionMuteMic,
+		ActionNightLight, ActionScreensOff, ActionLockPC, ActionSleepPC, ActionNextProfile,
+		ActionPreviousProfile, ActionOpenSettings:
 		return true
 	}
-	_, ok := a.MuteKnob()
-	return ok
+	_, mute := a.MuteKnob()
+	_, open := a.OpenApp()
+	_, closeApp := a.CloseApp()
+	_, url := a.URL()
+	_, keys := a.Keys()
+	_, profile := a.Profile()
+	return mute || open || closeApp || url || keys || profile
 }
 
 func DefaultMixerButtons() ButtonMap {

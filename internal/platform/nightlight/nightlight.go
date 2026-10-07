@@ -100,6 +100,42 @@ func (n *NightLight) run() {
 	}
 }
 
+// Toggle turns Night light off if it is on, or on at its own warmth if it is off.
+func (n *NightLight) Toggle() {
+	go func() {
+		blobs, err := readAll()
+		if err != nil || len(blobs) == 0 {
+			n.log("Night light is unavailable: its settings were not found")
+			return
+		}
+		on := false
+		stamp := time.Now().Unix()
+		for _, b := range blobs {
+			if b.state {
+				if isOn, err := core.IsOn(b.data); err == nil && isOn {
+					on = true
+				}
+			}
+			if ts, err := core.NightLightStamp(b.data); err == nil && ts+1 > stamp {
+				stamp = ts + 1
+			}
+		}
+		for _, b := range blobs {
+			if !b.state {
+				continue
+			}
+			next, err := core.SetOn(b.data, !on, time.Unix(stamp, 0))
+			if err == nil {
+				err = write(b.path, next)
+			}
+			if err != nil {
+				n.log("Could not change Night light: " + err.Error())
+				return
+			}
+		}
+	}()
+}
+
 type blob struct {
 	path  string
 	state bool

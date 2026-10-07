@@ -50,7 +50,8 @@ type Audio struct {
 	pending map[targetKind]pendingValue
 	wake    chan struct{}
 
-	queries chan chan []string
+	queries   chan chan []string
+	micToggle chan struct{}
 
 	deviceChanged chan struct{}
 	startErr      chan error
@@ -91,6 +92,7 @@ func Start(log func(string)) (*Audio, error) {
 		pending:       map[targetKind]pendingValue{},
 		wake:          make(chan struct{}, 1),
 		queries:       make(chan chan []string),
+		micToggle:     make(chan struct{}, 4),
 		deviceChanged: make(chan struct{}, 1),
 		startErr:      make(chan error, 1),
 		stop:          make(chan struct{}),
@@ -150,6 +152,14 @@ func (a *Audio) SetOtherApps(mapped []string, s float64) {
 }
 
 func (a *Audio) SetFocused(s float64) { a.enqueue(targetFocused, pendingValue{level: s}) }
+
+// ToggleMicMute mutes the default microphone, or unmutes it if it is muted.
+func (a *Audio) ToggleMicMute() {
+	select {
+	case a.micToggle <- struct{}{}:
+	default:
+	}
+}
 
 // Playing lists lowercase exes with an active session on a visible top-level window. Unlike
 // the Set* calls this needs a result, so it round-trips through the worker instead of just
@@ -226,6 +236,8 @@ func (a *Audio) run() {
 			a.pollNewSessions()
 		case respCh := <-a.queries:
 			respCh <- a.computePlaying()
+		case <-a.micToggle:
+			a.toggleMicMute()
 		}
 	}
 }
