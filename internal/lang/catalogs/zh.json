@@ -13,6 +13,7 @@
   "action.mute": "静音{name}",
   "action.mute_all": "全部静音",
   "action.mute_mic": "麦克风静音",
+  "action.next_lights": "下一种按钮灯光",
   "action.next_track": "下一曲",
   "action.night_light": "夜灯开/关",
   "action.open_app": "打开应用",

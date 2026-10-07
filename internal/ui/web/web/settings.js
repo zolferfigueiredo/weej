@@ -1011,6 +1011,7 @@ const BUTTON_GROUPS = [
       ["profile.previous", "previous_profile"],
       ["profile.next", "next_profile"],
       ["settings", "action.open_settings"],
+      ["lights.next", "action.next_lights"],
     ],
   ],
 ];
@@ -1805,6 +1806,12 @@ function onMessage(msg) {
       render();
       break;
     case "strings":
+      render();
+      break;
+    // Go-initiated: a button stepped the button lights to another pattern, already saved.
+    case "mixerLights":
+      draft.mixerLights = msg.pattern;
+      if (saved) saved.mixerLights = msg.pattern;
       render();
       break;
     case "saved":

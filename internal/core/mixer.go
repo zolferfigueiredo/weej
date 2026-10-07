@@ -66,6 +66,7 @@ const (
 	ActionNextProfile     ButtonAction = "profile.next"
 	ActionPreviousProfile ButtonAction = "profile.previous"
 	ActionOpenSettings    ButtonAction = "settings"
+	ActionNextLights      ButtonAction = "lights.next"
 
 	// These carry a setting after the prefix; settings.js keys its controls off the same prefixes.
 	muteActionPrefix    = "mute:"
@@ -158,7 +159,7 @@ func (a ButtonAction) Valid() bool {
 	case ActionNone, ActionPlayPause, ActionPlay, ActionPause, ActionStop, ActionPreviousTrack,
 		ActionNextTrack, ActionVolumeUp, ActionVolumeDown, ActionMuteAll, ActionMuteMic,
 		ActionNightLight, ActionScreensOff, ActionLockPC, ActionSleepPC, ActionNextProfile,
-		ActionPreviousProfile, ActionOpenSettings:
+		ActionPreviousProfile, ActionOpenSettings, ActionNextLights:
 		return true
 	}
 	_, mute := a.MuteKnob()

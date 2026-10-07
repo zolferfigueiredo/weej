@@ -51,6 +51,9 @@ func TestParseLightPattern(t *testing.T) {
 			t.Errorf("ParseLightPattern(%q) = %q, want %q", in, got, want)
 		}
 	}
+	if NextLightPattern("") != "on" || NextLightPattern("wave") != "sparkle" || NextLightPattern("blink") != "" {
+		t.Error("Next doesn't step through the patterns and back to off")
+	}
 	if Animated("on") || Animated("") || !Animated("sparkle") {
 		t.Error("only patterns that change over time are animated")
 	}

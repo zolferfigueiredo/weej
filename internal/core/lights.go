@@ -62,6 +62,15 @@ func LightFrame(pattern string, t float64) []int {
 	return on
 }
 
+// NextLightPattern is the pattern after cur, from the last back to "".
+func NextLightPattern(cur string) string {
+	i := slices.Index(LightPatterns, cur)
+	if cur == "" {
+		i = 0
+	}
+	return ParseLightPattern(LightPatterns[(i+1)%len(LightPatterns)])
+}
+
 // Animated is whether a pattern changes over time.
 func Animated(pattern string) bool { return pattern != "" && pattern != "off" && pattern != "on" }
 

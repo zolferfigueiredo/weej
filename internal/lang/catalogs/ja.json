@@ -13,6 +13,7 @@
   "action.mute": "{name} をミュート",
   "action.mute_all": "すべての音をミュート",
   "action.mute_mic": "マイクをミュート",
+  "action.next_lights": "次のボタンのライト",
   "action.next_track": "次のトラック",
   "action.night_light": "夜間モードのオン/オフ",
   "action.open_app": "アプリを開く",

@@ -13,6 +13,7 @@
   "action.mute": "Вимкнути звук: {name}",
   "action.mute_all": "Вимкнути весь звук",
   "action.mute_mic": "Вимкнути мікрофон",
+  "action.next_lights": "Наступне підсвічування кнопок",
   "action.next_track": "Наступний трек",
   "action.night_light": "Нічник увімк./вимк.",
   "action.open_app": "Відкрити застосунок",

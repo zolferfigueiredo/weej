@@ -13,6 +13,7 @@
   "action.mute": "Silenzia {name}",
   "action.mute_all": "Disattiva tutto l’audio",
   "action.mute_mic": "Disattiva microfono",
+  "action.next_lights": "Luci dei pulsanti successive",
   "action.next_track": "Brano successivo",
   "action.night_light": "Luce notturna sì/no",
   "action.open_app": "Apri un’app",

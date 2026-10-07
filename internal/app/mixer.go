@@ -234,5 +234,20 @@ func (app *App) runButtonAction(action core.ButtonAction, engine *core.Engine, d
 		app.loop.Invoke(func() { app.onHotkey(previousProfileHotkeyID) })
 	case core.ActionOpenSettings:
 		app.loop.Invoke(func() { app.openSettings("") })
+	case core.ActionNextLights:
+		app.loop.Invoke(app.nextLights)
+	}
+}
+
+// nextLights steps the button lights to their next pattern and saves it, as Settings would.
+func (app *App) nextLights() {
+	s := app.snapshotSettings()
+	s.MixerLights = core.NextLightPattern(s.MixerLights)
+	if err := app.persistSettings(s); err != nil {
+		return
+	}
+	midiport.SetLights(s.MixerLights)
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "mixerLights", "pattern": s.MixerLights})
 	}
 }

@@ -13,6 +13,7 @@
   "action.mute": "Mute {name}",
   "action.mute_all": "Mute all sound",
   "action.mute_mic": "Mute microphone",
+  "action.next_lights": "Next button lights",
   "action.next_track": "Next track",
   "action.night_light": "Night light on/off",
   "action.open_app": "Open an app",

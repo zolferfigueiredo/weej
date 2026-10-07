@@ -13,6 +13,7 @@
   "action.mute": "{name} 음소거",
   "action.mute_all": "모든 소리 음소거",
   "action.mute_mic": "마이크 음소거",
+  "action.next_lights": "다음 버튼 조명",
   "action.next_track": "다음 트랙",
   "action.night_light": "야간 모드 켜기/끄기",
   "action.open_app": "앱 열기",
