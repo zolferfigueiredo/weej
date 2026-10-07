@@ -45,6 +45,7 @@ var (
 	procClientToScreen         = user32.NewProc("ClientToScreen")
 	procMonitorFromWindow      = user32.NewProc("MonitorFromWindow")
 	procGetMonitorInfoW        = user32.NewProc("GetMonitorInfoW")
+	procIsZoomed               = user32.NewProc("IsZoomed")
 
 	procCreateSolidBrush = gdi32.NewProc("CreateSolidBrush")
 	procDeleteObject     = gdi32.NewProc("DeleteObject")
@@ -61,6 +62,7 @@ const (
 	wsCaption     = 0x00C00000
 	wsSysMenu     = 0x00080000
 	wsMinimizeBox = 0x00020000
+	wsMaximizeBox = 0x00010000
 	wsClipChilden = 0x02000000
 	wsVisible     = 0x10000000
 
@@ -214,10 +216,13 @@ func createPopupHidden(owner uintptr, x, y int32) uintptr {
 	return hwnd
 }
 
-func createWindowHidden(title string) uintptr {
+func createWindowHidden(title string, maximizable bool) uintptr {
 	registerWindowClass()
 	moduleHandle, _, _ := procGetModuleHandleW.Call(0)
 	style := uintptr(wsOverlapped | wsCaption | wsSysMenu | wsMinimizeBox | wsClipChilden)
+	if maximizable {
+		style |= wsMaximizeBox
+	}
 	hwnd, _, _ := procCreateWindowExW.Call(
 		0,
 		uintptr(unsafe.Pointer(windowClassName)),

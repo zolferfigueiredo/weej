@@ -139,7 +139,6 @@
   "mixer.press": "믹서의 버튼을 누르세요",
   "mixer_buttons": "버튼",
   "mixer_buttons_note": "+를 클릭하고 믹서의 버튼을 누르면 추가됩니다. 버튼을 누르면 해당 줄이 강조됩니다.",
-  "mixer_port_none": "없음",
   "mixer_port_note": "MIDI 믹서를 선택하면 보드와 함께 쓸 수 있어요.",
   "name": "이름",
   "needs_calibration": "보정 필요",

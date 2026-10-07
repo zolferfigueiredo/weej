@@ -140,7 +140,6 @@
   "mixer.press": "Aperte uma tecla no mixer",
   "mixer_buttons": "Teclas",
   "mixer_buttons_note": "Clique em + e aperte uma tecla no mixer para adicioná-la. Ao apertar uma tecla, a linha dela se acende.",
-  "mixer_port_none": "Nenhum",
   "mixer_port_note": "Escolha seu mixer MIDI para usá-lo junto com a placa.",
   "name": "Nome",
   "needs_calibration": "Precisa de calibração",

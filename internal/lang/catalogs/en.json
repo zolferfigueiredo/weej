@@ -140,7 +140,6 @@
   "mixer.press": "Press a button on the mixer",
   "mixer_buttons": "Buttons",
   "mixer_buttons_note": "Click + and press a button on the mixer to add it. Pressing a button lights up its row.",
-  "mixer_port_none": "None",
   "mixer_port_note": "Pick your MIDI mixer to use it next to the board.",
   "name": "Name",
   "needs_calibration": "Needs calibration",

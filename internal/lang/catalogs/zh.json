@@ -139,7 +139,6 @@
   "mixer.press": "请按下调音台上的按钮",
   "mixer_buttons": "按钮",
   "mixer_buttons_note": "点 + 然后按下调音台上的按钮即可添加。按下按钮时，对应的行会亮起。",
-  "mixer_port_none": "无",
   "mixer_port_note": "选择你的 MIDI 调音台，即可与板子一起使用。",
   "name": "名称",
   "needs_calibration": "需要校准",

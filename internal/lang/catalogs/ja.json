@@ -139,7 +139,6 @@
   "mixer.press": "ミキサーのボタンを押してください",
   "mixer_buttons": "ボタン",
   "mixer_buttons_note": "＋をクリックしてミキサーのボタンを押すと追加されます。ボタンを押すとその行が光ります。",
-  "mixer_port_none": "なし",
   "mixer_port_note": "MIDI ミキサーを選ぶと、ボードと一緒に使えます。",
   "name": "名前",
   "needs_calibration": "キャリブレーションが必要",

@@ -140,7 +140,6 @@
   "mixer.press": "Drück eine Taste am Mixer",
   "mixer_buttons": "Tasten",
   "mixer_buttons_note": "Klicke auf +, dann drück eine Taste am Mixer, um sie hinzuzufügen. Eine gedrückte Taste leuchtet in ihrer Zeile auf.",
-  "mixer_port_none": "Keiner",
   "mixer_port_note": "Wähle deinen MIDI-Mixer, um ihn neben dem Board zu nutzen.",
   "name": "Name",
   "needs_calibration": "Muss kalibriert werden",

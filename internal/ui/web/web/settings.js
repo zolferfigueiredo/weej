@@ -532,9 +532,13 @@ function currentDevice() {
   return usesMixer() ? "mixer" : "board";
 }
 
+// Drawn the way the volume moves: core's engine reads the board as 1 - raw unless inverted, and
+// the mixer as raw unless inverted.
 function valueAt(col) {
   const v = live[currentDevice()][col];
-  return v === undefined || col < 0 ? -1 : v;
+  if (v === undefined || col < 0) return -1;
+  const flip = currentDevice() === "mixer" ? draft.invertMixer : !draft.invertKnobs;
+  return flip ? 1023 - v : v;
 }
 
 // Moves the drawn faders and knobs to a device's new frame, and finds the input of a control
@@ -641,10 +645,10 @@ function boardInspector() {
       ? `<span class="row-desc">${esc(t("board.input", { n: String(col + 1) }))}</span><button class="btn btn-icon btn-subtle" type="button" data-action="find-input" title="${escAttr(t("board.find_again"))}" aria-label="${escAttr(t("board.find_again"))}">&#x21bb;</button>`
       : `<span class="waiting-note">${esc(t("board.waiting"))}</span>`;
   const moves = [
-    ["left", "&#x2190;"],
-    ["right", "&#x2192;"],
     ["up", "&#x2191;"],
+    ["left", "&#x2190;"],
     ["down", "&#x2193;"],
+    ["right", "&#x2192;"],
   ]
     .map(([dir, arrow]) => `<button class="btn btn-icon" type="button" data-action="move-control" data-dir="${dir}" title="${escAttr(t("board." + dir))}" aria-label="${escAttr(t("board." + dir))}"${canMove(k, dir) ? "" : " disabled"}>${arrow}</button>`)
     .join("");
@@ -654,10 +658,14 @@ function boardInspector() {
             <h2 class="group-title">${esc(boardName(k))}</h2>
             <span class="spacer"></span>
             <button class="btn" type="button" data-action="clear-control"${empty ? " disabled" : ""}>${esc(t("clear"))}</button>
+            <button class="btn btn-icon" type="button" data-action="remove-control" title="${escAttr(t("remove"))}" aria-label="${escAttr(t("remove"))}">&minus;</button>
           </div>
           <div class="card board-edit">
-            <div class="edit-row"><span class="segmented">${kinds}</span><span class="spacer"></span><button class="btn btn-icon" type="button" data-action="remove-control" title="${escAttr(t("remove"))}" aria-label="${escAttr(t("remove"))}">&minus;</button></div>
-            <div class="edit-row">${input}<span class="spacer"></span><span class="segmented">${moves}</span></div>
+            <div class="edit-main">
+              <div class="edit-row"><span class="segmented">${kinds}</span></div>
+              <div class="edit-row">${input}</div>
+            </div>
+            <div class="arrow-keys">${moves}</div>
           </div>
           <div class="card inspector-card" data-keep-scroll="board-${k}">${button ? actionPicks(k) : jobPicks(k)}</div>
         </div>`;
@@ -735,6 +743,14 @@ function moveControl(k, dir) {
 
 // Takes control k off the board, as removing a knob does: its input, place, jobs and button
 // actions go, and every later control moves down one, its mutes with it.
+function boardControlUsed(k) {
+  return draft.profiles.some(
+    (p) =>
+      ((p.jobs || [])[k] || []).length > 0 ||
+      Object.entries(p.boardButtons || {}).some(([id, actions]) => (parseInt(id, 10) === k && actions.length > 0) || actions.includes(`mute:${k}`)),
+  );
+}
+
 function removeBoardControl(k) {
   const shift = (i) => (i > k ? i - 1 : i);
   draft.boardLayout = boardLayout()
@@ -1211,7 +1227,7 @@ function connectionGroup(extra = "") {
   if (forced) {
     portOptions = `<option selected>${esc(forced)}</option>`;
   } else if (midi) {
-    portOptions = option("", t("mixer_port_none")) + midiInputs.map((name) => option(name, name)).join("");
+    portOptions = option("", t("port_off")) + midiInputs.map((name) => option(name, name)).join("");
     // A saved device that is unplugged right now still has to show as the choice.
     if (value && !midiInputs.includes(value)) portOptions += option(value, value);
   } else {
@@ -1658,7 +1674,8 @@ function onClick(e) {
       render();
       break;
     case "remove-control":
-      dialog = { kind: "removeControl" };
+      if (boardControlUsed(boardSelected)) dialog = { kind: "removeControl" };
+      else removeBoardControl(boardSelected);
       render();
       break;
     case "add-button":
@@ -1720,6 +1737,7 @@ function onChange(e) {
       break;
     case "invert":
       draft[usesMixer() ? "invertMixer" : "invertKnobs"] = el.checked;
+      render();
       break;
     case "language-select":
       draft.language = el.value;

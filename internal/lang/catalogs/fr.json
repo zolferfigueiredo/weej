@@ -140,7 +140,6 @@
   "mixer.press": "Appuyez sur une touche de la table de mixage",
   "mixer_buttons": "Touches",
   "mixer_buttons_note": "Cliquez sur + puis appuyez sur une touche de la table de mixage pour l’ajouter. Une touche pressée allume sa ligne.",
-  "mixer_port_none": "Aucune",
   "mixer_port_note": "Choisissez votre table de mixage MIDI pour l’utiliser à côté de la carte.",
   "name": "Nom",
   "needs_calibration": "À calibrer",

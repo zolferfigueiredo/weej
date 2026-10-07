@@ -142,7 +142,6 @@
   "mixer.press": "Naciśnij przycisk na mikserze",
   "mixer_buttons": "Przyciski",
   "mixer_buttons_note": "Kliknij + i naciśnij przycisk na mikserze, aby go dodać. Naciśnięty przycisk podświetla swój wiersz.",
-  "mixer_port_none": "Brak",
   "mixer_port_note": "Wybierz mikser MIDI, aby używać go obok płytki.",
   "name": "Nazwa",
   "needs_calibration": "Wymaga kalibracji",

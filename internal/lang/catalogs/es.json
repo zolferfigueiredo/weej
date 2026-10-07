@@ -140,7 +140,6 @@
   "mixer.press": "Pulsa un botón del mezclador",
   "mixer_buttons": "Botones",
   "mixer_buttons_note": "Haz clic en + y pulsa un botón del mezclador para añadirlo. Al pulsar un botón, su fila se ilumina.",
-  "mixer_port_none": "Ninguno",
   "mixer_port_note": "Elige tu mezclador MIDI para usarlo junto a la placa.",
   "name": "Nombre",
   "needs_calibration": "Necesita calibración",

@@ -1235,9 +1235,42 @@ select.select,
 
 .board-edit {
   display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+}
+
+.edit-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 12px;
+}
+
+.arrow-keys {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  grid-template-areas:
+    ". up ."
+    "left down right";
+  gap: 2px;
+}
+
+.arrow-keys [data-dir="up"] {
+  grid-area: up;
+}
+
+.arrow-keys [data-dir="left"] {
+  grid-area: left;
+}
+
+.arrow-keys [data-dir="down"] {
+  grid-area: down;
+}
+
+.arrow-keys [data-dir="right"] {
+  grid-area: right;
 }
 
 .edit-row {

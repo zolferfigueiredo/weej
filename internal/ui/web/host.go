@@ -50,8 +50,9 @@ type Options struct {
 	Height    int // DIP
 	MinHeight int // DIP
 
-	NoClose bool
-	Modal   bool
+	NoClose     bool
+	Modal       bool
+	Maximizable bool
 
 	OnClose func()
 	// Runs before a Modal window's loop starts, so its onMessage can reach the Window.
@@ -136,7 +137,7 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 		origin := clientOrigin(opts.Owner.hwnd)
 		hwnd = createPopupHidden(opts.Owner.hwnd, origin.X, origin.Y)
 	} else {
-		hwnd = createWindowHidden(opts.Title)
+		hwnd = createWindowHidden(opts.Title, opts.Maximizable)
 	}
 	if hwnd == 0 {
 		return nil, fmt.Errorf("web: CreateWindowExW failed for %q", page)
@@ -344,6 +345,10 @@ func (w *Window) resizeTo(heightPx int32, center bool) {
 		if w.visible {
 			w.placePopup(heightPx)
 		}
+		return
+	}
+	// Maximized, it keeps the work area's size and a longer page scrolls.
+	if zoomed, _, _ := procIsZoomed.Call(w.hwnd); zoomed != 0 {
 		return
 	}
 	if heightPx < w.minHeightPx {
