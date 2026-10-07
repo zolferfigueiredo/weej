@@ -38,7 +38,11 @@ type setupJSON struct {
 	TrayIcon         string         `json:"trayIcon"`
 	Speed            string         `json:"speed"`
 	Port             string         `json:"port"`
+	MixerPort        string         `json:"mixerPort"`
+	MixerLights      string         `json:"mixerLights"`
 	BaudRate         int            `json:"baudRate"`
+	BoardKinds       []string       `json:"boardKinds"`
+	BoardLayout      [][]int        `json:"boardLayout"`
 	MixerColumns     []*int         `json:"mixerColumns"`
 	MixerButtonOrder []int          `json:"mixerButtonOrder"`
 	Language         string         `json:"language"`
@@ -111,7 +115,11 @@ func setupToJSON(s core.Setup) setupJSON {
 		TrayIcon:         string(s.Icon),
 		Speed:            string(s.Speed),
 		Port:             s.Port,
+		MixerPort:        s.MixerPort,
+		MixerLights:      s.MixerLights,
 		BaudRate:         s.BaudRate(),
+		BoardKinds:       core.EncodeKinds(s.BoardKinds),
+		BoardLayout:      s.BoardLayout,
 		MixerColumns:     core.EncodeMixerColumns(s.MixerColumns),
 		MixerButtonOrder: s.ButtonOrder,
 	}
@@ -137,9 +145,13 @@ func setupFromJSON(j setupJSON) core.Setup {
 		Icon:         core.ParseIconStyle(j.TrayIcon),
 		Speed:        core.ParseSpeed(j.Speed),
 		Port:         j.Port,
+		MixerPort:    j.MixerPort,
+		MixerLights:  core.ParseLightPattern(j.MixerLights),
 		Baud:         j.BaudRate,
 		MixerColumns: mixerColumnsFromJSON(j.MixerColumns),
 		ButtonOrder:  j.MixerButtonOrder,
+		BoardKinds:   core.DecodeKinds(j.BoardKinds),
+		BoardLayout:  core.CleanLayout(j.BoardLayout, len(j.Columns)),
 	}
 }
 
@@ -162,7 +174,7 @@ func (app *App) openSettings(tab string) {
 	app.mu.Unlock()
 
 	w, err := web.Open(app.loop.Invoke, "settings", web.Options{
-		Title: app.tr("settings"), Width: 900, Height: 560,
+		Title: app.tr("settings"), Width: 1400, Height: 800, Resizable: true,
 		OnClose: func() {
 			app.mu.Lock()
 			app.settingsWin = nil
@@ -202,7 +214,11 @@ func (app *App) onSettingsMessage(data []byte) {
 	case "save":
 		app.handleSettingsSave(data)
 	case "calibrate":
-		app.loop.Invoke(func() { app.startCalibration(false) })
+		var msg struct {
+			Device string `json:"device"`
+		}
+		_ = json.Unmarshal(data, &msg)
+		app.loop.Invoke(func() { app.startCalibration(msg.Device == "mixer", false) })
 	case "openJobMenu":
 		app.loop.Invoke(func() { app.openJobMenu(data) })
 	case "pickApp":
@@ -258,11 +274,14 @@ func (app *App) sendSettingsInit() {
 	payload["iconPreviews"] = app.iconPreviews()
 	payload["labels"] = app.shortcutLabels(s.Setup)
 	payload["nightLightExperimental"] = true
-	payload["connection"] = app.connectionPayload()
+	payload["connection"] = app.connectionPayload(false)
+	payload["mixerConnection"] = app.connectionPayload(true)
 	payload["calibrating"] = app.isCalibrating()
 	payload["forcedPort"] = app.forcedPort
 	payload["baudRates"] = core.BaudRates
-	payload["mixerButtonDefaults"] = core.DefaultMixerButtonOrder
+	payload["mixerButtonDefaults"] = core.SMCButtonOrder()
+	payload["lightPatterns"] = core.LightPatterns
+	payload["values"] = map[string][]int{"board": app.boardLive.frame(), "mixer": app.mixerLive.frame()}
 	payload["ctrlName"] = app.ctrlLabelName()
 	win.Send(payload)
 }
@@ -282,6 +301,8 @@ func (app *App) handleSettingsSave(data []byte) {
 	if newSetup.Active < 0 || newSetup.Active >= len(newSetup.Profiles) {
 		newSetup.Active = 0
 	}
+	// Switching to an SMC-Mixer drops the calibration it had before WeeJ knew it.
+	core.MigrateSMC(&newSetup)
 
 	for i := range newSetup.Profiles {
 		if strings.TrimSpace(newSetup.Profiles[i].Name) == "" {
@@ -301,6 +322,10 @@ func (app *App) handleSettingsSave(data []byte) {
 	if old.Port != newSetup.Port || old.BaudRate() != newSetup.BaudRate() {
 		app.startSerial()
 	}
+	app.applyLights(newSetup)
+	if old.MixerPort != newSetup.MixerPort {
+		app.startMixer()
+	}
 
 	app.registerHotkeys(cur.Setup)
 	app.refreshTray()
@@ -309,8 +334,11 @@ func (app *App) handleSettingsSave(data []byte) {
 		win.Send(map[string]any{"type": "saved", "setup": setupToJSONWithLanguage(cur)})
 	}
 
-	if hasUncalibratedColumn(app.activeColumns(cur.Setup)) {
-		app.loop.Invoke(func() { app.startCalibration(true) })
+	for _, mixer := range []bool{false, true} {
+		if hasUncalibratedColumn(deviceColumns(cur.Setup, mixer)) && app.deviceConnected(mixer) {
+			app.loop.Invoke(func() { app.startCalibration(mixer, true) })
+			break
+		}
 	}
 }
 
@@ -593,15 +621,19 @@ func languagesPayload() []map[string]string {
 	return out
 }
 
-func (app *App) connectionPayload() map[string]any {
+func (app *App) connectionPayload(mixer bool) map[string]any {
 	connected, busy, port := app.connectionStatus()
+	if mixer {
+		connected, busy, port = app.mixerStatus()
+	}
 	return map[string]any{"connected": connected, "busy": busy, "port": port}
 }
 
-func (app *App) pushConnection() {
+func (app *App) pushConnection(mixer bool) {
 	if win := app.settingsWin; win != nil {
-		payload := app.connectionPayload()
+		payload := app.connectionPayload(mixer)
 		payload["type"] = "connection"
+		payload["device"] = deviceName(mixer)
 		win.Send(payload)
 	}
 }

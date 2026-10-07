@@ -235,6 +235,8 @@ type Profile struct {
 	// Buttons is what each mixer button does in this profile. Nil means a profile saved before
 	// buttons were per profile; DecodeSettings fills it in.
 	Buttons ButtonMap `json:"buttons"`
+	// BoardButtons is what each of the board's buttons does in this profile, by knob index.
+	BoardButtons ButtonMap `json:"boardButtons,omitempty"`
 }
 
 // AllJobs is every job the profile uses, on either device.
@@ -320,16 +322,24 @@ type Setup struct {
 	ShowProfiles bool
 	Icon         IconStyle
 	Speed        Speed
-	// Port is a COM port or a MidiPort to use instead of finding the board automatically; empty
-	// means automatic, which only ever looks for serial boards.
-	Port string
+	// Port is the board's: a COM port, empty to find it automatically, or PortOff. MixerPort is
+	// the MIDI input the mixer is read from, empty for none; both can run at once.
+	Port      string
+	MixerPort string
+	// MixerLights is the pattern an SMC-Mixer's button lights run (lights.go), "" for none.
+	MixerLights string
 	// Baud is the serial speed; 0 means DefaultBaud.
 	Baud int
 	// MixerColumns is the mixer's own calibration, so the board's Columns survive a switch to
-	// the mixer and back. Nil means never calibrated: knob i reads mixer column i.
+	// the mixer and back. Nil means never calibrated. An SMC-Mixer has neither: its controls are
+	// fixed (smc.go).
 	MixerColumns []int
-	// ButtonOrder is the mixer buttons Calibrate found, as CCs: Button 1 first. Nil means never.
+	// ButtonOrder is the mixer buttons Calibrate found, by id: Button 1 first. Nil means never.
 	ButtonOrder []int
+	// BoardKinds is what each of the board's knobs is (board.go), and BoardLayout how Settings
+	// draws them: rows of knob indices, left to right. Nil draws one row of knobs.
+	BoardKinds  []ControlKind
+	BoardLayout [][]int
 }
 
 func (s Setup) activeJobs() [][]Job {
@@ -358,7 +368,19 @@ func mapping(columns []int, jobs [][]Job) map[int][]Job {
 	return result
 }
 
-func (s Setup) Mapping() map[int][]Job { return mapping(s.Columns, s.activeJobs()) }
+// Mapping leaves the board's buttons out: a button only presses, whatever jobs it kept.
+func (s Setup) Mapping() map[int][]Job {
+	jobs := s.activeJobs()
+	if s.BoardKinds != nil {
+		jobs = append([][]Job(nil), jobs...)
+		for i := range jobs {
+			if s.Kind(i) == KindButton {
+				jobs[i] = nil
+			}
+		}
+	}
+	return mapping(s.Columns, jobs)
+}
 
 func (s Setup) ActiveButtons() ButtonMap {
 	switch {
@@ -437,6 +459,9 @@ func Clipped(name string, limit int) string {
 	}
 	return strings.TrimRight(string(r[:limit-1]), " \t\n") + "…"
 }
+
+// PortOff keeps WeeJ off the serial ports: finding a board opens each, which restarts an Arduino.
+const PortOff = "off"
 
 // DefaultBaud is what deej's sketch (and so most boards) passes to Serial.begin().
 const DefaultBaud = 9600

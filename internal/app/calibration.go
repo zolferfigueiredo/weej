@@ -18,10 +18,13 @@ import (
 // timing logic, which always reads the calibrator's own Left()/Paused().
 const calibrationTurnSeconds = "20"
 
-func (app *App) startCalibration(onlyNew bool) {
-	// Read before taking app.mu: snapshotSettings, under both of these, locks it too.
-	saved := app.activeColumns(app.snapshotSettings().Setup)
-	mixer := app.usesMixer()
+func (app *App) startCalibration(mixer, onlyNew bool) {
+	// The SMC-Mixer's controls are fixed, so there is nothing to find.
+	if mixer && app.isSMC() {
+		return
+	}
+	// Read before taking app.mu: snapshotSettings locks it too.
+	saved := deviceColumns(app.snapshotSettings().Setup, mixer)
 	app.mu.Lock()
 	if app.calibWin != nil {
 		win := app.calibWin
@@ -118,7 +121,7 @@ func (app *App) finishCalibration() {
 	result := cal.Result()
 	mixer := cal.Mixer()
 	cur := app.snapshotSettings()
-	saved := app.activeColumns(cur.Setup)
+	saved := deviceColumns(cur.Setup, mixer)
 	changed := !intSliceEqual(result, saved)
 	if buttons := cal.Buttons(); mixer && len(buttons) > 0 && !intSliceEqual(buttons, cur.ButtonOrder) {
 		cur.ButtonOrder = buttons
@@ -159,7 +162,7 @@ func (app *App) finishCalibration() {
 	}
 	// Finish arrives inside a WebView2 callback; opening a window there would nest message loops.
 	app.loop.Invoke(func() {
-		app.openSettings("general")
+		app.openSettings(deviceName(mixer))
 		if wasOpen {
 			if win := app.settingsWin; win != nil {
 				buttons := make([]core.ButtonMap, len(cur.Profiles))
@@ -205,7 +208,7 @@ func (app *App) refreshCalibration() {
 		return
 	}
 	code := app.currentLanguage()
-	connected, _, _ := app.connectionStatus()
+	connected := app.deviceConnected(cal.Mixer())
 	app.mu.Lock()
 	onlyNew := app.calibOnlyNew
 	app.mu.Unlock()

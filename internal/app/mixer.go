@@ -5,8 +5,11 @@ package app
 import (
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
+	"github.com/zolferfigueiredo/weej/internal/platform/audio"
 	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 )
@@ -18,26 +21,72 @@ func (app *App) sourcePort() string {
 	return app.snapshotSettings().Port
 }
 
-func (app *App) usesMixer() bool { return core.IsMidiPort(app.sourcePort()) }
+// isSMC tells whether the mixer is an SMC-Mixer, whose controls are fixed.
+func (app *App) isSMC() bool { return app.snapshotSettings().MixerIsSMC() }
 
-// activeColumns is the calibration of whatever is connected: the board's or the mixer's.
-func (app *App) activeColumns(s core.Setup) []int {
-	if app.usesMixer() {
+// deviceColumns is the board's calibration, or the mixer's.
+func deviceColumns(s core.Setup, mixer bool) []int {
+	if mixer {
 		return s.ForMixer().Columns
 	}
 	return s.Columns
 }
 
+// deviceName is how Settings tells the two apart.
+func deviceName(mixer bool) string {
+	if mixer {
+		return "mixer"
+	}
+	return "board"
+}
+
 func (app *App) onMixerValues(values []int) {
-	app.handleValues(values, app.snapshotSettings().ForMixer())
+	app.handleValues(app.mixerEngine, values, app.snapshotSettings().ForMixer(), true)
+	app.showValues(true, &app.mixerLive, values)
+}
+
+// liveFrames keeps a device's last frame for the controls Settings draws.
+type liveFrames struct {
+	mu    sync.Mutex
+	last  []int
+	timer *time.Timer
+}
+
+func (l *liveFrames) frame() []int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.last
+}
+
+// showValues hands Settings a device's frames at most 20 times a second, the last always among
+// them.
+func (app *App) showValues(mixer bool, live *liveFrames, values []int) {
+	live.mu.Lock()
+	defer live.mu.Unlock()
+	live.last = values
+	if live.timer == nil && app.settingsWin != nil {
+		live.timer = time.AfterFunc(50*time.Millisecond, func() {
+			live.mu.Lock()
+			values := live.last
+			live.timer = nil
+			live.mu.Unlock()
+			if win := app.settingsWin; win != nil {
+				win.Send(map[string]any{"type": "values", "device": deviceName(mixer), "values": values})
+			}
+		})
+	}
 }
 
 // pointOutMovedKnobs lights up a knob's row in Settings while its control moves, so it is easy
 // to tell which knob is which.
-func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
+func (app *App) pointOutMovedKnobs(mixer bool, values []int, setup core.Setup) {
 	win := app.settingsWin
 	app.movesMu.Lock()
-	moved := app.moves.Moved(values)
+	watcher := &app.moves
+	if mixer {
+		watcher = &app.mixerMoves
+	}
+	moved := watcher.Moved(values)
 	app.movesMu.Unlock()
 	if win == nil {
 		return
@@ -45,7 +94,7 @@ func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
 	for _, col := range moved {
 		for knob, c := range setup.Columns {
 			if c == col {
-				win.Send(map[string]any{"type": "knobMoved", "knob": knob})
+				win.Send(map[string]any{"type": "knobMoved", "device": deviceName(mixer), "knob": knob})
 			}
 		}
 	}
@@ -55,7 +104,8 @@ func (app *App) pointOutMovedKnobs(values []int, setup core.Setup) {
 // muted one could no longer be unmuted from its button.
 func (app *App) unmuteAll() {
 	setup := app.snapshotSettings().Setup
-	if app.engine.UnmuteAll(setup.ForMixer()) == 0 || !app.usesMixer() {
+	app.engine.UnmuteAll(setup)
+	if app.mixerEngine.UnmuteAll(setup.ForMixer()) == 0 {
 		return
 	}
 	for id, actions := range setup.ActiveButtons() {
@@ -74,45 +124,63 @@ func mixerButtonName(id int) string {
 	return fmt.Sprintf("CC %d", id)
 }
 
-func (app *App) onMixerButton(cc int) {
-	if app.isCalibrating() {
-		app.log(fmt.Sprintf("Mixer button %s pressed while calibrating", mixerButtonName(cc)))
+func (app *App) onMixerButton(id int) {
+	if cal := app.currentCalibrator(); cal != nil && cal.Mixer() {
+		app.log(fmt.Sprintf("Mixer button %s pressed while calibrating", mixerButtonName(id)))
 		app.loop.Invoke(func() {
 			cal := app.currentCalibrator()
 			if cal == nil {
 				return
 			}
-			cal.PressButton(cc)
+			cal.PressButton(id)
 			app.refreshCalibration()
 		})
 		return
 	}
 	setup := app.snapshotSettings().Setup
-	actions := setup.ActiveButtons()[cc]
+	actions := setup.ActiveButtons()[id]
 	if len(actions) == 0 {
-		app.log(fmt.Sprintf("Mixer button %s pressed: empty", mixerButtonName(cc)))
+		app.log(fmt.Sprintf("Mixer button %s pressed: empty", mixerButtonName(id)))
 	} else {
 		names := make([]string, len(actions))
 		for i, a := range actions {
 			names[i] = string(a)
 		}
-		app.log(fmt.Sprintf("Mixer button %s pressed: %s", mixerButtonName(cc), strings.Join(names, ", ")))
+		app.log(fmt.Sprintf("Mixer button %s pressed: %s", mixerButtonName(id), strings.Join(names, ", ")))
 	}
 	for _, action := range actions {
-		app.runButtonAction(cc, action, setup)
+		app.runButtonAction(action, app.mixerEngine, setup.ForMixer(), func(on bool) { midiport.SetLED(id, on) })
 	}
 
 	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "mixerButton", "cc": cc})
+		win.Send(map[string]any{"type": "mixerButton", "id": id})
 	}
 }
 
-func (app *App) runButtonAction(cc int, action core.ButtonAction, setup core.Setup) {
+func (app *App) onBoardButton(knob int, setup core.Setup) {
+	actions := setup.ActiveBoardButtons()[knob]
+	names := make([]string, len(actions))
+	for i, a := range actions {
+		names[i] = string(a)
+	}
+	app.log(fmt.Sprintf("Board button %s pressed: %s", core.Letter(knob), strings.Join(names, ", ")))
+	for _, action := range actions {
+		app.runButtonAction(action, app.engine, setup, nil)
+	}
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "boardButton", "knob": knob})
+	}
+}
+
+// runButtonAction does one of a button's actions. A mute acts on the engine and setup of the
+// device the button is on, and led shows the mute on the button if it has a light.
+func (app *App) runButtonAction(action core.ButtonAction, engine *core.Engine, device core.Setup, led func(on bool)) {
 	if knob, ok := action.MuteKnob(); ok {
-		mixer := setup.ForMixer()
-		if knob < len(mixer.Columns) && mixer.Columns[knob] >= 0 {
-			muted := app.engine.ToggleMute(mixer.Columns[knob], mixer)
-			midiport.SetLED(cc, muted)
+		if knob < len(device.Columns) && device.Columns[knob] >= 0 {
+			muted := engine.ToggleMute(device.Columns[knob], device)
+			if led != nil {
+				led(muted)
+			}
 		}
 	}
 	if path, ok := action.OpenApp(); ok && !winui.FocusApp(core.ExeName(path)) {
@@ -167,5 +235,44 @@ func (app *App) runButtonAction(cc int, action core.ButtonAction, setup core.Set
 		app.loop.Invoke(func() { app.onHotkey(previousProfileHotkeyID) })
 	case core.ActionOpenSettings:
 		app.loop.Invoke(func() { app.openSettings("") })
+	case core.ActionNextLights:
+		app.loop.Invoke(app.nextLights)
+	}
+}
+
+// applyLights runs the mixer's button light pattern, listening to the speakers only for the EQ.
+func (app *App) applyLights(s core.Setup) {
+	midiport.SetLights(s.MixerLights)
+	eq := s.MixerLights == "eq" && s.MixerIsSMC()
+	app.mu.Lock()
+	if app.spectrum == nil {
+		app.spectrum = core.NewSpectrum()
+		midiport.SetSpectrum(app.spectrum)
+	}
+	stop := app.loopback
+	if eq && stop == nil {
+		app.loopback = audio.StartLoopback(app.spectrum, app.log)
+	}
+	if eq {
+		stop = nil
+	} else {
+		app.loopback = nil
+	}
+	app.mu.Unlock()
+	if stop != nil {
+		stop.Stop()
+	}
+}
+
+// nextLights steps the button lights to their next pattern and saves it, as Settings would.
+func (app *App) nextLights() {
+	s := app.snapshotSettings()
+	s.MixerLights = core.NextLightPattern(s.MixerLights)
+	if err := app.persistSettings(s); err != nil {
+		return
+	}
+	app.applyLights(s.Setup)
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "mixerLights", "pattern": s.MixerLights})
 	}
 }

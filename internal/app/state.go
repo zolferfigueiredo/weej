@@ -45,6 +45,27 @@ func (app *App) connectionStatus() (connected, busy bool, port string) {
 	return app.connected, app.busy, app.currentPort
 }
 
+func (app *App) setMixerConnection(connected, busy bool, port string) {
+	app.mu.Lock()
+	app.mixerConnected, app.mixerBusy, app.mixerPortName = connected, busy, port
+	app.mu.Unlock()
+}
+
+func (app *App) mixerStatus() (connected, busy bool, port string) {
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	return app.mixerConnected, app.mixerBusy, app.mixerPortName
+}
+
+func (app *App) deviceConnected(mixer bool) bool {
+	if mixer {
+		connected, _, _ := app.mixerStatus()
+		return connected
+	}
+	connected, _, _ := app.connectionStatus()
+	return connected
+}
+
 func (app *App) setCalibrating(v bool) {
 	app.mu.Lock()
 	app.calibrating = v

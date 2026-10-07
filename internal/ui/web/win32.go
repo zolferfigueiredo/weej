@@ -45,6 +45,7 @@ var (
 	procClientToScreen         = user32.NewProc("ClientToScreen")
 	procMonitorFromWindow      = user32.NewProc("MonitorFromWindow")
 	procGetMonitorInfoW        = user32.NewProc("GetMonitorInfoW")
+	procIsZoomed               = user32.NewProc("IsZoomed")
 
 	procCreateSolidBrush = gdi32.NewProc("CreateSolidBrush")
 	procDeleteObject     = gdi32.NewProc("DeleteObject")
@@ -61,6 +62,8 @@ const (
 	wsCaption     = 0x00C00000
 	wsSysMenu     = 0x00080000
 	wsMinimizeBox = 0x00020000
+	wsMaximizeBox = 0x00010000
+	wsThickFrame  = 0x00040000
 	wsClipChilden = 0x02000000
 	wsVisible     = 0x10000000
 
@@ -90,6 +93,8 @@ const (
 	wmSysCommand = 0x0112
 	wmDpiChanged = 0x02E0
 	wmSetIcon    = 0x0080
+	wmSizing     = 0x0214
+	wmMinMaxInfo = 0x0024
 	wmAppHide    = 0x8001 // WM_APP+1: hide a popup once its activation change is done
 
 	iconSmall  = 0
@@ -214,10 +219,13 @@ func createPopupHidden(owner uintptr, x, y int32) uintptr {
 	return hwnd
 }
 
-func createWindowHidden(title string) uintptr {
+func createWindowHidden(title string, resizable bool) uintptr {
 	registerWindowClass()
 	moduleHandle, _, _ := procGetModuleHandleW.Call(0)
 	style := uintptr(wsOverlapped | wsCaption | wsSysMenu | wsMinimizeBox | wsClipChilden)
+	if resizable {
+		style |= wsThickFrame | wsMaximizeBox
+	}
 	hwnd, _, _ := procCreateWindowExW.Call(
 		0,
 		uintptr(unsafe.Pointer(windowClassName)),
@@ -403,6 +411,17 @@ func wndProcDispatch(hwnd uintptr, message uint32, wparam, lparam uintptr) uintp
 			w.resizeWebView()
 		}
 		return 0
+	case wmSizing:
+		if w != nil {
+			w.userSized = true
+		}
+	case wmMinMaxInfo:
+		if w != nil && w.opts.Resizable {
+			// MINMAXINFO.ptMinTrackSize follows three POINTs.
+			minSize := [2]int32{dipToPx(minResizeW, w.scale) + w.frameW, dipToPx(minResizeH, w.scale) + w.frameH}
+			procRtlMoveMemory.Call(lparam+24, uintptr(unsafe.Pointer(&minSize)), unsafe.Sizeof(minSize))
+			return 0
+		}
 	case wmMove:
 		if w != nil && w.chromium != nil && !w.isClosed() {
 			_ = w.chromium.NotifyParentWindowPositionChanged()

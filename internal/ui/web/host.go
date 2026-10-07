@@ -52,6 +52,9 @@ type Options struct {
 
 	NoClose bool
 	Modal   bool
+	// Resizable lets the user size and maximize it; once dragged to a size, it stops following
+	// its page's height.
+	Resizable bool
 
 	OnClose func()
 	// Runs before a Modal window's loop starts, so its onMessage can reach the Window.
@@ -86,6 +89,7 @@ type Window struct {
 	work           rect32
 	widthPx        int32
 	minHeightPx    int32
+	userSized      bool
 	dark           bool
 	brush          uintptr
 
@@ -113,6 +117,9 @@ var (
 
 const showFallbackTimer = 1
 
+// The smallest a Resizable window can be dragged to, in DIP.
+const minResizeW, minResizeH = 720, 480
+
 func dipToPx(dip int, scale float64) int32 {
 	return int32(math.Round(float64(dip) * scale))
 }
@@ -136,7 +143,7 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 		origin := clientOrigin(opts.Owner.hwnd)
 		hwnd = createPopupHidden(opts.Owner.hwnd, origin.X, origin.Y)
 	} else {
-		hwnd = createWindowHidden(opts.Title)
+		hwnd = createWindowHidden(opts.Title, opts.Resizable)
 	}
 	if hwnd == 0 {
 		return nil, fmt.Errorf("web: CreateWindowExW failed for %q", page)
@@ -156,6 +163,9 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 		w.work = workArea()
 	}
 	w.widthPx = dipToPx(opts.Width, w.scale)
+	if maxW := (w.work.Right - w.work.Left) - w.frameW; !popup && maxW > 0 && w.widthPx > maxW {
+		w.widthPx = maxW
+	}
 	w.minHeightPx = dipToPx(opts.MinHeight, w.scale)
 	w.maxHeightPx = dipToPx(opts.MaxHeight, w.scale)
 	w.applyTheme(!sys.AppsLight())
@@ -341,6 +351,11 @@ func (w *Window) resizeTo(heightPx int32, center bool) {
 		if w.visible {
 			w.placePopup(heightPx)
 		}
+		return
+	}
+	// Maximized or sized by hand, it keeps its size and a longer page scrolls.
+	if zoomed, _, _ := procIsZoomed.Call(w.hwnd); zoomed != 0 || w.userSized {
+		w.resizeWebView()
 		return
 	}
 	if heightPx < w.minHeightPx {

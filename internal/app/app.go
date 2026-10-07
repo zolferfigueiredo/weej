@@ -58,8 +58,11 @@ type App struct {
 
 	engine *core.Engine
 	audio  *audio.Audio
-	ddc    *display.DDC
-	via    *via.VIA
+	// spectrum is the sound the button lights' EQ follows, while loopback listens for it.
+	spectrum *core.Spectrum
+	loopback *audio.Loopback
+	ddc      *display.DDC
+	via      *via.VIA
 
 	nightlight NightLight
 	zoom       Zoom
@@ -106,6 +109,21 @@ type App struct {
 	movesMu      sync.Mutex
 	moves        core.MoveWatcher
 	shutdownOnce sync.Once
+
+	movesBoard core.ButtonWatcher
+	mixerMoves core.MoveWatcher
+
+	boardLive, mixerLive liveFrames
+
+	// The mixer runs beside the board, with an engine and a connection of its own.
+	mixerEngine      *core.Engine
+	mixerConnected   bool
+	mixerBusy        bool
+	mixerPortName    string
+	mixerReconnectCh chan struct{}
+	cancelMixer      context.CancelFunc
+	mixerDone        chan struct{}
+	mixerFirstDone   bool
 }
 
 func Main(args []string) int {
@@ -158,6 +176,7 @@ func Main(args []string) int {
 		log:               lg.Log,
 		startTime:         time.Now(),
 		reconnectCh:       make(chan struct{}, 1),
+		mixerReconnectCh:  make(chan struct{}, 1),
 		appName:           map[string]string{},
 		appPath:           map[string]string{},
 		appIcon:           map[string]string{},

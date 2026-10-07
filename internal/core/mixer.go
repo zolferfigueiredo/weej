@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"slices"
 	"strconv"
 	"strings"
 )
@@ -46,13 +45,6 @@ func MixerNoteButton(note int) int { return 128 + note }
 // MixerButtonNote reports the note behind a DAW-mode button id.
 func MixerButtonNote(id int) (int, bool) { return id - 128, id >= 128 }
 
-// DefaultMixerButtonOrder is every button CC the SMC-Mixer sends in CC mode, in the order
-// Settings lists them until Calibrate sets an order. CC 50 never fired on a real unit.
-var DefaultMixerButtonOrder = []int{
-	20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 38, 39, 48, 49,
-	51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
-}
-
 type ButtonAction string
 
 const (
@@ -74,6 +66,7 @@ const (
 	ActionNextProfile     ButtonAction = "profile.next"
 	ActionPreviousProfile ButtonAction = "profile.previous"
 	ActionOpenSettings    ButtonAction = "settings"
+	ActionNextLights      ButtonAction = "lights.next"
 
 	// These carry a setting after the prefix; settings.js keys its controls off the same prefixes.
 	muteActionPrefix    = "mute:"
@@ -166,7 +159,7 @@ func (a ButtonAction) Valid() bool {
 	case ActionNone, ActionPlayPause, ActionPlay, ActionPause, ActionStop, ActionPreviousTrack,
 		ActionNextTrack, ActionVolumeUp, ActionVolumeDown, ActionMuteAll, ActionMuteMic,
 		ActionNightLight, ActionScreensOff, ActionLockPC, ActionSleepPC, ActionNextProfile,
-		ActionPreviousProfile, ActionOpenSettings:
+		ActionPreviousProfile, ActionOpenSettings, ActionNextLights:
 		return true
 	}
 	_, mute := a.MuteKnob()
@@ -178,10 +171,11 @@ func (a ButtonAction) Valid() bool {
 	return mute || open || closeApp || url || keys || profile
 }
 
+// DefaultMixerButtons has the SMC-Mixer's M buttons mute their faders, and « and » step profiles.
 func DefaultMixerButtons() ButtonMap {
-	m := ButtonMap{59: {ActionPreviousProfile}, 60: {ActionNextProfile}}
+	m := ButtonMap{MixerNoteButton(46): {ActionPreviousProfile}, MixerNoteButton(47): {ActionNextProfile}}
 	for i := 0; i < 8; i++ {
-		m[20+i] = []ButtonAction{MuteAction(i)}
+		m[MixerNoteButton(16+i)] = []ButtonAction{MuteAction(i)}
 	}
 	return m
 }
@@ -189,7 +183,7 @@ func DefaultMixerButtons() ButtonMap {
 // ForMixer is the setup a mixer frame is handled with: Columns come from MixerColumns and every
 // profile's Jobs from its MixerJobs, so the mixer has its own knobs. A fader's top is already its
 // highest value, so only the mixer's own MixerInvert flips it. A mixer never calibrated reads its
-// faders, then its knobs.
+// faders, then its knobs, and an SMC-Mixer always does.
 func (s Setup) ForMixer() Setup {
 	profiles := make([]Profile, len(s.Profiles))
 	for i, p := range s.Profiles {
@@ -197,7 +191,9 @@ func (s Setup) ForMixer() Setup {
 		profiles[i] = p
 	}
 	s.Profiles = profiles
-	if s.MixerColumns == nil {
+	if s.MixerIsSMC() {
+		s.Columns = append([]int{}, smcColumns...)
+	} else if s.MixerColumns == nil {
 		cols := make([]int, len(s.Columns))
 		for i := range cols {
 			cols[i] = -1
@@ -210,15 +206,17 @@ func (s Setup) ForMixer() Setup {
 		s.Columns = append([]int{}, s.MixerColumns...)
 	}
 	s.Invert = !s.MixerInvert
+	s.BoardKinds, s.BoardLayout = nil, nil
 	return s
 }
 
-// MixerButtonOrder is the order Settings lists the mixer's buttons in: Calibrate's, or the default.
+// MixerButtonOrder is the order Settings lists the mixer's buttons in: Calibrate's, or the
+// SMC-Mixer's own.
 func (s Setup) MixerButtonOrder() []int {
-	if s.ButtonOrder != nil {
+	if s.ButtonOrder != nil && !s.MixerIsSMC() {
 		return s.ButtonOrder
 	}
-	return DefaultMixerButtonOrder
+	return SMCButtonOrder()
 }
 
 // MixerState turns MIDI short messages into a frame of 0..1023 values. A control that has not
@@ -235,8 +233,14 @@ func NewMixerState() *MixerState {
 	return &MixerState{values: v}
 }
 
+// A step is never 0 or 127, and a CC-mode button on the same number never sends anything else.
+func isVPotStep(cc, value int) bool {
+	return cc >= vpotFirstCC && cc < vpotFirstCC+vpotCount && value != 0 && value != 127
+}
+
 // Feed takes a WinMM short message (status | data1<<8 | data2<<16). It reports whether a column
-// changed, and the id of a button that was just pressed, or -1.
+// changed, and the id of a button that was just pressed, or -1: a button has the same id in
+// either mode (SMCButtonID).
 func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 	status := int(msg & 0xFF)
 	data1 := int(msg>>8) & 0x7F
@@ -262,8 +266,7 @@ func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 	}
 
 	cc, value := data1, data2
-	// A step is never 0 or 127, and a CC-mode button on the same number never sends anything else.
-	if cc >= vpotFirstCC && cc < vpotFirstCC+vpotCount && value != 0 && value != 127 {
+	if isVPotStep(cc, value) {
 		col := knobFirstCC + cc - vpotFirstCC
 		pos := m.values[col]
 		if pos < 0 {
@@ -275,9 +278,9 @@ func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 		}
 		return m.set(col, min(max(pos+step*vpotStep, 0), 1023)), -1
 	}
-	if slices.Contains(DefaultMixerButtonOrder, cc) {
+	if id, ok := SMCButtonID(cc); ok {
 		if value > 0 {
-			return false, cc
+			return false, id
 		}
 		return false, -1
 	}

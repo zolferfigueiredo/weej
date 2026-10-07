@@ -391,7 +391,8 @@ const MOCK_EN_STRINGS = {
   baud_rate: "Baud rate",
   baud_note: "Must match Serial.begin() in your board’s sketch.",
   refresh: "Refresh",
-  "tab.general": "General",
+  "tab.board": "Board",
+  "tab.mixer": "Mixer",
   tray: "Tray icon",
   tray_tip: "If you don't see its icon, open Show hidden icons on the taskbar and drag it next to the clock.",
   tray_tip_title: "WeeJ is running",
@@ -454,6 +455,73 @@ function mockShortcutLabel(s) {
 function mockShortcutKeyJSON(s) {
   if (!s) return null;
   return JSON.stringify({ vk: s.vk, mods: s.mods, key: s.key });
+}
+
+// The SMC-Mixer preview (?mock=settings&device=smc): a profile set up the way a real one was.
+function mockSMC(init) {
+  const setup = init.setup;
+  setup.port = "off";
+  setup.mixerPort = "SMC-Mixer";
+  for (const p of setup.profiles) {
+    p.mixerJobs = Array.from({ length: 16 }, () => []);
+    p.buttons = { 174: ["profile.previous"], 175: ["profile.next"] };
+  }
+  const p = setup.profiles[0];
+  p.mixerJobs[0] = [{ kind: "master" }];
+  p.mixerJobs[1] = [{ kind: "brightness", screen: 0 }];
+  p.mixerJobs[2] = [{ kind: "brightness", screen: 1 }];
+  p.mixerJobs[3] = [{ kind: "app", exe: "discord.exe" }, { kind: "app", exe: "spotify.exe" }, { kind: "otherApps" }];
+  p.mixerJobs[5] = [{ kind: "microphone" }];
+  p.mixerJobs[6] = [{ kind: "nightLight" }];
+  p.mixerJobs[8] = [{ kind: "zoom" }];
+  p.mixerJobs[9] = [{ kind: "contrast", screen: 0 }];
+  for (let i = 0; i < 8; i++) p.buttons[144 + i] = [`mute:${i}`];
+  p.buttons[222] = ["media.playpause"];
+  p.buttons[227] = ["settings", "url:https://weej.zolfer.com"];
+  init.connection = { connected: false, busy: false, port: "" };
+  init.mixerConnection = { connected: true, busy: false, port: "SMC-Mixer" };
+  // A mixer frame: CC-mode columns, faders on 40-47 and knobs on 30-37.
+  const frame = Array(144).fill(-1);
+  [1023, 600, 300, -1, -1, 800, 150, -1].forEach((v, i) => (frame[40 + i] = v));
+  frame[30] = 512;
+  init.values = { mixer: frame };
+  return init;
+}
+
+// A board with a row of knobs over a row of faders and a button, the button not found yet.
+function mockBoard(init) {
+  const setup = init.setup;
+  setup.columns = [0, 3, 2, 4, 1, -1];
+  setup.boardKinds = ["knob", "knob", "knob", "fader", "fader", "button"];
+  setup.boardLayout = [[0, 1, 2], [3, 4, 5]];
+  for (const p of setup.profiles) while (p.jobs.length < 6) p.jobs.push([]);
+  setup.profiles[0].jobs[3] = [{ kind: "microphone" }];
+  setup.profiles[0].boardButtons = { 5: ["media.playpause"] };
+  init.connection = { connected: true, busy: false, port: "COM6" };
+  init.values = { board: [500, 120, 800, 1023, 300, 0] };
+  return init;
+}
+
+// Moves fader 3 for a moment after the page opens.
+function startSMCDemo(post, frame) {
+  const values = frame.slice();
+  setTimeout(() => {
+    post({ type: "knobMoved", device: "mixer", knob: 2 });
+    let step = 0;
+    const timer = setInterval(() => {
+      values[42] = Math.round(512 + 400 * Math.sin(step / 5));
+      post({ type: "values", device: "mixer", values: values.slice() });
+      if (++step > 30) clearInterval(timer);
+    }, 50);
+  }, 800);
+}
+
+// Served from the repository root, the preview reads the real English catalog, so every string
+// shows; anywhere else it keeps the sample copy above.
+function loadMockStrings(fallback) {
+  return fetch("../../../lang/catalogs/en.json")
+    .then((r) => (r.ok ? r.json() : fallback))
+    .catch(() => fallback);
 }
 
 function mockSettingsInit(enStrings) {
@@ -525,6 +593,7 @@ function mockSettingsInit(enStrings) {
       trayIcon: "mixer",
       speed: "slow",
       port: "",
+      mixerPort: "",
       baudRate: 9600,
     },
     catalog,
@@ -534,6 +603,7 @@ function mockSettingsInit(enStrings) {
     connection: { connected: true, busy: false, port: "COM6" },
     forcedPort: "",
     baudRates: [9600, 19200, 38400, 57600, 115200],
+    lightPatterns: ["off", "on", "random", "eq", "fire", "chase", "bounce", "wave", "sparkle", "blink", "rain", "matrix", "snake", "fill", "explode", "checker", "rise", "zigzag", "orbit", "heartbeat", "stars", "bars", "ball", "comet", "helix", "breathe", "clock"],
   };
 }
 
@@ -542,8 +612,17 @@ function startSettingsMock(post, enStrings) {
   return (msg) => {
     switch (msg.type) {
       case "ready":
-        draft = mockSettingsInit(enStrings);
-        post(draft);
+        loadMockStrings(enStrings).then((strings) => {
+          draft = mockSettingsInit(strings);
+          const device = new URLSearchParams(location.search).get("device");
+          if (device === "smc") {
+            mockSMC(draft);
+            startSMCDemo(post, draft.values.mixer);
+          }
+          if (device === "board") mockBoard(draft);
+          post(draft);
+          window.weejMock = { post };
+        });
         break;
       case "save":
         post({ type: "saved", setup: msg.setup });
@@ -556,6 +635,7 @@ function startSettingsMock(post, enStrings) {
               { name: "COM1", product: "", usb: false },
               { name: "COM6", product: "USB Serial", usb: true },
             ],
+            midi: ["SMC-Mixer"],
           });
         }, 100);
         break;

@@ -136,10 +136,13 @@ func closeInput(h uintptr) {
 	current.Store(nil)
 }
 
-var led struct {
+var out struct {
 	mu sync.Mutex
 	h  uintptr
 }
+
+// mode outlives a connection, so a button's LED can be cleared before the mixer sends again.
+var mode core.SMCMode
 
 func openOutput(name string) {
 	id, ok := findOutput(name)
@@ -150,44 +153,68 @@ func openOutput(name string) {
 	if r, _, _ := procMidiOutOpen.Call(uintptr(unsafe.Pointer(&h)), id, 0, 0, 0); r != 0 {
 		return
 	}
-	led.mu.Lock()
-	led.h = h
-	led.mu.Unlock()
+	out.mu.Lock()
+	out.h = h
+	out.mu.Unlock()
 }
 
 func closeOutput() {
-	led.mu.Lock()
-	defer led.mu.Unlock()
-	if led.h != 0 {
-		procMidiOutClose.Call(led.h)
-		led.h = 0
+	out.mu.Lock()
+	defer out.mu.Unlock()
+	if out.h != 0 {
+		procMidiOutClose.Call(out.h)
+		out.h = 0
 	}
 }
 
-// SetLED lights or clears a button's LED. In DAW mode the mixer lights a button when the note
-// comes back on; in CC mode the CC is echoed.
+func send(msg uint32) {
+	out.mu.Lock()
+	defer out.mu.Unlock()
+	if out.h != 0 {
+		procMidiOutShortMsg.Call(out.h, uintptr(msg))
+	}
+}
+
+var (
+	// muteLEDs is what SetLED last asked of each button's light, by id.
+	muteLEDs     [256]atomic.Bool
+	lightPattern atomic.Value
+	spectrum     atomic.Pointer[core.Spectrum]
+	lightsPoke   = make(chan struct{}, 1)
+)
+
+func pokeLights() {
+	select {
+	case lightsPoke <- struct{}{}:
+	default:
+	}
+}
+
+// SetLED shows a mute on a button's light, the way the mode the mixer is in takes it.
 func SetLED(button int, on bool) {
-	value := 0
-	if on {
-		value = 127
+	if button >= 0 && button < len(muteLEDs) {
+		muteLEDs[button].Store(on)
+		pokeLights()
 	}
-	msg := 0xB0 | button<<8 | value<<16
-	if note, ok := core.MixerButtonNote(button); ok {
-		msg = 0x90 | note<<8 | value<<16
-	}
-	led.mu.Lock()
-	defer led.mu.Unlock()
-	if led.h != 0 {
-		procMidiOutShortMsg.Call(led.h, uintptr(msg))
-	}
+}
+
+// SetSpectrum is the sound the "eq" pattern follows.
+func SetSpectrum(s *core.Spectrum) { spectrum.Store(s) }
+
+// SetLights picks the pattern an SMC-Mixer's button lights run (core.LightPatterns).
+func SetLights(pattern string) {
+	lightPattern.Store(core.ParseLightPattern(pattern))
+	pokeLights()
 }
 
 type Config struct {
 	Device   string
 	OnValues func(values []int)
-	OnButton func(cc int)
+	OnButton func(id int)
 	OnStatus func(connected, busy bool)
-	Log      func(string)
+	// Lights runs the SetLights pattern, on an SMC-Mixer.
+	Lights bool
+	Log    func(string)
 }
 
 type dropReason int
@@ -268,6 +295,10 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 	state := core.NewMixerState()
 	check := time.NewTicker(2 * time.Second)
 	defer check.Stop()
+	lights := newButtonLights(cfg.Lights)
+	var guard core.LightGuard
+	lights.update()
+	defer lights.clear()
 
 	for {
 		select {
@@ -279,13 +310,32 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 			if _, ok := findInput(cfg.Device); !ok {
 				return dropGone
 			}
+		case <-lights.tick:
+			lights.update()
+		case <-lightsPoke:
+			lights.update()
+		case <-lights.paced:
+			lights.flush()
 		case msg := <-ch:
 			changed := false
 			feed := func(m uint32) {
+				daw := mode.DAW()
+				if mode.Seen(m); daw != mode.DAW() {
+					lights.update()
+				}
+				if cfg.Lights && !guard.Pass(m, time.Since(lights.start0).Seconds(), lights.last.Sub(lights.start0).Seconds()) {
+					return
+				}
 				c, pressed := state.Feed(m)
 				changed = changed || c
-				if pressed >= 0 && cfg.OnButton != nil {
-					cfg.OnButton(pressed)
+				if pressed >= 0 {
+					lights.hold(pressed, true)
+					if cfg.OnButton != nil {
+						cfg.OnButton(pressed)
+					}
+				}
+				if id, ok := core.SMCButtonReleased(m); ok {
+					lights.hold(id, false)
 				}
 			}
 			feed(msg)
@@ -301,6 +351,142 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 			if changed && cfg.OnValues != nil {
 				cfg.OnValues(state.Values())
 			}
+		}
+	}
+}
+
+// buttonLights keeps each button's light as the pattern, its mute and a hand on it want it: lit
+// when any of them says so. It starts over when the mixer changes mode, since a light is sent
+// differently in each, and sends no more than lightsBurst changes every 10 ms: a real SMC-Mixer
+// sent fader moves nobody made after a few dozen at once.
+type buttonLights struct {
+	patterns bool
+	pattern  string
+	start    time.Time
+	ticker   *time.Ticker
+	tick     <-chan time.Time
+	daw      bool
+	held     [256]bool
+	// strip is an SMC-Mixer's strip buttons, the only ones it lights, and which a pattern from
+	// before may have left on.
+	strip [256]bool
+	// want and sent are each light as decided and as last sent: 0 unknown, 1 off, 2 on.
+	want, sent [256]int8
+	next       int
+	// last is when a light was last sent, after start0, when these lights began.
+	start0, last time.Time
+	pace         *time.Ticker
+	paced        <-chan time.Time
+}
+
+const lightsBurst = 4
+
+func newButtonLights(patterns bool) *buttonLights {
+	l := &buttonLights{patterns: patterns, start0: time.Now()}
+	if patterns {
+		for _, id := range core.SMCStripButtons() {
+			l.strip[id] = true
+		}
+	}
+	return l
+}
+
+func (l *buttonLights) hold(id int, down bool) {
+	if id >= 0 && id < len(l.held) && (!l.patterns || l.strip[id]) {
+		l.held[id] = down
+		l.update()
+	}
+}
+
+func (l *buttonLights) update() {
+	pattern := ""
+	if l.patterns {
+		pattern, _ = lightPattern.Load().(string)
+	}
+	if pattern != l.pattern {
+		l.pattern, l.start = pattern, time.Now()
+		if l.ticker != nil {
+			l.ticker.Stop()
+			l.ticker, l.tick = nil, nil
+		}
+		if core.Animated(pattern) {
+			l.ticker = time.NewTicker(40 * time.Millisecond)
+			l.tick = l.ticker.C
+		}
+	}
+	if daw := mode.DAW(); daw != l.daw {
+		l.daw, l.want, l.sent = daw, [256]int8{}, [256]int8{}
+	}
+	frame := core.LightFrame(pattern, time.Since(l.start).Seconds())
+	switch pattern {
+	case "eq":
+		if sp := spectrum.Load(); sp != nil {
+			frame = core.EQFrame(sp.Bands(time.Since(l.start).Seconds()))
+		}
+	case "clock":
+		frame = core.ClockFrame(time.Now())
+	}
+	var lit [256]bool
+	for _, id := range frame {
+		lit[id] = true
+	}
+	for id := range lit {
+		switch {
+		case lit[id] || l.held[id] || muteLEDs[id].Load():
+			l.want[id] = 2
+		case l.sent[id] != 0 || l.strip[id]:
+			l.want[id] = 1
+		}
+	}
+	l.flush()
+}
+
+// flush sends up to lightsBurst of the lights that differ from what was sent, taking turns, and
+// keeps pacing itself until none differ.
+func (l *buttonLights) flush() {
+	budget := lightsBurst
+	for range len(l.want) {
+		id := l.next
+		l.next = (l.next + 1) % len(l.want)
+		if l.want[id] == 0 || l.want[id] == l.sent[id] {
+			continue
+		}
+		if budget == 0 {
+			if l.pace == nil {
+				l.pace = time.NewTicker(10 * time.Millisecond)
+				l.paced = l.pace.C
+			}
+			return
+		}
+		budget--
+		l.last = time.Now()
+		l.sent[id] = l.want[id]
+		if msg, ok := core.SMCButtonLED(id, l.want[id] == 2, l.daw); ok {
+			send(msg)
+		}
+	}
+	if l.pace != nil {
+		l.pace.Stop()
+		l.pace, l.paced = nil, nil
+	}
+}
+
+func (l *buttonLights) clear() {
+	for _, t := range []*time.Ticker{l.ticker, l.pace} {
+		if t != nil {
+			t.Stop()
+		}
+	}
+	n := 0
+	for id, state := range l.sent {
+		if state != 2 {
+			continue
+		}
+		if msg, ok := core.SMCButtonLED(id, false, l.daw); ok {
+			send(msg)
+		}
+		if n++; n%lightsBurst == 0 {
+			time.Sleep(10 * time.Millisecond)
 		}
 	}
 }
