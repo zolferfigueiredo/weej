@@ -2,6 +2,7 @@ import { connect, send, t } from "./bridge.js";
 import {
   addControl,
   controlUsed,
+  fitLists,
   moveControl,
   picked,
   pressed,
@@ -597,6 +598,9 @@ function tabFor(tab) {
 
 function onMessage(msg) {
   switch (msg.type) {
+    case "room":
+      fitLists();
+      break;
     case "init":
       S.init = msg;
       S.draft = clone(msg.settings || { devices: [] });
@@ -774,3 +778,5 @@ window.addEventListener("keydown", (e) => {
 });
 
 connect("root", onMessage);
+
+window.addEventListener("resize", fitLists);

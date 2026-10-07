@@ -1,6 +1,7 @@
 // The Boards tab: a tab of its own for each board, with its profiles, and the board drawn or
 // listed with what each control does.
 import { send, t } from "./bridge.js";
+import { pageHeight, roomHeight } from "./bridge.js";
 import { boardSVG, showValue, smcButtonIcon, smcSVG } from "./device.js";
 import { actionPicks, buttonLines, buttonParams, controlLabel, jobLines, jobPicks, shortcutControl } from "./pickers.js";
 import {
@@ -96,7 +97,25 @@ export function renderBoards() {
       </div>
       ${body}
     </div>`;
+    fitLists();
   });
+}
+
+// When the List view would make the page taller than the window can grow, its cards scroll
+// inside themselves instead, so the page never scrolls as a whole.
+export function fitLists() {
+  const columns = document.querySelector(".list-columns");
+  if (!columns) return;
+  const cards = [...columns.querySelectorAll(".card")];
+  const scrolled = cards.map((c) => c.scrollTop);
+  columns.style.removeProperty("--list-max");
+  const room = roomHeight();
+  const over = Math.ceil(pageHeight() - room);
+  if (room > 0 && over > 0) {
+    const tallest = Math.max(...cards.map((c) => c.offsetHeight));
+    columns.style.setProperty("--list-max", `${Math.max(tallest - over, 160)}px`);
+  }
+  cards.forEach((c, i) => (c.scrollTop = scrolled[i]));
 }
 
 export const GEAR_ICON = `<svg class="gear" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.6 1h2.8l.4 1.9 1.1.6 1.8-.7 1.4 2.4-1.4 1.3v1.2l1.4 1.3-1.4 2.4-1.8-.7-1.1.6-.4 1.9H6.6l-.4-1.9-1.1-.6-1.8.7-1.4-2.4 1.4-1.3V7.8L1.9 6.5l1.4-2.4 1.8.7 1.1-.6z"/><circle cx="8" cy="8" r="2.2"/></svg>`;
@@ -264,16 +283,16 @@ function listView(d) {
         )
         .join("")
     : `<div class="row"><span class="row-desc">${esc(t("list.none"))}</span></div>`;
-  const card = (title, rows) => `
+  const card = (title, rows, name) => `
         <div class="group list-group">
           <div class="group-head"><h2 class="group-title">${esc(title)}</h2></div>
-          <div class="card">${rows}</div>
+          <div class="card" data-keep-scroll="${name}-${d.id}">${rows}</div>
         </div>`;
   return `
       <div class="list-columns">
-        ${card(t("knobs"), potRows(knobs))}
-        ${card(t("list.faders"), potRows(faders))}
-        ${card(t("list.buttons"), buttonRows)}
+        ${card(t("knobs"), potRows(knobs), "knobs")}
+        ${card(t("list.faders"), potRows(faders), "faders")}
+        ${card(t("list.buttons"), buttonRows, "buttons")}
       </div>`;
 }
 

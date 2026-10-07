@@ -861,6 +861,7 @@ button.popover-item {
 .btn-icon {
   width: 26px;
   height: 26px;
+  padding: 0;
 }
 
 .segmented {
@@ -1341,6 +1342,12 @@ select.select,
   padding: 40px 16px;
   color: var(--text-secondary);
   text-align: center;
+}
+
+/* --list-max is set by fitLists when the page would be taller than the window can grow. */
+.list-columns .card {
+  max-height: var(--list-max, none);
+  overflow-y: auto;
 }
 
 .list-columns {

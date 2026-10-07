@@ -94,6 +94,8 @@ type Window struct {
 	brush          uintptr
 	// neededPx is the client height the page last asked for, clamped to the work area.
 	neededPx int32
+	// roomPx is the tallest the client area can be on the window's monitor, as last sent.
+	roomPx int32
 
 	// Popups only.
 	popup        bool
@@ -359,11 +361,18 @@ func (w *Window) resizeTo(heightPx int32, center bool) {
 	if !center {
 		work = monitorWorkArea(w.hwnd)
 	}
+	room := (work.Bottom - work.Top) - w.frameH
+	// The page fits its longest lists into this, rather than scroll as a whole. The first call
+	// comes before the page exists, so the first one the page asks for sends it.
+	if !center && room > 0 && room != w.roomPx {
+		w.roomPx = room
+		w.Send(map[string]any{"type": "room", "value": room})
+	}
 	if heightPx < w.minHeightPx {
 		heightPx = w.minHeightPx
 	}
-	if maxH := (work.Bottom - work.Top) - w.frameH; maxH > 0 && heightPx > maxH {
-		heightPx = maxH
+	if room > 0 && heightPx > room {
+		heightPx = room
 	}
 	w.neededPx = heightPx
 	// Maximized, it keeps its size and a longer page scrolls.

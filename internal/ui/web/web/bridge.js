@@ -9,6 +9,7 @@ let handler = null;
 let rootEl = null;
 let sendImpl = null;
 let pendingHeight = null;
+let roomPx = 0;
 let initDone = false;
 let early = [];
 
@@ -140,15 +141,32 @@ function applyTheme(theme) {
 
 // --- Height reporting -----------------------------------------------------
 
-// Physical pixels, so Go sizes the window right for any DPI and Windows text size.
-function reportHeight() {
-  if (!rootEl) return;
+// The page's height in CSS pixels, laid out without a scrollbar: a scrollbar narrows the page,
+// a narrower drawing is shorter, and a window sized to that would keep the scrollbar.
+export function pageHeight() {
+  if (!rootEl) return 0;
+  const de = document.documentElement;
+  const scrollbar = de.clientWidth < window.innerWidth;
+  if (scrollbar) de.style.overflow = "hidden";
   const body = getComputedStyle(document.body);
-  let css =
+  const css =
     rootEl.getBoundingClientRect().bottom +
     window.scrollY +
     parseFloat(body.paddingBottom || "0") +
     parseFloat(body.marginBottom || "0");
+  if (scrollbar) de.style.overflow = "";
+  return css;
+}
+
+// The tallest the window can be, in CSS pixels, or 0 until Go says.
+export function roomHeight() {
+  return roomPx / (window.devicePixelRatio || 1);
+}
+
+// Physical pixels, so Go sizes the window right for any DPI and Windows text size.
+function reportHeight() {
+  if (!rootEl) return;
+  let css = pageHeight();
   // A dialog floats over the page, so its height is added on its own: all of it, scrolled part
   // included, and the scrim's margin around it.
   const dialog = document.querySelector(".dialog");
@@ -188,6 +206,8 @@ function dispatch(msg) {
     if (msg.strings) strings = msg.strings;
   } else if (msg.type === "theme") {
     applyTheme(msg);
+  } else if (msg.type === "room") {
+    roomPx = msg.value;
   }
   if (handler) handler(msg);
   scheduleHeightReport();
