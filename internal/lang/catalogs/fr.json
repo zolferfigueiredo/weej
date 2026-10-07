@@ -164,7 +164,7 @@
   "lights.wave": "Vague",
   "lights.zigzag": "Zigzag",
   "lights_leds": "Inclure les LED",
-  "lights_leds_note": "Les LED au-dessus des faders clignotent avec la rangée du haut du motif, dès que chaque fader a bougé.",
+  "lights_leds_note": "Les LED au-dessus des faders clignotent tant qu'un motif tourne.",
   "lights_note": "Les boutons appuyés et les sourdines restent allumés.",
   "login": "Ouvrir à la connexion",
   "made_by": "Créé par",

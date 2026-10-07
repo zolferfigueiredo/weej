@@ -150,13 +150,9 @@ func TestSpectrumJumpsTheBandThatGetsLouder(t *testing.T) {
 	}
 }
 
-func TestPreviousLightPatternAndStripLEDs(t *testing.T) {
+func TestPreviousLightPattern(t *testing.T) {
 	if PreviousLightPattern("") != "clock" || PreviousLightPattern("on") != "" || PreviousLightPattern("random") != "on" {
 		t.Error("Previous doesn't step back through the patterns")
-	}
-	leds := StripLEDs(EQFrame([8]float64{1, 0.5, 0, 0, 0, 0, 0, 1}))
-	if leds != [8]bool{true, false, false, false, false, false, false, true} {
-		t.Errorf("a full column's LED is the only one on, got %v", leds)
 	}
 }
 

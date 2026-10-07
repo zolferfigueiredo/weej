@@ -163,7 +163,7 @@
   "lights.wave": "波浪",
   "lights.zigzag": "之字形",
   "lights_leds": "包括 LED",
-  "lights_leds_note": "推子上方的 LED 随图案的最上一行闪烁，每个推子动过一次后加入。",
+  "lights_leds_note": "图案运行时，推子上方的 LED 会闪烁。",
   "lights_note": "按下的按钮和静音仍会亮起。",
   "login": "登录时启动",
   "made_by": "作者:",

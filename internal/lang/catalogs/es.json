@@ -164,7 +164,7 @@
   "lights.wave": "Ola",
   "lights.zigzag": "Zigzag",
   "lights_leds": "Incluir LEDs",
-  "lights_leds_note": "Los LED sobre los faders parpadean con la fila superior del patrón, cuando cada fader se ha movido.",
+  "lights_leds_note": "Los LED sobre los faders parpadean mientras corre un patrón.",
   "lights_note": "Los botones pulsados y los silencios se siguen iluminando.",
   "login": "Abrir al iniciar sesión",
   "made_by": "Hecho por",

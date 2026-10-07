@@ -164,7 +164,7 @@
   "lights.wave": "Welle",
   "lights.zigzag": "Zickzack",
   "lights_leds": "LEDs einbeziehen",
-  "lights_leds_note": "Die LEDs über den Fadern blinken mit der obersten Reihe des Musters, sobald der jeweilige Fader bewegt wurde.",
+  "lights_leds_note": "Die LEDs über den Fadern blinken, solange ein Muster läuft.",
   "lights_note": "Gedrückte Tasten und Stummschaltungen leuchten weiterhin.",
   "login": "Beim Anmelden starten",
   "made_by": "Erstellt von",

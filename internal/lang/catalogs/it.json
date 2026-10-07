@@ -164,7 +164,7 @@
   "lights.wave": "Onda",
   "lights.zigzag": "Zigzag",
   "lights_leds": "Includi i LED",
-  "lights_leds_note": "I LED sopra i fader lampeggiano con la riga superiore dello schema, quando ogni fader si è mosso.",
+  "lights_leds_note": "I LED sopra i fader lampeggiano mentre uno schema è attivo.",
   "lights_note": "I pulsanti premuti e i muti restano accesi.",
   "login": "Apri all’accesso",
   "made_by": "Creato da",

@@ -164,7 +164,7 @@
   "lights.wave": "Onda",
   "lights.zigzag": "Ziguezague",
   "lights_leds": "Incluir LEDs",
-  "lights_leds_note": "Os LEDs sobre os faders piscam com a linha de cima do padrão, quando cada fader se mexe.",
+  "lights_leds_note": "Os LEDs sobre os faders piscam enquanto um padrão corre.",
   "lights_note": "Botões pressionados e silenciamentos continuam acesos.",
   "login": "Abrir ao iniciar sessão",
   "made_by": "Feito por",

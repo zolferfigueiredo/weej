@@ -41,16 +41,6 @@ func PreviousLightPattern(cur string) string {
 	return ParseLightPattern(LightPatterns[(i-1+len(LightPatterns))%len(LightPatterns)])
 }
 
-// StripLEDs is which fader LEDs a frame lights: each sits above its column, so it goes with the
-// column's top button, M.
-func StripLEDs(frame []int) [gridCols]bool {
-	var on [gridCols]bool
-	for col := range gridCols {
-		on[col] = slices.Contains(frame, MixerNoteButton(lightRows[0]+col))
-	}
-	return on
-}
-
 // Animated is whether a pattern changes over time.
 func Animated(pattern string) bool { return pattern != "" && pattern != "off" && pattern != "on" }
 

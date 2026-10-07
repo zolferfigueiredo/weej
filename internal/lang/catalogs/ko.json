@@ -163,7 +163,7 @@
   "lights.wave": "웨이브",
   "lights.zigzag": "지그재그",
   "lights_leds": "LED 포함",
-  "lights_leds_note": "페이더 위의 LED가 패턴의 맨 윗줄과 함께 깜박입니다. 각 페이더를 한 번 움직이면 함께합니다.",
+  "lights_leds_note": "패턴이 실행되는 동안 페이더 위의 LED가 깜박입니다.",
   "lights_note": "누른 버튼과 음소거는 계속 켜집니다.",
   "login": "로그인 시 실행",
   "made_by": "제작:",

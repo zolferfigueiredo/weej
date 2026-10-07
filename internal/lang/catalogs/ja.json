@@ -163,7 +163,7 @@
   "lights.wave": "ウェーブ",
   "lights.zigzag": "ジグザグ",
   "lights_leds": "LEDも含める",
-  "lights_leds_note": "フェーダーの上のLEDがパターンの一番上の列と一緒に点滅します。各フェーダーを一度動かすと加わります。",
+  "lights_leds_note": "パターンの実行中、フェーダーの上のLEDが点滅します。",
   "lights_note": "押したボタンとミュートは引き続き点灯します。",
   "login": "ログイン時に起動",
   "made_by": "制作:",

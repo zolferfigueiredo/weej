@@ -477,31 +477,34 @@ func (l *buttonLights) update() {
 	}
 	l.flush()
 
-	var stripLEDs [8]bool
-	if leds {
-		stripLEDs = core.StripLEDs(frame)
-	}
-	for strip := range stripLEDs {
-		l.setLED(strip, stripLEDs[strip] || now.Before(l.knobUntil[strip]))
+	for strip := range l.blink {
+		l.setLED(strip, leds && pattern != "" || now.Before(l.knobUntil[strip]))
 	}
 }
 
-// setLED starts or stops a fader's LED blinking, once that fader has said where it is. A blinking
-// LED counts as a light change for the fader drift guard, since it flashes on its own.
+// setLED starts or stops a fader's LED blinking. A fader not heard from yet is told it sits in the
+// middle, which starts it unless it does, and nothing can stop it until that fader moves. A
+// blinking LED counts as a light change for the fader drift guard, since it flashes on its own.
 func (l *buttonLights) setLED(strip int, on bool) {
-	lsb, msb, ok := l.state.Pitch(strip)
-	if !ok || !l.daw {
+	if !l.daw {
 		return
 	}
+	lsb, msb, known := l.state.Pitch(strip)
 	switch {
 	case on:
-		if msg := core.SMCStripBlink(strip, msb); msg != l.blink[strip] {
+		msg := core.SMCStripRestore(strip, 0, 64)
+		if known {
+			msg = core.SMCStripBlink(strip, msb)
+		}
+		if msg != l.blink[strip] {
 			send(msg)
 			l.blink[strip] = msg
 		}
 		l.last = time.Now()
 	case l.blink[strip] != 0:
-		send(core.SMCStripRestore(strip, lsb, msb))
+		if known {
+			send(core.SMCStripRestore(strip, lsb, msb))
+		}
 		l.blink[strip] = 0
 		l.last = time.Now()
 	}

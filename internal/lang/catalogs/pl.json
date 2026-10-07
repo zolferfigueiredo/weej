@@ -166,7 +166,7 @@
   "lights.wave": "Fala",
   "lights.zigzag": "Zygzak",
   "lights_leds": "Uwzględnij diody LED",
-  "lights_leds_note": "Diody nad suwakami migają z górnym rzędem wzoru, gdy dany suwak się poruszy.",
+  "lights_leds_note": "Diody nad suwakami migają, gdy działa wzór.",
   "lights_note": "Wciśnięte przyciski i wyciszenia nadal się świecą.",
   "login": "Uruchamiaj przy logowaniu",
   "made_by": "Autor:",

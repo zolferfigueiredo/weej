@@ -164,7 +164,7 @@
   "lights.wave": "Wave",
   "lights.zigzag": "Zigzag",
   "lights_leds": "Include LEDs",
-  "lights_leds_note": "The LEDs over the faders blink with the pattern's top row, once each fader has moved.",
+  "lights_leds_note": "The LEDs over the faders blink while a pattern runs.",
   "lights_note": "Pressed buttons and mutes still light up.",
   "login": "Launch at login",
   "made_by": "Made by",
