@@ -198,12 +198,12 @@ func (app *App) startMixer() {
 			return
 		}
 		midiport.Run(ctx, midiport.Config{
-			Device:      device,
-			OnValues:    app.onMixerValues,
-			OnButton:    app.onMixerButton,
-			OnStatus:    func(connected, busy bool) { app.onMixerStatus(connected, busy, device) },
-			StripLights: core.IsSMCName(device),
-			Log:         app.log,
+			Device:   device,
+			OnValues: app.onMixerValues,
+			OnButton: app.onMixerButton,
+			OnStatus: func(connected, busy bool) { app.onMixerStatus(connected, busy, device) },
+			Lights:   core.IsSMCName(device),
+			Log:      app.log,
 		}, app.mixerReconnectCh)
 	}()
 }

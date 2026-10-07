@@ -193,9 +193,9 @@ type Config struct {
 	OnValues func(values []int)
 	OnButton func(id int)
 	OnStatus func(connected, busy bool)
-	// StripLights lights an SMC-Mixer strip's Square button while its fader or knob moves.
-	StripLights bool
-	Log         func(string)
+	// Lights lights an SMC-Mixer's controls as they are used (smcLights).
+	Lights bool
+	Log    func(string)
 }
 
 type dropReason int
@@ -276,7 +276,7 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 	state := core.NewMixerState()
 	check := time.NewTicker(2 * time.Second)
 	defer check.Stop()
-	strips := &stripLEDs{cfg: cfg, start: time.Now()}
+	strips := &smcLights{cfg: cfg, state: state, start: time.Now()}
 	defer strips.allOff()
 
 	for {
@@ -300,8 +300,14 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 				if c {
 					strips.moved(state.LastChanged())
 				}
-				if pressed >= 0 && cfg.OnButton != nil {
-					cfg.OnButton(pressed)
+				if pressed >= 0 {
+					strips.held(pressed, true)
+					if cfg.OnButton != nil {
+						cfg.OnButton(pressed)
+					}
+				}
+				if id, ok := core.SMCButtonReleased(m); ok {
+					strips.held(id, false)
 				}
 			}
 			feed(msg)
@@ -321,25 +327,26 @@ func stream(ctx context.Context, ch <-chan uint32, cfg Config, reconnect <-chan 
 	}
 }
 
-// stripLEDs lights a strip's Square button while the strip moves, in DAW mode: the LED over the
-// fader can only blink, and stops as soon as the fader moves.
-type stripLEDs struct {
+// smcLights lights an SMC-Mixer's controls as they are used, in DAW mode. A button lights while it
+// is held. The LED over a fader blinks while the strip's knob turns: sending the fader channel a
+// position far from the fader starts it, and the fader's own stops it. A moving fader puts that LED
+// out itself, so the fader's own moves are left alone.
+type smcLights struct {
 	cfg    Config
+	state  *core.MixerState
 	lights core.StripLights
 	start  time.Time
 	ticker *time.Ticker
 	tick   <-chan time.Time
-	// lit is the strips whose Square this lit, to be put back as SetLED left it.
-	lit [8]bool
+	// blink is the message keeping each strip blinking, 0 when none was sent.
+	blink [8]uint32
 }
 
-func (s *stripLEDs) now() float64 { return time.Since(s.start).Seconds() }
+func (s *smcLights) now() float64 { return time.Since(s.start).Seconds() }
 
-func squareOf(strip int) int { return core.MixerNoteButton(24 + strip) }
-
-func (s *stripLEDs) moved(col int) {
+func (s *smcLights) moved(col int) {
 	strip, ok := core.SMCStripOf(col)
-	if !s.cfg.StripLights || !ok {
+	if !s.cfg.Lights || !ok || col != 30+strip {
 		return
 	}
 	s.lights.Move(strip, s.now())
@@ -347,16 +354,17 @@ func (s *stripLEDs) moved(col int) {
 		s.ticker = time.NewTicker(50 * time.Millisecond)
 		s.tick = s.ticker.C
 	}
-	if s.lit[strip] || !mode.DAW() {
+	_, msb, ok := s.state.Pitch(strip)
+	if !ok || !mode.DAW() {
 		return
 	}
-	if msg, ok := core.SMCButtonLED(squareOf(strip), true, true); ok {
+	if msg := core.SMCStripBlink(strip, msb); msg != s.blink[strip] {
 		send(msg)
-		s.lit[strip] = true
+		s.blink[strip] = msg
 	}
 }
 
-func (s *stripLEDs) due() {
+func (s *smcLights) due() {
 	for _, strip := range s.lights.Due(s.now()) {
 		s.off(strip)
 	}
@@ -366,23 +374,36 @@ func (s *stripLEDs) due() {
 	}
 }
 
-func (s *stripLEDs) off(strip int) {
-	if !s.lit[strip] {
+func (s *smcLights) off(strip int) {
+	if s.blink[strip] == 0 {
 		return
 	}
-	id := squareOf(strip)
-	if msg, ok := core.SMCButtonLED(id, buttonLEDs[id].Load(), true); ok {
-		send(msg)
+	if lsb, msb, ok := s.state.Pitch(strip); ok {
+		send(core.SMCStripRestore(strip, lsb, msb))
 	}
-	s.lit[strip] = false
+	s.blink[strip] = 0
 }
 
-func (s *stripLEDs) allOff() {
+func (s *smcLights) allOff() {
 	for _, strip := range s.lights.AllOff() {
 		s.off(strip)
 	}
 	if s.ticker != nil {
 		s.ticker.Stop()
+	}
+}
+
+// held lights a button while it is down, and gives it back what SetLED last set when it comes up.
+func (s *smcLights) held(id int, down bool) {
+	if !s.cfg.Lights {
+		return
+	}
+	on := down
+	if !down && id >= 0 && id < len(buttonLEDs) {
+		on = buttonLEDs[id].Load()
+	}
+	if msg, ok := core.SMCButtonLED(id, on, mode.DAW()); ok {
+		send(msg)
 	}
 }
 

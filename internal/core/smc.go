@@ -61,6 +61,21 @@ func SMCButtonCC(id int) (int, bool) {
 	return 0, false
 }
 
+// SMCButtonReleased is the button a message lets go of: a note off, or a note or CC-mode button CC
+// at 0.
+func SMCButtonReleased(msg uint32) (int, bool) {
+	status := msg & 0xF0
+	data1 := int(msg>>8) & 0x7F
+	data2 := int(msg>>16) & 0x7F
+	switch {
+	case status == 0x80, status == 0x90 && data2 == 0:
+		return MixerNoteButton(data1), true
+	case status == 0xB0 && data2 == 0:
+		return SMCButtonID(data1)
+	}
+	return 0, false
+}
+
 // SMCButtonOrder lists every button by id: M, S, R and Square for each strip, then the bottom row.
 func SMCButtonOrder() []int {
 	var ids []int
@@ -84,6 +99,22 @@ func SMCStripOf(column int) (int, bool) {
 		return column - 30, true
 	}
 	return 0, false
+}
+
+// The LED above a strip's fader blinks while the fader position the computer last sent differs
+// from where the fader is, and stops once they match (tried on a real unit, in DAW mode only;
+// meters, the knob ring and touch notes leave it alone). So a pitch bend far from the fader starts
+// it blinking, and the fader's own position stops it.
+func SMCStripBlink(strip, faderMSB int) uint32 {
+	far := 127
+	if faderMSB >= 64 {
+		far = 0
+	}
+	return uint32(0xE0|strip) | uint32(far)<<16
+}
+
+func SMCStripRestore(strip, lsb, msb int) uint32 {
+	return uint32(0xE0|strip) | uint32(lsb)<<8 | uint32(msb)<<16
 }
 
 // SMCButtonLED lights or clears a button's LED: by its note in DAW mode, or by its CC in CC mode,
