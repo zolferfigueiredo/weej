@@ -63,16 +63,19 @@ func (app *App) applyJob(job core.Job, s float64) {
 	}
 }
 
+// activeProfileAppExes lists the apps every board's active profile turns up and down, which
+// "Other apps" leaves alone.
 func (app *App) activeProfileAppExes() []string {
-	s := app.snapshotSettings()
-	if s.Active < 0 || s.Active >= len(s.Profiles) {
-		return nil
-	}
 	set := map[string]struct{}{}
-	for _, row := range s.Profiles[s.Active].Jobs {
-		for _, j := range row {
-			if j.Kind == core.JobApp {
-				set[j.Exe] = struct{}{}
+	for _, d := range app.snapshotSettings().Devices {
+		if !d.Enabled {
+			continue
+		}
+		for _, row := range d.ActiveProfile().Jobs {
+			for _, j := range row {
+				if j.Kind == core.JobApp {
+					set[j.Exe] = struct{}{}
+				}
 			}
 		}
 	}

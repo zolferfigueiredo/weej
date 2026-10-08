@@ -17,9 +17,9 @@ type Display struct {
 // ScreenCount is how many screens the job list offers: the external screens Windows reports,
 // and at least as many as the highest one a profile already uses, so a job for a screen that
 // is unplugged right now can still be seen and unticked.
-func ScreenCount(externals int, setup Setup) int {
+func ScreenCount(externals int, devices []Device) int {
 	n := externals
-	for _, p := range setup.Profiles {
+	for _, p := range allProfiles(devices) {
 		for _, row := range p.Jobs {
 			for _, j := range row {
 				if (j.Kind == JobBrightness || j.Kind == JobContrast) && j.Screen+1 > n {
@@ -44,5 +44,13 @@ func Externals(displays []Display) []Display {
 		}
 		return out[i].Top < out[j].Top
 	})
+	return out
+}
+
+func allProfiles(devices []Device) []DeviceProfile {
+	var out []DeviceProfile
+	for _, d := range devices {
+		out = append(out, d.Profiles...)
+	}
 	return out
 }

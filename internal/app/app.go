@@ -3,7 +3,6 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"regexp"
@@ -24,7 +23,10 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/updater"
 )
 
-type NightLight interface{ Set(s float64) }
+type NightLight interface {
+	Set(s float64)
+	Toggle()
+}
 
 type Zoom interface {
 	Set(s float64)
@@ -46,24 +48,24 @@ type App struct {
 
 	startTime time.Time
 
-	mu          sync.Mutex
-	settings    core.Settings
-	connected   bool
-	busy        bool
-	currentPort string
-	calibrating bool
+	mu       sync.Mutex
+	settings core.Settings
 
-	engine *core.Engine
-	audio  *audio.Audio
-	ddc    *display.DDC
-	via    *via.VIA
+	// runners reads each board that is on, by its ID; bindings is what each registered hotkey
+	// does (core.HotkeyBindings), by its id; wizard is the board being calibrated.
+	runners  map[string]*runner
+	bindings []core.HotkeyBinding
+	wizard   *wizardRun
+
+	audio *audio.Audio
+	// spectrum is the sound the button lights' EQ follows, while loopback listens for it.
+	spectrum *core.Spectrum
+	loopback *audio.Loopback
+	ddc      *display.DDC
+	via      *via.VIA
 
 	nightlight NightLight
 	zoom       Zoom
-
-	reconnectCh  chan struct{}
-	cancelSerial context.CancelFunc
-	serialDone   chan struct{}
 
 	tray *winui.Tray
 	hud  *winui.HUD
@@ -86,20 +88,13 @@ type App struct {
 	jobMenuAnchor   web.Rect
 	jobMenuHiddenAt time.Time
 
-	calibWin      *web.Window
-	calibrator    *core.Calibrator
-	calibOnlyNew  bool
-	calibTickStop func()
-
 	updateWin   *web.Window
 	checking    bool
 	installing  bool
 	installStep updater.Step
 	lastRelease updater.Release
 
-	firstConnectDone bool
-	lastTerminalLine time.Time
-	shutdownOnce     sync.Once
+	shutdownOnce sync.Once
 }
 
 func Main(args []string) int {
@@ -151,7 +146,6 @@ func Main(args []string) int {
 		testNotifications: flags.testNotifications,
 		log:               lg.Log,
 		startTime:         time.Now(),
-		reconnectCh:       make(chan struct{}, 1),
 		appName:           map[string]string{},
 		appPath:           map[string]string{},
 		appIcon:           map[string]string{},

@@ -14,6 +14,7 @@ var (
 
 	procTaskDialogIndirect = comctl32.NewProc("TaskDialogIndirect")
 	procGetOpenFileNameW   = comdlg32.NewProc("GetOpenFileNameW")
+	procGetSaveFileNameW   = comdlg32.NewProc("GetSaveFileNameW")
 )
 
 const (
@@ -26,10 +27,11 @@ const (
 	idYes = 6
 	idNo  = 7
 
-	ofnExplorer      = 0x00080000
-	ofnFileMustExist = 0x00001000
-	ofnPathMustExist = 0x00000800
-	ofnHideReadOnly  = 0x00000004
+	ofnExplorer        = 0x00080000
+	ofnFileMustExist   = 0x00001000
+	ofnPathMustExist   = 0x00000800
+	ofnOverwritePrompt = 0x00000002
+	ofnHideReadOnly    = 0x00000004
 
 	maxPathBuf = 32768
 )
@@ -190,6 +192,31 @@ func (l *Loop) OpenFile(title string, filter [][2]string, initialDir string) (st
 	ofn.structSize = uint32(unsafe.Sizeof(ofn))
 
 	r, _, _ := procGetOpenFileNameW.Call(uintptr(unsafe.Pointer(&ofn)))
+	if r == 0 {
+		return "", false
+	}
+	return windows.UTF16ToString(fileBuf), true
+}
+
+// SaveFile asks where to save a file, offering name; ext is added to a name typed without one.
+func (l *Loop) SaveFile(title string, filter [][2]string, name, ext string) (string, bool) {
+	fileBuf := make([]uint16, maxPathBuf)
+	if u, err := windows.UTF16FromString(name); err == nil && len(u) < len(fileBuf) {
+		copy(fileBuf, u)
+	}
+
+	ofn := openFileNameW{
+		hwndOwner: l.hwnd,
+		filter:    buildFilterString(filter),
+		file:      &fileBuf[0],
+		maxFile:   uint32(len(fileBuf)),
+		title:     mustUTF16PtrFromString(title),
+		defExt:    mustUTF16PtrFromString(ext),
+		flags:     ofnExplorer | ofnOverwritePrompt | ofnPathMustExist | ofnHideReadOnly,
+	}
+	ofn.structSize = uint32(unsafe.Sizeof(ofn))
+
+	r, _, _ := procGetSaveFileNameW.Call(uintptr(unsafe.Pointer(&ofn)))
 	if r == 0 {
 		return "", false
 	}

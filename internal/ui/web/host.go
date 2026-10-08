@@ -52,6 +52,9 @@ type Options struct {
 
 	NoClose bool
 	Modal   bool
+	// Resizable lets the user size and maximize it; once dragged to a size, it stops following
+	// its page's height.
+	Resizable bool
 
 	OnClose func()
 	// Runs before a Modal window's loop starts, so its onMessage can reach the Window.
@@ -86,8 +89,13 @@ type Window struct {
 	work           rect32
 	widthPx        int32
 	minHeightPx    int32
+	userSized      bool
 	dark           bool
 	brush          uintptr
+	// neededPx is the client height the page last asked for, clamped to the work area.
+	neededPx int32
+	// roomPx is the tallest the client area can be on the window's monitor, as last sent.
+	roomPx int32
 
 	// Popups only.
 	popup        bool
@@ -113,6 +121,9 @@ var (
 
 const showFallbackTimer = 1
 
+// The smallest a Resizable window can be dragged to, in DIP.
+const minResizeW, minResizeH = 720, 480
+
 func dipToPx(dip int, scale float64) int32 {
 	return int32(math.Round(float64(dip) * scale))
 }
@@ -136,7 +147,7 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 		origin := clientOrigin(opts.Owner.hwnd)
 		hwnd = createPopupHidden(opts.Owner.hwnd, origin.X, origin.Y)
 	} else {
-		hwnd = createWindowHidden(opts.Title)
+		hwnd = createWindowHidden(opts.Title, opts.Resizable)
 	}
 	if hwnd == 0 {
 		return nil, fmt.Errorf("web: CreateWindowExW failed for %q", page)
@@ -156,6 +167,9 @@ func Open(invoke func(func()), page string, opts Options, onMessage func(msg []b
 		w.work = workArea()
 	}
 	w.widthPx = dipToPx(opts.Width, w.scale)
+	if maxW := (w.work.Right - w.work.Left) - w.frameW; !popup && maxW > 0 && w.widthPx > maxW {
+		w.widthPx = maxW
+	}
 	w.minHeightPx = dipToPx(opts.MinHeight, w.scale)
 	w.maxHeightPx = dipToPx(opts.MaxHeight, w.scale)
 	w.applyTheme(!sys.AppsLight())
@@ -343,26 +357,51 @@ func (w *Window) resizeTo(heightPx int32, center bool) {
 		}
 		return
 	}
+	work := w.work
+	if !center {
+		work = monitorWorkArea(w.hwnd)
+	}
+	room := (work.Bottom - work.Top) - w.frameH
+	// The page fits its longest lists into this, rather than scroll as a whole. The first call
+	// comes before the page exists, so the first one the page asks for sends it.
+	if !center && room > 0 && room != w.roomPx {
+		w.roomPx = room
+		w.Send(map[string]any{"type": "room", "value": room})
+	}
 	if heightPx < w.minHeightPx {
 		heightPx = w.minHeightPx
 	}
-	if maxH := (w.work.Bottom - w.work.Top) - w.frameH; maxH > 0 && heightPx > maxH {
-		heightPx = maxH
+	if room > 0 && heightPx > room {
+		heightPx = room
 	}
+	w.neededPx = heightPx
+	// Maximized, it keeps its size and a longer page scrolls.
+	if zoomed, _, _ := procIsZoomed.Call(w.hwnd); zoomed != 0 {
+		w.resizeWebView()
+		return
+	}
+	cur := windowRect(w.hwnd)
 	totalW := w.widthPx + w.frameW
+	if w.userSized {
+		// Sized by hand, it keeps that size unless the page needs more height.
+		if in := clientRect(w.hwnd); in.Bottom-in.Top >= heightPx {
+			w.resizeWebView()
+			return
+		}
+		totalW = cur.Right - cur.Left
+	}
 	totalH := heightPx + w.frameH
 	if center {
-		x := w.work.Left + ((w.work.Right-w.work.Left)-totalW)/2
-		y := w.work.Top + ((w.work.Bottom-w.work.Top)-totalH)/2
+		x := work.Left + ((work.Right-work.Left)-totalW)/2
+		y := work.Top + ((work.Bottom-work.Top)-totalH)/2
 		setWindowPos(w.hwnd, x, y, totalW, totalH, swpNoZorder|swpNoActivate)
 	} else {
-		cur := windowRect(w.hwnd)
 		y := cur.Top
-		if y+totalH > w.work.Bottom {
-			y = w.work.Bottom - totalH
+		if y+totalH > work.Bottom {
+			y = work.Bottom - totalH
 		}
-		if y < w.work.Top {
-			y = w.work.Top
+		if y < work.Top {
+			y = work.Top
 		}
 		setWindowPos(w.hwnd, cur.Left, y, totalW, totalH, swpNoZorder|swpNoActivate)
 	}

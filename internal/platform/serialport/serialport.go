@@ -5,6 +5,8 @@ package serialport
 import (
 	"context"
 	"fmt"
+	"slices"
+	"sync"
 	"time"
 )
 
@@ -15,6 +17,11 @@ type Status struct {
 }
 
 type Config struct {
+	// Owner names the board, so two boards never open the same port: opening one restarts the
+	// Arduino on it.
+	Owner string
+	// Exclude lists ports other boards use, which finding a board automatically leaves alone.
+	Exclude    func() []string
 	ForcedPort string
 	// Baud is the serial speed; 0 means core.DefaultBaud.
 	Baud     int
@@ -52,6 +59,11 @@ func Run(ctx context.Context, cfg Config, reconnect <-chan struct{}) {
 		}
 
 		candidates := pickCandidates(cfg.ForcedPort)
+		if cfg.ForcedPort == "" && cfg.Exclude != nil {
+			skip := cfg.Exclude()
+			candidates = slices.DeleteFunc(candidates, func(name string) bool { return slices.Contains(skip, name) })
+		}
+		candidates = slices.DeleteFunc(candidates, func(name string) bool { return claimedBy(name, cfg.Owner) })
 		if len(candidates) == 0 {
 			logf("Waiting for a serial device")
 			setStatus(Status{})
@@ -72,8 +84,12 @@ func Run(ctx context.Context, cfg Config, reconnect <-chan struct{}) {
 				return
 			}
 
+			if !claim(name, cfg.Owner) {
+				continue
+			}
 			port, err := openPort(name, cfg.Baud)
 			if err != nil {
+				release(name, cfg.Owner)
 				logf(fmt.Sprintf("Could not open %s", name))
 				busy := isAccessDenied(err)
 				busyPort := ""
@@ -93,6 +109,7 @@ func Run(ctx context.Context, cfg Config, reconnect <-chan struct{}) {
 			}
 			reason := streamPort(ctx, port, reconnect, probe, onLine, connected)
 			port.Close()
+			release(name, cfg.Owner)
 
 			switch reason {
 			case dropCanceled:
@@ -129,4 +146,35 @@ func sleepDiscard(ctx context.Context, d time.Duration, reconnect <-chan struct{
 		case <-reconnect:
 		}
 	}
+}
+
+// claims holds which board has each port open.
+var claims = struct {
+	sync.Mutex
+	owners map[string]string
+}{owners: map[string]string{}}
+
+func claim(port, owner string) bool {
+	claims.Lock()
+	defer claims.Unlock()
+	if o, ok := claims.owners[port]; ok && o != owner {
+		return false
+	}
+	claims.owners[port] = owner
+	return true
+}
+
+func release(port, owner string) {
+	claims.Lock()
+	defer claims.Unlock()
+	if claims.owners[port] == owner {
+		delete(claims.owners, port)
+	}
+}
+
+func claimedBy(port, owner string) bool {
+	claims.Lock()
+	defer claims.Unlock()
+	o, ok := claims.owners[port]
+	return ok && o != owner
 }

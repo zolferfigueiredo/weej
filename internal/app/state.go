@@ -32,33 +32,3 @@ func (app *App) persistSettings(s core.Settings) error {
 	app.replaceSettings(s)
 	return nil
 }
-
-func (app *App) setConnection(connected, busy bool, port string) {
-	app.mu.Lock()
-	app.connected, app.busy, app.currentPort = connected, busy, port
-	app.mu.Unlock()
-}
-
-func (app *App) connectionStatus() (connected, busy bool, port string) {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	return app.connected, app.busy, app.currentPort
-}
-
-func (app *App) setCalibrating(v bool) {
-	app.mu.Lock()
-	app.calibrating = v
-	app.mu.Unlock()
-}
-
-func (app *App) isCalibrating() bool {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	return app.calibrating
-}
-
-func (app *App) currentCalibrator() *core.Calibrator {
-	app.mu.Lock()
-	defer app.mu.Unlock()
-	return app.calibrator
-}

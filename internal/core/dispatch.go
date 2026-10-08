@@ -2,6 +2,7 @@ package core
 
 import (
 	"math"
+	"slices"
 	"strconv"
 	"sync"
 	"time"
@@ -50,18 +51,20 @@ type Engine struct {
 	applier     Applier
 	debouncer   *Debouncer
 	lastApplied map[int]float64
-	lastInvert  bool
-	lines       []Line
+	// A muted column keeps recording its position, so unmuting puts it back where it now is.
+	muted map[int]bool
+	lines []Line
 }
 
 func NewEngine(a Applier) *Engine {
-	return &Engine{applier: a, debouncer: NewDebouncer(), lastApplied: map[int]float64{}}
+	return &Engine{applier: a, debouncer: NewDebouncer(), lastApplied: map[int]float64{}, muted: map[int]bool{}}
 }
 
 func (e *Engine) Reset() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.lastApplied = map[int]float64{}
+	e.muted = map[int]bool{}
 }
 
 func jobKey(job Job) string {
@@ -91,13 +94,6 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 	mapping := setup.Mapping()
 	settle := setup.Speed.Settle()
 
-	if setup.Invert != e.lastInvert {
-		for k, v := range e.lastApplied {
-			e.lastApplied[k] = 1 - v
-		}
-		e.lastInvert = setup.Invert
-	}
-
 	shown := map[string]bool{}
 	once := func(display string, show func()) {
 		if !shown[display] {
@@ -107,11 +103,10 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 	}
 
 	for index, raw := range values {
-		scalar := float64(raw) / 1023.0
-		u := scalar
-		if !setup.Invert {
-			u = 1 - scalar
+		if raw < 0 {
+			continue
 		}
+		u := float64(raw) / 1023.0
 		switch {
 		case u < 0.01:
 			u = 0
@@ -137,13 +132,12 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 			continue
 		}
 		e.lastApplied[index] = u
+		if e.muted[index] {
+			continue
+		}
 
 		for _, job := range jobs {
-			if job.Immediate() {
-				e.applier.Apply(job, u)
-			} else {
-				e.debouncer.Debounce(jobKey(job), settle, func() { e.applier.Apply(job, u) })
-			}
+			e.apply(job, u, settle)
 			once(displayKey(job), func() { e.applier.HUD(job, u) })
 		}
 	}
@@ -155,10 +149,78 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 	var lines []Line
 	for _, col := range setup.MenuOrder() {
 		for _, job := range mapping[col] {
-			lines = append(lines, Line{Job: job, Percent: Percent(e.lastApplied[col])})
+			percent := Percent(e.lastApplied[col])
+			if e.muted[col] {
+				percent = 0
+			}
+			lines = append(lines, Line{Job: job, Percent: percent})
 		}
 	}
 	e.lines = lines
+}
+
+func (e *Engine) apply(job Job, u float64, settle time.Duration) {
+	if job.Immediate() {
+		e.applier.Apply(job, u)
+	} else {
+		e.debouncer.Debounce(jobKey(job), settle, func() { e.applier.Apply(job, u) })
+	}
+}
+
+// UnmuteAll puts every muted column's jobs back to its position, with no HUD, and reports how
+// many were muted.
+func (e *Engine) UnmuteAll(setup Setup) int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	n := len(e.muted)
+	mapping := setup.Mapping()
+	settle := setup.Speed.Settle()
+	for col := range e.muted {
+		if last, ok := e.lastApplied[col]; ok {
+			for _, job := range mapping[col] {
+				e.apply(job, last, settle)
+			}
+		}
+	}
+	e.muted = map[int]bool{}
+	return n
+}
+
+func (e *Engine) ToggleMute(col int, setup Setup) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	muted := !e.muted[col]
+	if muted {
+		e.muted[col] = true
+	} else {
+		delete(e.muted, col)
+	}
+	u := 0.0
+	if !muted {
+		last, ok := e.lastApplied[col]
+		if !ok {
+			return false
+		}
+		u = last
+	}
+
+	jobs := setup.Mapping()[col]
+	settle := setup.Speed.Settle()
+	shown := map[string]bool{}
+	for _, job := range jobs {
+		e.apply(job, u, settle)
+		if d := displayKey(job); !shown[d] {
+			shown[d] = true
+			e.applier.HUD(job, u)
+		}
+	}
+	for i, ln := range e.lines {
+		if slices.Contains(jobs, ln.Job) {
+			e.lines[i].Percent = Percent(u)
+		}
+	}
+	return muted
 }
 
 func (e *Engine) Lines() []Line {

@@ -1,6 +1,6 @@
 ---
 name: WeeJ
-description: A Windows 11 tray companion app for a DIY knob box; its four WebView2 windows execute the Windows 11 Settings app's own Fluent language rather than inventing one.
+description: A Windows 11 tray companion app for DIY knob boxes and MIDI mixers; its three WebView2 windows execute the Windows 11 Settings app's own Fluent language rather than inventing one.
 colors:
   accent: "#0078d4"
   accent-text-light: "#ffffff"
@@ -19,6 +19,8 @@ colors:
   danger-dark: "#ff99a4"
   warning-light: "#9d5d00"
   warning-dark: "#ffb956"
+  success-light: "#0f7b0f"
+  success-dark: "#6ccb5f"
   scrim: "rgba(0, 0, 0, 0.35)"
 typography:
   label:
@@ -82,11 +84,11 @@ components:
 
 **Creative North Star: "The Settings App You Already Trust"**
 
-WeeJ's four windows (Settings, Calibration, the first-run Language prompt, Update progress) are not a brand exercise. The brief pinned the direction before any design round could run: look and behave like the Windows 11 Settings app itself, in both OS themes, following the OS accent color. The system here is Fluent executed faithfully, not Fluent as inspiration. Nothing in these pages should let a Windows 11 user guess they are looking at HTML.
+WeeJ's three windows (Settings, the first-run Language prompt, Update progress) are not a brand exercise. The brief pinned the direction before any design round could run: look and behave like the Windows 11 Settings app itself, in both OS themes, following the OS accent color. The system here is Fluent executed faithfully, not Fluent as inspiration. Nothing in these pages should let a Windows 11 user guess they are looking at HTML.
 
-That constraint shapes everything. Density stays native-Settings: grouped cards of rows (SettingsCard), a left label plus a right-aligned control, hairline dividers between rows, generous but not loose vertical rhythm between groups. Color stays restrained to the bone: the accent appears only on the primary action, the active tab's underline, a focused toggle, and nothing else. Depth is almost entirely absent; a 1px border carries every card, and the one flyout (the per-knob job picker) is the only element that earns a shadow, because it is the only thing that floats above the page rather than sitting in it.
+That constraint shapes everything. Density stays native-Settings: grouped cards of rows (SettingsCard), a left label plus a right-aligned control, hairline dividers between rows, generous but not loose vertical rhythm between groups. Color stays restrained to the bone: the accent appears only on the primary action, the active tab's underline, a focused toggle, and nothing else. Depth is almost entirely absent; a 1px border carries every card, and only what floats above the page (the job picker, the dialogs) earns a shadow.
 
-The four windows share one visual system (one stylesheet, one component set) but differ in posture: Settings is a working document (tabs, dense rows, two persistent footer actions), while Calibration, Language and Update are small, centered, single-purpose moments with no chrome beyond a title, body text and one or two buttons.
+The three windows share one visual system (one stylesheet, one component set) but differ in posture: Settings is a working document (tabs, dense rows, two persistent footer actions) with its few dialogs (a board's settings, Add board, calibration, confirm), while Language and Update are small, centered, single-purpose moments with no chrome beyond a title, body text and one or two buttons.
 
 **Key Characteristics:**
 - Segoe UI Variable throughout; no secondary/display typeface
@@ -100,15 +102,16 @@ The four windows share one visual system (one stylesheet, one component set) but
 Restrained by the brief, not by default: a single accent carries every call to action, every selection state and nothing else.
 
 ### Primary
-- **Windows Accent** (`#0078d4` fallback; the real value arrives live from `sys.Accent()` via the `theme` message): the Apply/Continue/Reopen primary buttons, the active tab's underline, a checked toggle or checkbox, and the focus ring on interactive controls. Never used for body text or decoration.
+- **Windows Accent** (`#0078d4` fallback; the real value arrives live from `sys.Accent()` via the `theme` message): the Apply/Continue/Next/Finish primary buttons, the active tab's underline, a checked toggle or checkbox, the outline of the control picked on a drawn board, and the focus ring on interactive controls. Never used for body text or decoration.
 
 ### Neutral
 - **Mica Ground** (`#f3f3f3` light / `#202020` dark): the window background, standing in for the native Mica backdrop the host applies to the HWND itself (see Elevation & Depth).
 - **Card Surface** (`#fbfbfb` light / `#2c2c2c` dark): every SettingsCard, the job-picker flyout, and confirm dialogs.
 - **Control Surface** (`#ffffff` light / `#2c2c2c` dark): text inputs, selects, and secondary buttons, one step brighter than the card they usually sit inside.
 - **Primary Text** (`#1a1a1a` light / `#ffffff` dark) and **Secondary Text** (`#5d5d5d` light / `#c5c5c5` dark): row titles versus row descriptions/hints; both verified at or above 4.5:1 against their surface.
-- **Danger** (`#c42b1c` light / `#ff99a4` dark): the "Needs calibration" row note and the remove-profile/remove-knob dialog's destructive action.
-- **Warning** (`#9d5d00` light / `#ffb956` dark): the Calibration window's progress line when Go marks a step `warning: true` (a wrong knob, a paused countdown).
+- **Danger** (`#c42b1c` light / `#ff99a4` dark): Remove board and the remove dialogs' destructive action, and a port another app holds.
+- **Warning** (`#9d5d00` light / `#ffb956` dark): the calibration dialog's warning line (a control already found, a press on another button, nothing moved between 0% and 100%).
+- **Success** (`#0f7b0f` light / `#6ccb5f` dark): a board's Connected status, the one place a state is shown in color as well as words.
 
 ### Named Rules
 **The One Signal Rule.** The accent color appears on exactly the controls that are either the primary action or currently selected/on. It never fills a card, a background, or decorative chrome: Windows Settings uses it as a pointer, not a paint.
@@ -120,10 +123,10 @@ Restrained by the brief, not by default: a single accent carries every call to a
 **Character:** A single system sans at a tight, product-appropriate scale (1.0-1.43 ratio between steps), never a display face standing in for brand voice.
 
 ### Hierarchy
-- **Title** (600, 20px, 1.3): the one page-level heading at the top of Settings, and the equivalent heading in the Calibration/Language/Update windows.
-- **Subtitle** (600, 14px, 1.3): group headers above a card ("Profiles", "Knobs", "Shortcuts") and the dialog title.
+- **Title** (600, 20px, 1.3): the one page-level heading at the top of Settings, and the equivalent heading in the Language/Update windows.
+- **Subtitle** (600, 14px, 1.3): group headers above a card ("Boards", "Profile", "Knobs"), the dialog title, and the calibration dialog's instruction.
 - **Body** (400, 14px, 1.4): row titles, button labels, input text, dialog body copy.
-- **Caption** (400, 12px, 1.4): row descriptions/hints, the calibration progress line.
+- **Caption** (400, 12px, 1.4): row descriptions/hints, a board's status, the calibration counter.
 - **Label** (600, 10px, 1, +0.02em, uppercase): the one place type drops below Caption, the "Experimental" badge next to the Night light job in the picker; reserved for that single chip role, not a general-purpose tiny-text size.
 
 ### Named Rules
@@ -131,16 +134,16 @@ Restrained by the brief, not by default: a single accent carries every call to a
 
 ## Layout
 
-Each window is a single-column flex layout, not a grid: `.app` (Settings) or `.center-page` (the other three) stacks its children top to bottom with a consistent gap, padded 20px top / 24px sides and bottom. There is no responsive breakpoint system, because these are fixed-width native windows, not a webpage; the only layout adaptation is vertical, where the page reports its own rendered height to the host after every change and the host resizes the window's client area to match, capped to the primary monitor's work area (the page then scrolls past that cap).
+Each window stacks its children top to bottom with a consistent gap: `.app` (Settings) or `.center-page` (the other two). Settings is the one window that can be resized and maximized. Until the user does either, the page reports its own rendered height to the host after every change and the host resizes the window's client area to match, capped to the work area; once sized by hand or maximized, it keeps its size and the page scrolls. General is a single list at most 640px wide, centered, so a wide window never stretches its rows. Its one breakpoint, at 760px, folds the side-by-side layouts (a board's drawing beside its panel, List's three cards) into a single column.
 
-Settings uses a persistent two-button footer (`position: sticky; bottom: 0`) so Close/Apply stay reachable regardless of tab content length. The three single-purpose windows center their content both axes, with a fixed 320px measure for body copy so translated strings with longer average length (German, Russian, Polish) still read comfortably.
+Settings fills its window, and its two-button footer sits at the bottom of it (`position: sticky; bottom: 0`), so Close/Apply stay in the same place whatever the tab's length. The two single-purpose windows center their content both axes, with a fixed 320px measure for body copy so translated strings with longer average length (German, Russian, Polish) still read comfortably.
 
 ## Elevation & Depth
 
 Mostly flat, by the brief's own evidence (Windows 11 Settings is a Mica surface with hairline cards, not a shadow-heavy system). The window's native Mica backdrop is requested by the host at the HWND level (`DWMWA_SYSTEMBACKDROP_TYPE`); the page content itself renders as fully opaque cards in a solid approximation of that Mica tone, so the page looks correct standing alone (including in a plain browser preview) rather than depending on true backdrop blending.
 
 ### Shadow Vocabulary
-- **Flyout** (`0 4px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.08)`): the only shadow in the system, reserved for the confirm dialogs, which visually float above the page rather than belong to it. The job picker floats too, but as a window of its own, so Windows draws its shadow.
+- **Flyout** (`0 4px 16px rgba(0,0,0,.14), 0 0 2px rgba(0,0,0,.08)`): the only shadow in the system, reserved for the dialogs and the Boards toolbar's ⋯ menu, which visually float above the page rather than belong to it. The job picker floats too, but as a window of its own, so Windows draws its shadow.
 
 ### Named Rules
 **The Flat-At-Rest Rule.** Every card, row, button and input is flat with a 1px border at rest. A shadow appears only on a surface that is actually layered above the page (a flyout, a dialog), never on a card that merely wants emphasis.
@@ -153,11 +156,11 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 
 ### Buttons
 - **Shape:** 6px radius, 1px border, 7px/14px padding.
-- **Order:** Windows' commit order, right-aligned: the action first, then Cancel or Close, with Apply last of all. So Settings reads Close · Apply, Calibration reads Skip/Finish · Cancel, and the confirm dialogs read Remove · Cancel.
-- **Primary** (Apply, Continue, Reopen-when-done): accent background, white text; disabled state drops to the neutral control-border color so it reads as inert rather than a dimmed accent.
-- **Secondary** (Close, Cancel, Skip, Record Shortcut): control-surface background with a hairline border; hover shifts to the card-hover tint.
-- **Icon** (+/- on profiles and knobs): 30x30px square, same radius and border language as a secondary button.
-- **Link** (Calibrate, Website, Made by, Inspired by): accent text, no border, underline on hover/focus only.
+- **Order:** Windows' commit order, right-aligned: the action first, then Cancel or Close, with Apply last of all. So Settings reads Close · Apply, the confirm dialogs read Remove · Cancel, and a board's settings put Remove board alone on the left.
+- **Primary** (Apply, Continue, Next, Finish, Save): accent background, white text; disabled state drops to the neutral control-border color so it reads as inert rather than a dimmed accent.
+- **Secondary** (Close, Cancel, Skip, Start again, Record Shortcut, Calibrate): control-surface background with a hairline border; hover shifts to the card-hover tint.
+- **Icon** (+/- on profiles and controls, the gear, the arrows that move a drawn control): 30x30px square, same radius and border language as a secondary button.
+- **Link** (Website, Made by, Inspired by): accent text, no border, underline on hover/focus only.
 
 ### Cards / Containers (SettingsCard)
 - **Corner Style:** 8px.
@@ -180,14 +183,25 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - **Style:** Card Surface, a borderless popup window of its own (`jobs.html`) that Windows rounds to 8px and shadows like a menu.
 - **Behavior:** it opens beside the knob's card the way a submenu does: to the right, or to the left when the screen has no room there, its top level with the knob's row and moved up as far as the screen needs. It is up to 490px tall and 280px wide, past the Settings window's own edge; a longer list scrolls. It is made once, hidden, when Settings loads, and only hides between opens, so it opens at once. Section headers (Volume, Brightness, ...) group its checklist exactly as Go's catalog orders them, with Clear first and Other... last. Every tick goes straight back to Settings; Escape, a click anywhere else, or a second click on the same knob closes it.
 
-### Knob reorder
-- **Grip:** six dots in secondary text at the left of every knob row, the Windows sign that a row can be dragged; no label. The cursor is a grab hand over it.
-- **Behavior:** dragging the grip lifts the row like a card (the hover tint plus the flyout shadow) and the rows it passes slide out of its way. The knob letters stay in order top to bottom, because the knobs, their inputs and calibration stay put and only the jobs move. A row gives way once the dragged row's leading edge passes its middle. Alt+Up and Alt+Down move the focused row one place. It changes the profile shown, applied with Apply like any other edit, and a plain click on the grip opens the job menu as the rest of the row does.
+### Board row (General)
+- A row in the Boards card: the on/off toggle at its left, the board's name, its status (Connected in Success, Disconnected or Off in secondary text) and an icon-button gear at its right that opens the board's settings.
+
+### Drawn board (Boards tab, Draw)
+- An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. Beside the drawing, the inspector is one card, headed by the control picked and Clear, its list scrolling below; its top is level with the drawing's. On a DIY or MIDI board a gear between Draw and List turns on four arrows laid out as a keyboard's (up above left, down and right) that move the control picked.
+
+### List (Boards tab, List)
+- Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions, ten rows at most before the card scrolls; a row takes the selection tint while its control moves or is pressed.
+
+### Calibration dialog
+- First the 0% and the 100% readings, each an instruction in subtitle type with Next as the primary button. Then one control at a time: the step count, the instruction, a press counter for a button, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.
+
+### Shortcut keys
+- A set shortcut shows each key as a keycap inside its button: a small raised face (`--keycap-bg`) with a hairline edge (`--keycap-border`) a pixel thicker at the bottom, caption type at 600 weight, arrows drawn as ← ↑ → ↓. A refused combination turns the button's text to the Warning color and says why.
 
 ### Tabs (Settings' Pivot)
-- Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge.
+- Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab has one toolbar instead: the board and profile menus, a ⋯ flyout menu (the profile's dialog, add, remove, import, export, the board's settings), and Draw | List at its right end.
 
-### Dialog (confirm sheets)
+### Dialog (confirm sheets, a board's settings, Add board, calibration)
 - Centered over the Scrim color (`rgba(0, 0, 0, 0.35)`, the one color in the system not tied to light/dark since a dimming layer reads the same over either), Card Surface, the system's one shadow, title (subtitle type) + body (secondary text) + right-aligned Cancel/destructive-action button pair.
 
 ## Do's and Don'ts

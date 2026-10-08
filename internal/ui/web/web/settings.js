@@ -1,167 +1,80 @@
 import { connect, send, t } from "./bridge.js";
+import {
+  fitLists,
+  moveControl,
+  picked,
+  pressed,
+  renderBoards,
+  select,
+  showValues,
+  touched,
+} from "./boards.js";
+import { openAdd, openGear, refreshGearPorts, renderDialog } from "./dialogs.js";
+import { renderGeneral } from "./general.js";
+import {
+  BUTTON_MENU_BASE,
+  jobKey,
+  onPick,
+  openButtonMenu,
+  openJobMenu,
+  replaceKind,
+  toggleAction,
+  toggleJob,
+} from "./pickers.js";
+import {
+  S,
+  activeProfile,
+  buttonKey,
+  clampIndex,
+  clone,
+  currentBoard,
+  deviceById,
+  esc,
+  escAttr,
+  isButton,
+  jobsOf,
+  setActions,
+} from "./state.js";
 
-// A 1x1 transparent GIF: the About tab's icon falls back to this rather than an
-// empty src, which some browsers render as a visible broken-image box.
-const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
-
-// --- State --------------------------------------------------------------
-// init: the last full "init"/"saved"/"imported" payload (catalog, languages,
-// iconPreviews, labels, version, website...). draft: the mutable core.Setup
-// JSON being edited; draft.profile doubles as "which profile the editor shows"
-// and "which profile core treats as active", since Settings has only one picker
-// for both. Nothing here is sent to Go except on an explicit protocol message.
-let init = null;
-let draft = null;
-let labels = {};
-let activeTab = "general";
-let recording = null; // { field: "profile:<i>" | "next" | "previous" }
-let dialog = null; // { kind: "removeProfile" | "removeKnob" }
-let saved = null; // the setup as last saved, so Save is enabled only when the draft differs
-let importNote = ""; // last import_skipped / import_failed text, shown under the import button
-let ports = null; // [{ name, product, usb }] once Go has listed them
-let connection = { connected: false, busy: false, port: "" };
-
-const SECTION_LABEL_KEY = {
-  volume: "section.volume",
-  brightness: "section.brightness",
-  contrast: "section.contrast",
-  nightLight: "section.night_light",
-  keyboard: "section.keyboard",
-  zoom: "section.zoom",
-  apps: "section.apps",
-};
-
-// --- Small helpers --------------------------------------------------------
-
-function clone(v) {
-  return JSON.parse(JSON.stringify(v));
-}
-
-function esc(s) {
-  return String(s == null ? "" : s).replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])
-  );
-}
-const escAttr = esc;
-
-// A to Z, then A2 to Z2, A3 and so on, as core.Letter names them.
-function letterFor(i) {
-  return String.fromCharCode(65 + (i % 26)) + (i >= 26 ? String(Math.floor(i / 26) + 1) : "");
-}
-
-function clip(name, limit) {
-  if (!name) return name;
-  const chars = Array.from(name);
-  if (chars.length <= limit) return name;
-  return chars.slice(0, limit - 1).join("").trimEnd() + "…";
-}
-
-function clampIndex(i, len) {
-  if (len <= 0) return 0;
-  if (i < 0 || i >= len) return 0;
-  return i;
-}
-
-function jobKey(job) {
-  if (job.kind === "brightness" || job.kind === "contrast") return job.kind + ":" + job.screen;
-  if (job.kind === "app") return job.kind + ":" + job.exe;
-  return job.kind;
-}
-
-function hasJob(jobs, job) {
-  const k = jobKey(job);
-  return jobs.some((j) => jobKey(j) === k);
-}
-
-function jobTitleFor(job) {
-  const k = jobKey(job);
-  const entry = init.catalog.find((c) => jobKey(c.job) === k);
-  return entry ? entry.short : job.kind;
-}
-
-function jobEntryFor(job) {
-  const k = jobKey(job);
-  return init.catalog.find((c) => jobKey(c.job) === k) || null;
-}
-
-function jobLines(jobs) {
-  if (!jobs.length) return `<span class="job-line muted">${esc(t("job.nothing"))}</span>`;
-  return jobs
-    .map((job) => {
-      const entry = jobEntryFor(job);
-      const title = entry ? entry.title : job.exe || job.kind;
-      const icon = entry && entry.icon ? `<img src="${entry.icon}" alt="" />` : "";
-      return `<span class="job-line">${icon}<span>${esc(title)}</span></span>`;
-    })
-    .join("");
-}
-
-function jobsSummary(jobs) {
-  return jobs.map(jobTitleFor).join(", ");
-}
-
-function sectionsFromCatalog() {
-  const bySection = new Map();
-  for (const entry of init.catalog) {
-    if (!bySection.has(entry.section)) bySection.set(entry.section, []);
-    bySection.get(entry.section).push(entry);
-  }
-  return bySection;
-}
-
-function shortcutKeyJSON(s) {
-  if (!s) return null;
-  // Field order must match Go's json.Marshal of core.Shortcut{VK,Mods,Key}, since
-  // that encoded string is the literal key into init.labels.
-  return JSON.stringify({ vk: s.vk, mods: s.mods, key: s.key });
-}
-
-function shortcutLabel(s) {
-  if (!s) return null;
-  return labels[shortcutKeyJSON(s)] || s.key || "";
-}
-
-function activeProfile() {
-  return draft.profiles[draft.profile];
-}
+// A 1x1 transparent GIF: the About tab's icon falls back to this rather than an empty src, which
+// some browsers render as a visible broken-image box.
+const TRANSPARENT_PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
 
 // --- Rendering ------------------------------------------------------------
 
 function render() {
   const focusedId = document.activeElement && document.activeElement.id;
 
-  // The dialog is appended fresh below, not patched in place: drop any previous
-  // copy first, or every render while one is open would stack another on top.
+  // The dialog is appended fresh below, not patched in place: drop any previous copy first, or
+  // every render while one is open would stack another on top.
   document.querySelectorAll(".dialog-scrim").forEach((el) => el.remove());
 
   document.getElementById("page-title").textContent = t("settings");
   renderTabs();
   renderFooter();
-  if (activeTab === "app") renderApp();
-  else if (activeTab === "connection") renderConnection();
-  else if (activeTab === "about") renderAbout();
+  if (S.tab === "boards") renderBoards();
+  else if (S.tab === "about") renderAbout();
   else renderGeneral();
 
-  if (dialog) renderDialog();
+  if (S.dialog) renderDialog();
 
   if (focusedId) {
     const el = document.getElementById(focusedId);
     if (el) el.focus({ preventScroll: true });
   }
 }
+S.render = render;
 
 function renderTabs() {
   const tabs = [
     ["general", t("tab.general")],
-    ["app", t("tab.app")],
-    ["connection", t("tab.connection")],
+    ["boards", t("tab.boards")],
     ["about", t("tab.about")],
   ];
   document.getElementById("tabs").innerHTML = tabs
     .map(
       ([id, label]) =>
-        `<button class="tab" type="button" role="tab" data-action="switch-tab" data-tab="${id}" aria-selected="${id === activeTab}">${esc(label)}</button>`
+        `<button class="tab" type="button" role="tab" data-action="switch-tab" data-tab="${id}" aria-selected="${id === S.tab}">${esc(label)}</button>`
     )
     .join("");
 }
@@ -172,283 +85,22 @@ function renderFooter() {
   updateSaveButton();
 }
 
-// Language applies, and is saved, the moment it is picked, so it never waits for Save.
-function comparable(setup) {
-  return JSON.stringify({ ...setup, language: undefined });
+// Language is saved the moment it is picked, so it never waits for Apply, nor does a board's
+// Draw or List.
+function comparable(settings) {
+  return JSON.stringify({
+    ...settings,
+    language: undefined,
+    devices: (settings.devices || []).map((d) => ({ ...d, view: undefined })),
+  });
 }
 
 function hasChanges() {
-  return !!draft && !!saved && comparable(draft) !== comparable(saved);
+  return !!S.draft && !!S.saved && comparable(S.draft) !== comparable(S.saved);
 }
 
-// Comparing with the saved setup, rather than noting that something was edited, also turns
-// Save off again when an edit is undone by hand.
 function updateSaveButton() {
   document.getElementById("btn-save").disabled = !hasChanges();
-}
-
-function shortcutControl(field, shortcut) {
-  const isRecording = recording && recording.field === field;
-  const label = isRecording ? t("press_shortcut") : shortcut ? shortcutLabel(shortcut) : t("record_shortcut");
-  const removeBtn =
-    shortcut && !isRecording
-      ? `<button class="btn btn-icon btn-subtle" type="button" data-action="remove-shortcut" data-field="${escAttr(field)}" title="${escAttr(t("remove_shortcut"))}" aria-label="${escAttr(t("remove_shortcut"))}">&times;</button>`
-      : "";
-  return `<button class="btn" type="button" data-action="record" data-field="${escAttr(field)}">${esc(label)}</button>${removeBtn}`;
-}
-
-function renderGeneral() {
-  const profile = activeProfile();
-  const profileOptions = draft.profiles
-    .map(
-      (p, i) =>
-        `<option value="${i}"${i === draft.profile ? " selected" : ""}>${esc(clip(p.name || t("profile_n", { n: String(i + 1) }), 30))}</option>`
-    )
-    .join("");
-
-  const knobsHtml = draft.columns.length
-    ? draft.columns
-        .map((col, i) => {
-          const jobs = profile.jobs[i] || [];
-          const needsCal = col === null || col === undefined || col === -1;
-          return `
-            <div class="row clickable knob-row" id="knob-row-${i}" role="button" tabindex="0" data-action="open-job-menu" data-knob="${i}">
-              <span class="knob-grip" aria-hidden="true">${GRIP_ICON}</span>
-              <div class="row-main">
-                <span class="row-title">${esc(t("knob", { letter: letterFor(i) }))}</span>
-                ${needsCal ? `<span class="row-desc warning">${esc(t("needs_calibration"))}</span>` : ""}
-              </div>
-              <div class="row-control">
-                <div class="job-list">${jobLines(jobs)}</div>
-                <span class="chev" aria-hidden="true">&#x2304;</span>
-              </div>
-            </div>`;
-        })
-        .join("")
-    : `<div class="row"><span class="row-desc">${esc(t("no_knobs"))}</span></div>`;
-
-  document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel">
-      <div class="group">
-        <div class="group-head">
-          <h2 class="group-title">${esc(t("profile"))}</h2>
-          <select class="select select-inline" id="profile-select">${profileOptions}</select>
-          <span class="spacer"></span>
-          <span class="segmented">
-            <button class="btn btn-icon" type="button" data-action="add-profile" title="${escAttr(t("add_profile"))}" aria-label="${escAttr(t("add_profile"))}">+</button>
-            <button class="btn btn-icon" type="button" data-action="remove-profile" title="${escAttr(t("remove_profile"))}" aria-label="${escAttr(t("remove_profile"))}"${draft.profiles.length <= 1 ? " disabled" : ""}>&minus;</button>
-          </span>
-        </div>
-        <div class="card">
-          <div class="row">
-            <div class="row-main"><span class="row-title">${esc(t("name"))}</span></div>
-            <div class="row-control">
-              <input class="input input-name" id="profile-name" type="text" value="${escAttr(profile.name)}" placeholder="${escAttr(t("profile_n", { n: String(draft.profile + 1) }))}" />
-            </div>
-          </div>
-          <div class="row">
-            <div class="row-main"><span class="row-title">${esc(t("shortcut"))}</span></div>
-            <div class="row-control">${shortcutControl("profile:" + draft.profile, profile.shortcut)}</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="group">
-        <div class="group-head">
-          <h2 class="group-title">${esc(t("knobs"))}</h2>
-          <span class="spacer"></span>
-          <span class="segmented">
-            <button class="btn btn-icon" type="button" data-action="add-knob" title="${escAttr(t("add_knob"))}" aria-label="${escAttr(t("add_knob"))}">+</button>
-            <button class="btn btn-icon" type="button" data-action="remove-knob" title="${escAttr(t("remove_knob"))}" aria-label="${escAttr(t("remove_knob"))}"${draft.columns.length === 0 ? " disabled" : ""}>&minus;</button>
-          </span>
-        </div>
-        <div class="card">${knobsHtml}</div>
-        <div class="group-foot">
-          <span class="group-note">${esc(t("jobs_note"))}</span>
-          <button class="btn" type="button" data-action="calibrate">${esc(t("calibrate"))}</button>
-        </div>
-      </div>
-
-      <div class="group">
-        <div class="card">
-          <div class="row">
-            <div class="row-main">
-              <span class="row-title">${esc(t("invert"))}</span>
-              <span class="row-desc">${esc(t("invert_note"))}</span>
-            </div>
-            <div class="row-control"><input class="toggle" id="invert" type="checkbox" role="switch"${draft.invertKnobs ? " checked" : ""} /></div>
-          </div>
-        </div>
-        <div class="group-foot end">
-          ${importNote ? `<span class="group-note">${esc(importNote)}</span>` : ""}
-          <button class="btn" type="button" data-action="import-deej">${esc(t("import_deej"))}</button>
-        </div>
-      </div>
-    </div>`;
-}
-
-function renderApp() {
-  const langOptions = (init.languages || [])
-    .map((l) => `<option value="${escAttr(l.code)}"${l.code === draft.language ? " selected" : ""}>${esc(l.name)}</option>`)
-    .join("");
-
-  const profileShortcuts = draft.profiles
-    .map(
-      (p, i) => `
-      <div class="row">
-        <div class="row-main"><span class="row-title">${esc(p.name || t("profile_n", { n: String(i + 1) }))}</span></div>
-        <div class="row-control">${shortcutControl("profile:" + i, p.shortcut)}</div>
-      </div>`
-    )
-    .join("");
-
-  const trayPreview =
-    init.iconPreviews && init.iconPreviews[draft.trayIcon]
-      ? `<img src="${init.iconPreviews[draft.trayIcon]}" alt="" data-style="width:20px;height:20px;border-radius:4px;" />`
-      : "";
-  const iconOptions = ["mixer", "dial", "app"]
-    .map((style) => `<option value="${style}"${draft.trayIcon === style ? " selected" : ""}>${esc(t("icon." + style))}</option>`)
-    .join("");
-  const speedOptions = ["slow", "medium", "fast", "superFast"]
-    .map((s) => `<option value="${s}"${draft.speed === s ? " selected" : ""}>${esc(t("speed." + s))}</option>`)
-    .join("");
-
-  document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel">
-      <div class="group">
-        <div class="card">
-          <div class="row">
-            <div class="row-main"><span class="row-title">${esc(t("language"))}</span></div>
-            <div class="row-control"><select class="select" id="language-select">${langOptions}</select></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="group">
-        <h2 class="group-title">${esc(t("shortcuts"))}</h2>
-        <div class="card">
-          <div class="row">
-            <div class="row-main"><span class="row-title">${esc(t("next_profile"))}</span></div>
-            <div class="row-control">${shortcutControl("next", draft.nextProfile)}</div>
-          </div>
-          <div class="row">
-            <div class="row-main"><span class="row-title">${esc(t("previous_profile"))}</span></div>
-            <div class="row-control">${shortcutControl("previous", draft.previousProfile)}</div>
-          </div>
-          ${profileShortcuts}
-        </div>
-      </div>
-
-      <div class="group">
-        <h2 class="group-title">${esc(t("tray"))}</h2>
-        <div class="card">
-          <div class="row">
-            <div class="row-main">
-              <span class="row-title">${esc(t("hide_icon"))}</span>
-              <span class="row-desc">${esc(t("hide_icon_note"))}</span>
-            </div>
-            <div class="row-control"><input class="toggle" id="hide-icon" type="checkbox" role="switch"${draft.hideTrayIcon ? " checked" : ""} /></div>
-          </div>
-          <div class="row">
-            <div class="row-main"><span class="row-title"${draft.hideTrayIcon ? ' data-style="color:var(--text-disabled)"' : ""}>${esc(t("icon"))}</span></div>
-            <div class="row-control">
-              ${trayPreview}
-              <select class="select" id="tray-icon-style"${draft.hideTrayIcon ? " disabled" : ""}>${iconOptions}</select>
-            </div>
-          </div>
-          <div class="row">
-            <div class="row-main"><span class="row-title"${draft.hideTrayIcon ? ' data-style="color:var(--text-disabled)"' : ""}>${esc(t("profile_list"))}</span></div>
-            <div class="row-control"><input class="toggle" id="show-profile-list" type="checkbox" role="switch"${draft.showProfileList ? " checked" : ""}${draft.hideTrayIcon ? " disabled" : ""} /></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="group">
-        <h2 class="group-title">${esc(t("sensitivity"))}</h2>
-        <div class="card">
-          <div class="row">
-            <div class="row-main">
-              <span class="row-title">${esc(t("speed"))}</span>
-              <span class="row-desc">${esc(t("speed_note"))}</span>
-            </div>
-            <div class="row-control"><select class="select" id="speed-select">${speedOptions}</select></div>
-          </div>
-        </div>
-      </div>
-    </div>`;
-}
-
-function portLabel(p) {
-  return p.product ? `${p.name} (${p.product})` : p.name;
-}
-
-function renderConnection() {
-  const forced = init.forcedPort || "";
-  const autoLabel =
-    !draft.port && connection.connected && connection.port ? t("port_auto_found", { port: connection.port }) : t("port_auto");
-  const list = ports || [];
-  let portOptions;
-  if (forced) {
-    portOptions = `<option selected>${esc(forced)}</option>`;
-  } else {
-    portOptions =
-      `<option value=""${draft.port ? "" : " selected"}>${esc(autoLabel)}</option>` +
-      list
-        .map((p) => `<option value="${escAttr(p.name)}"${draft.port === p.name ? " selected" : ""}>${esc(portLabel(p))}</option>`)
-        .join("");
-    // A saved port that is unplugged right now still has to show as the choice.
-    if (draft.port && !list.some((p) => p.name === draft.port)) {
-      portOptions += `<option value="${escAttr(draft.port)}" selected>${esc(draft.port)}</option>`;
-    }
-  }
-
-  const rates = (init.baudRates || [9600]).slice();
-  if (draft.baudRate && !rates.includes(draft.baudRate)) rates.push(draft.baudRate);
-  const baudOptions = rates
-    .map((r) => `<option value="${r}"${r === draft.baudRate ? " selected" : ""}>${r}</option>`)
-    .join("");
-
-  let status = t("not_connected");
-  let statusClass = "";
-  if (connection.connected) {
-    status = t("connected", { port: connection.port });
-    statusClass = " status-ok";
-  } else if (connection.busy && connection.port) {
-    status = t("port_busy", { port: connection.port });
-    statusClass = " warning";
-  }
-
-  document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel">
-      <div class="group">
-        <div class="card">
-          <div class="row">
-            <div class="row-main">
-              <span class="row-title">${esc(t("status"))}</span>
-              <span class="row-desc${statusClass}">${esc(status)}</span>
-            </div>
-            <div class="row-control"><button class="btn" type="button" data-action="reconnect">${esc(t("reconnect"))}</button></div>
-          </div>
-          <div class="row">
-            <div class="row-main">
-              <span class="row-title">${esc(t("port"))}</span>
-              <span class="row-desc">${esc(forced ? t("port_forced", { port: forced }) : t("port_note"))}</span>
-            </div>
-            <div class="row-control">
-              <button class="btn btn-icon btn-subtle" type="button" data-action="refresh-ports" title="${escAttr(t("refresh"))}" aria-label="${escAttr(t("refresh"))}"${forced ? " disabled" : ""}>&#x21bb;</button>
-              <select class="select" id="port-select"${forced ? " disabled" : ""}>${portOptions}</select>
-            </div>
-          </div>
-          <div class="row">
-            <div class="row-main">
-              <span class="row-title">${esc(t("baud_rate"))}</span>
-              <span class="row-desc">${esc(t("baud_note"))}</span>
-            </div>
-            <div class="row-control"><select class="select" id="baud-select">${baudOptions}</select></div>
-          </div>
-        </div>
-      </div>
-    </div>`;
 }
 
 function hostnameOf(url) {
@@ -460,226 +112,87 @@ function hostnameOf(url) {
 }
 
 function renderAbout() {
+  const init = S.init;
   document.getElementById("panel").innerHTML = `
-    <div class="tabpanel" role="tabpanel" data-style="align-items:center;text-align:center;padding-top:4px;gap:0;">
-      <img src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" data-style="border-radius:14px;" />
-      <h2 data-style="font:600 16px var(--font-display);margin:12px 0 0;">WeeJ</h2>
-      <p class="row-desc" data-style="margin-top:2px;">${esc(t("version", { version: init.version }))}</p>
-      <button class="btn" type="button" data-action="check-updates" data-style="margin-top:14px;">${esc(t("check"))}</button>
-      <p data-style="margin-top:20px;"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
-      <p class="row-desc" data-style="margin-top:6px;">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">${esc(hostnameOf(init.madeBy))}</a></p>
-      <p class="row-desc" data-style="margin-top:6px;">${esc(t("on_macos"))} <a href="#" data-action="open-url" data-url="${escAttr(init.theej)}">TheeJ</a></p>
-      <p class="row-desc" data-style="margin-top:6px;">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
+    <div class="tabpanel about" role="tabpanel">
+      <img class="about-icon" src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" />
+      <h2 class="about-name">WeeJ</h2>
+      <p class="row-desc">${esc(t("version", { version: init.version }))}</p>
+      <button class="btn about-check" type="button" data-action="check-updates">${esc(t("check"))}</button>
+      <p class="about-line"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
+      <p class="row-desc about-line">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">${esc(hostnameOf(init.madeBy))}</a></p>
+      <p class="row-desc about-line">${esc(t("on_macos"))} <a href="#" data-action="open-url" data-url="${escAttr(init.theej)}">TheeJ</a></p>
+      <p class="row-desc about-line">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
     </div>`;
 }
 
-// The job menu is a popup window of its own (jobs.html), so it can hang past this window's
-// edge. This page owns the list, the catalog and the knob's unsaved jobs, so it sends the
-// whole menu, and Go hands every tick back as jobMenuToggle or jobMenuClear.
-function openJobMenu(knob, row) {
-  const r = row.getBoundingClientRect();
-  const knobJobs = activeProfile().jobs[knob] || [];
-  const item = (entry) => ({
-    job: entry.job,
-    title: entry.title,
-    icon: entry.icon,
-    badge: entry.job.kind === "nightLight" && !!init.nightLightExperimental,
-    checked: hasJob(knobJobs, entry.job),
-  });
-  const bySection = sectionsFromCatalog();
-  const sections = [];
-  for (const [section, entries] of bySection) {
-    if (section === "apps") continue;
-    sections.push({ title: t(SECTION_LABEL_KEY[section] || ""), items: entries.map(item) });
-  }
-  sections.push({ title: t("section.apps"), items: (bySection.get("apps") || []).map(item), other: true });
-  send({
-    type: "openJobMenu",
-    knob,
-    anchor: { left: r.left, top: r.top, right: r.right, bottom: r.bottom },
-    model: { sections },
-  });
+// --- Saving -----------------------------------------------------------------
+
+function doSave() {
+  if (!hasChanges()) return;
+  send({ type: "save", settings: S.draft });
 }
 
-function renderDialog() {
-  let title, body;
-  if (dialog.kind === "removeProfile") {
-    const name = activeProfile().name;
-    title = name ? t("remove_named", { name }) : t("remove_this_profile");
-    body = t("remove_profile_info");
-  } else {
-    title = t("remove_knob_q", { letter: letterFor(draft.columns.length - 1) });
-    body = t("remove_knob_info");
-  }
-  const html = `
-    <div class="dialog-scrim" data-action="cancel-dialog">
-      <div class="dialog">
-        <div class="dialog-title">${esc(title)}</div>
-        <div class="dialog-body">${esc(body)}</div>
-        <div class="dialog-actions">
-          <button class="btn btn-primary btn-danger" type="button" data-action="confirm-dialog">${esc(t("remove"))}</button>
-          <button class="btn" type="button" data-action="cancel-dialog">${esc(t("cancel"))}</button>
-        </div>
-      </div>
-    </div>`;
-  document.getElementById("root").insertAdjacentHTML("beforeend", html);
+// saveBoard saves one board at once, with whatever the page has of it.
+function saveBoard(d) {
+  send({ type: "setDevice", device: d });
 }
 
-// --- Mutations --------------------------------------------------------------
-
-function addProfile() {
-  draft.profiles.push({ name: "", jobs: draft.columns.map(() => []), shortcut: null });
-  draft.profile = draft.profiles.length - 1;
+// Calibrating works on the board as saved, so the page's edits to it are saved first.
+function calibrate(d, controls) {
+  saveBoard(d);
+  S.dialog = { kind: "wizard", id: d.id };
+  send({ type: "calibrate", device: d.id, controls });
   render();
 }
 
-function removeProfileConfirmed() {
-  draft.profiles.splice(draft.profile, 1);
-  draft.profile = clampIndex(draft.profile, draft.profiles.length);
-}
-
-// --- Knob reorder -----------------------------------------------------------
-
-// Six dots, Windows' sign that a row can be dragged to a new place.
-const GRIP_ICON = `<svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.25"/><circle cx="6" cy="2" r="1.25"/><circle cx="2" cy="7" r="1.25"/><circle cx="6" cy="7" r="1.25"/><circle cx="2" cy="12" r="1.25"/><circle cx="6" cy="12" r="1.25"/></svg>`;
-
-const DRAG_THRESHOLD = 4;
-let drag = null; // { from, to, startY, pointerId, row, active, rows: [{ el, top, height }] }
-let swallowClick = false;
-
-// Moves a knob's jobs to another knob in the profile shown, the knobs in between shifting by
-// one, as cards in a list do. Knobs keep their letters, inputs and calibration.
-function moveKnobJobs(from, to) {
-  const jobs = activeProfile().jobs;
-  while (jobs.length < draft.columns.length) jobs.push([]);
-  const [moved] = jobs.splice(from, 1);
-  jobs.splice(to, 0, moved);
-}
-
-function onGripPointerDown(e) {
-  const grip = e.target.closest(".knob-grip");
-  if (!grip || e.button !== 0) return;
-  e.preventDefault();
-  const row = grip.closest(".knob-row");
-  const knob = Number(row.dataset.knob);
-  drag = { from: knob, to: knob, startY: e.clientY, pointerId: e.pointerId, row, active: false, rows: [] };
-  row.setPointerCapture(e.pointerId);
-}
-
-function onDragMove(e) {
-  if (!drag || e.pointerId !== drag.pointerId) return;
-  const dy = e.clientY - drag.startY;
-  if (!drag.active) {
-    if (Math.abs(dy) < DRAG_THRESHOLD) return;
-    drag.active = true;
-    drag.rows = [...document.querySelectorAll(".knob-row")].map((el) => {
-      const r = el.getBoundingClientRect();
-      return { el, top: r.top, height: r.height };
-    });
-    drag.row.classList.add("dragging");
-    drag.row.closest(".card").classList.add("reordering");
+// Puts a board Go saved into both copies, leaving the page's other edits as they are.
+function upsertDevice(dev) {
+  for (const s of [S.draft, S.saved]) {
+    if (!s) continue;
+    s.devices = s.devices || [];
+    const i = s.devices.findIndex((d) => d.id === dev.id);
+    if (i >= 0) s.devices[i] = clone(dev);
+    else s.devices.push(clone(dev));
   }
-  updateDrag(dy);
 }
 
-function updateDrag(dy) {
-  const { rows, from } = drag;
-  const self = rows[from];
-  const first = rows[0];
-  const last = rows[rows.length - 1];
-  const offset = Math.min(Math.max(dy, first.top - self.top), last.top + last.height - self.top - self.height);
-  // A row gives way once the dragged row's leading edge passes its middle, so a tall row can
-  // still reach the first and last places.
-  const top = self.top + offset;
-  const bottom = top + self.height;
-  let to = from;
-  rows.forEach((r, i) => {
-    const middle = r.top + r.height / 2;
-    if (i < from && top < middle) to--;
-    if (i > from && bottom > middle) to++;
-  });
-  drag.to = to;
-
-  // The rows slide, but the letters stay in order top to bottom: the jobs move, the knobs don't.
-  rows.forEach((r, i) => {
-    let shift = 0;
-    let slot = i;
-    if (i === from) {
-      shift = offset;
-      slot = to;
-    } else if (from < to && i > from && i <= to) {
-      shift = -self.height;
-      slot = i - 1;
-    } else if (from > to && i >= to && i < from) {
-      shift = self.height;
-      slot = i + 1;
-    }
-    r.el.style.transform = shift ? `translateY(${shift}px)` : "";
-    r.el.querySelector(".row-title").textContent = t("knob", { letter: letterFor(slot) });
-  });
-}
-
-function onDragEnd(e) {
-  if (!drag || e.pointerId !== drag.pointerId) return;
-  if (drag.active && e.type === "pointerup") updateDrag(e.clientY - drag.startY);
-  const { active, from, to } = drag;
-  drag = null;
-  if (!active) return; // a plain click on the grip opens the job menu like the rest of the row
-  // The click that ends a drag must not open the job menu. If none comes, the next one counts.
-  swallowClick = true;
-  setTimeout(() => (swallowClick = false), 0);
-  if (e.type === "pointerup" && to !== from) moveKnobJobs(from, to);
-  render();
-}
-
-function onKnobKeydown(e) {
-  if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
-  const row = e.target.closest && e.target.closest(".knob-row");
-  if (!row) return;
-  const from = Number(row.dataset.knob);
-  const to = from + (e.key === "ArrowUp" ? -1 : 1);
-  if (to < 0 || to >= draft.columns.length) return;
-  e.preventDefault();
-  moveKnobJobs(from, to);
-  render();
-  const moved = document.getElementById(`knob-row-${to}`);
-  if (moved) moved.focus();
-}
-
-function addKnob() {
-  draft.columns.push(-1);
-  for (const p of draft.profiles) p.jobs.push([]);
-  render();
-}
-
-function removeKnobConfirmed() {
-  draft.columns.pop();
-  for (const p of draft.profiles) p.jobs.pop();
-}
-
-function applyRecorded(field, shortcut) {
-  if (field === "next") draft.nextProfile = shortcut;
-  else if (field === "previous") draft.previousProfile = shortcut;
-  else if (field && field.indexOf("profile:") === 0) {
-    const i = parseInt(field.slice("profile:".length), 10);
-    if (draft.profiles[i]) draft.profiles[i].shortcut = shortcut;
+function removeDevice(id) {
+  for (const s of [S.draft, S.saved]) {
+    if (s) s.devices = (s.devices || []).filter((d) => d.id !== id);
   }
+  if (S.board === id) S.board = null;
+  if (S.dialog && S.dialog.id === id) S.dialog = null;
 }
 
 // --- Shortcut recording -----------------------------------------------------
 
-function currentDraftShortcuts() {
-  return {
-    profiles: draft.profiles.map((p) => p.shortcut || null),
-    next: draft.nextProfile || null,
-    previous: draft.previousProfile || null,
-  };
+// The board a shortcut being recorded belongs to: the gear's own copy while its dialog is open.
+function recordTarget(r) {
+  if (r.dialog && S.dialog && S.dialog.kind === "gear") return S.dialog.dev;
+  return deviceById(r.device);
+}
+
+function applyRecorded(r, shortcut) {
+  const d = recordTarget(r);
+  if (!d) return;
+  const field = r.field;
+  if (field === "next") d.nextProfile = shortcut;
+  else if (field === "previous") d.previousProfile = shortcut;
+  else if (field.indexOf("profile:") === 0) {
+    const i = parseInt(field.slice("profile:".length), 10);
+    if (d.profiles[i]) d.profiles[i].shortcut = shortcut;
+  } else if (field.indexOf("button:") === 0) {
+    const key = parseInt(field.slice("button:".length), 10);
+    replaceKind(d, key, shortcut ? `keys:${shortcut.mods}:${shortcut.vk}:${shortcut.key}` : "keys:");
+  }
 }
 
 const MODIFIER_KEYS = new Set(["Control", "Alt", "AltGraph", "Shift", "Meta", "OS"]);
 
 function onRecordKeydown(e) {
-  if (!recording) return;
+  const r = S.recording;
+  if (!r) return;
   e.preventDefault();
   e.stopPropagation();
   if (e.key === "Escape") {
@@ -689,22 +202,26 @@ function onRecordKeydown(e) {
   // Holding Ctrl or Alt fires a keydown for the modifier itself; wait for the real key.
   if (MODIFIER_KEYS.has(e.key)) return;
   const isClear = (e.key === "Delete" || e.key === "Backspace") && !e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey;
-  if (!isClear && !e.ctrlKey && !e.altKey) return; // wait for a real Ctrl/Alt chord
+  // A hotkey needs a Ctrl or Alt chord; a key a button presses can be any key.
+  if (!isClear && !e.ctrlKey && !e.altKey && r.field.indexOf("button:") !== 0) return;
+  const d = recordTarget(r);
   send({
     type: "key",
-    field: recording.field,
+    field: r.field,
     vk: e.keyCode,
     key: e.key,
     ctrl: e.ctrlKey,
     alt: e.altKey,
     shift: e.shiftKey,
     meta: e.metaKey,
-    draft: currentDraftShortcuts(),
+    draft: d
+      ? { profiles: d.profiles.map((p) => p.shortcut || null), next: d.nextProfile || null, previous: d.previousProfile || null }
+      : { profiles: [], next: null, previous: null },
   });
 }
 
-function startRecording(field) {
-  recording = { field };
+function startRecording(field, device, dialog) {
+  S.recording = { field, device, dialog };
   // Go releases the saved hotkeys meanwhile, or a chord already in use never reaches the page.
   send({ type: "record" });
   window.addEventListener("keydown", onRecordKeydown, true);
@@ -717,88 +234,207 @@ function onWindowBlurWhileRecording() {
 }
 
 function stopRecording(notifyGo) {
-  if (!recording) return;
+  if (!S.recording) return;
   window.removeEventListener("keydown", onRecordKeydown, true);
   window.removeEventListener("blur", onWindowBlurWhileRecording);
-  recording = null;
+  S.recording = null;
   if (notifyGo) send({ type: "stopRecording" });
   render();
 }
 
 // --- Events -----------------------------------------------------------------
 
-function doSave() {
-  if (!hasChanges()) return;
-  send({ type: "save", setup: draft });
+function board() {
+  return currentBoard();
 }
 
 function onClick(e) {
-  if (recording) {
-    const stillInside = e.target.closest(`[data-field="${recording.field}"]`);
+  if (S.recording) {
+    const r = S.recording;
+    const stillInside = e.target.closest(`[data-field="${r.field}"][data-device="${r.device}"]`);
     if (!stillInside) stopRecording(true);
   }
 
   const target = e.target.closest("[data-action]");
-  if (!target) return;
+  // Any click but the one on its own button closes the toolbar menu.
+  const closing = S.menu && !(target && target.dataset.action === "board-menu");
+  if (closing) S.menu = false;
+  if (!target) {
+    if (closing) render();
+    return;
+  }
+  const d = board();
 
   switch (target.dataset.action) {
     case "switch-tab":
-      activeTab = target.dataset.tab;
-      if (activeTab === "connection") send({ type: "listPorts" });
+      S.tab = target.dataset.tab;
       render();
       break;
-    case "add-profile":
-      addProfile();
+    case "board-tab":
+    case "open-board":
+      S.board = target.dataset.board;
+      S.tab = "boards";
+      render();
       break;
-    case "remove-profile":
-      if (draft.profiles.length > 1) {
-        dialog = { kind: "removeProfile" };
+    case "gear":
+      send({ type: "listPorts" });
+      openGear(target.dataset.board);
+      render();
+      break;
+    case "board-menu":
+      S.menu = !S.menu;
+      render();
+      break;
+    case "edit-profile":
+      if (d) S.dialog = { kind: "profile", id: d.id };
+      render();
+      break;
+    case "add-board":
+      send({ type: "listPorts" });
+      openAdd();
+      render();
+      break;
+    case "setup-count":
+      S.setup = { total: parseInt(target.dataset.count, 10), done: 0 };
+      send({ type: "listPorts" });
+      openAdd();
+      render();
+      break;
+    case "add-type":
+      S.dialog.type = target.dataset.type;
+      S.dialog.port = "";
+      if (S.dialog.type === "smc") S.dialog.port = (S.midiInputs || []).find((n) => n.toLowerCase().includes("smc-mixer")) || "";
+      render();
+      break;
+    case "add-confirm": {
+      const a = S.dialog;
+      S.dialog = { kind: "adding", type: a.type, counted: a.type !== "smc" };
+      send({
+        type: "addDevice",
+        name: a.name.trim(),
+        deviceType: a.type,
+        port: a.port,
+        baudRate: a.baud,
+        knobs: a.knobs,
+        faders: a.faders,
+        buttons: a.buttons,
+      });
+      render();
+      break;
+    }
+    case "save-board": {
+      const dev = S.dialog.dev;
+      S.dialog = null;
+      saveBoard(dev);
+      render();
+      break;
+    }
+    case "remove-board":
+      S.dialog = { kind: "confirm", what: "board", id: S.dialog.id, back: S.dialog };
+      render();
+      break;
+    case "calibrate-board": {
+      const dev = S.dialog && S.dialog.kind === "gear" ? S.dialog.dev : d;
+      if (dev) calibrate(dev);
+      break;
+    }
+    case "arrange":
+      if (d) {
+        S.arrange[d.id] = !S.arrange[d.id];
         render();
       }
       break;
-    case "add-knob":
-      addKnob();
+    case "wizard-op":
+      send({ type: "wizard", op: target.dataset.op });
       break;
-    case "remove-knob":
-      if (draft.columns.length > 0) {
-        dialog = { kind: "removeKnob" };
+    case "set-view":
+      if (d) {
+        d.view = target.dataset.view;
+        const saved = deviceById(d.id, S.saved);
+        if (saved) saved.view = d.view;
+        saveBoard(d);
+        render();
+      }
+      break;
+    case "add-profile":
+      if (d) {
+        const p = { name: "", jobs: d.controls.map(() => []), buttons: {}, shortcut: null };
+        d.profiles.push(p);
+        d.profile = d.profiles.length - 1;
+        render();
+      }
+      break;
+    case "remove-profile":
+      if (d && d.profiles.length > 1) {
+        S.dialog = { kind: "confirm", what: "profile", id: d.id };
         render();
       }
       break;
     case "confirm-dialog":
-      if (dialog && dialog.kind === "removeProfile") removeProfileConfirmed();
-      else if (dialog && dialog.kind === "removeKnob") removeKnobConfirmed();
-      dialog = null;
+      confirmDialog();
       render();
       break;
     case "cancel-dialog":
-      dialog = null;
+      if (S.dialog && S.dialog.kind === "add") S.setup = null;
+      S.dialog = S.dialog && S.dialog.back ? S.dialog.back : null;
       render();
       break;
+    case "select-control":
+      if (d) select(d, parseInt(target.dataset.control, 10));
+      break;
     case "open-job-menu":
-      openJobMenu(parseInt(target.dataset.knob, 10), target);
+      if (d) openJobMenu(d, parseInt(target.dataset.control, 10), target);
+      break;
+    case "open-button-menu":
+      // Typing in a button's address box or clicking its own controls is not a click on the row.
+      if (d && !e.target.closest(".button-param")) openButtonMenu(d, parseInt(target.dataset.key, 10), target);
       break;
     case "record": {
+      const r = S.recording;
       const field = target.dataset.field;
-      if (recording && recording.field === field) stopRecording(true);
-      else startRecording(field);
+      const device = target.dataset.device;
+      const dialog = !!target.dataset.dialog;
+      if (r && r.field === field && r.device === device && r.dialog === dialog) stopRecording(true);
+      else startRecording(field, device, dialog);
       break;
     }
+    case "remove-shortcut":
+      applyRecorded({ field: target.dataset.field, device: target.dataset.device, dialog: !!target.dataset.dialog }, null);
+      render();
+      break;
+    case "pick-button-app":
+      send({ type: "pickApp", button: parseInt(target.dataset.key, 10), mode: target.dataset.mode });
+      break;
+    case "clear-control":
+      if (d) {
+        const k = picked(d);
+        if (isButton(d, k)) setActions(d, buttonKey(d, k), []);
+        else jobsOf(d, k).length = 0;
+        render();
+      }
+      break;
+    case "pick-control-app":
+      if (d) send({ type: "pickApp", knob: picked(d) });
+      break;
+    case "move-control":
+      if (d) {
+        moveControl(d, picked(d), target.dataset.dir);
+        render();
+      }
+      break;
     case "refresh-ports":
       send({ type: "listPorts" });
       break;
     case "reconnect":
-      send({ type: "reconnect" });
+      send({ type: "reconnect", device: target.dataset.board || (d && d.id) });
       break;
-    case "remove-shortcut":
-      applyRecorded(target.dataset.field, null);
+    case "import-profile":
+      if (d) send({ type: "importProfile", device: d.id });
       render();
       break;
-    case "calibrate":
-      send({ type: "calibrate" });
-      break;
-    case "import-deej":
-      send({ type: "importDeej" });
+    case "export-profile":
+      if (d) send({ type: "exportProfile", device: d.id, profile: activeProfile(d) });
+      render();
       break;
     case "check-updates":
       send({ type: "checkUpdates" });
@@ -808,177 +444,350 @@ function onClick(e) {
       send({ type: "openUrl", url: target.dataset.url });
       break;
   }
+  updateSaveButton();
+}
+
+function confirmDialog() {
+  const dlg = S.dialog;
+  S.dialog = null;
+  const d = deviceById(dlg.id);
+  if (!d) return;
+  if (dlg.what === "profile") {
+    d.profiles.splice(d.profile, 1);
+    d.profile = clampIndex(d.profile, d.profiles.length);
+  } else if (dlg.what === "board") {
+    send({ type: "removeDevice", device: d.id });
+  }
 }
 
 function onInput(e) {
-  if (e.target.id === "profile-name") {
-    // No render() here: it would tear down and rebuild the input, dropping
-    // focus and the caret mid-type. The profile picker label catches up next
-    // time something else forces a redraw.
-    activeProfile().name = e.target.value;
+  const el = e.target;
+  const d = board();
+  // No render() for typing: it would rebuild the input and lose the caret mid-word.
+  if (el.id === "profile-name" && d) activeProfile(d).name = el.value;
+  if (el.id === "dlg-name" && S.dialog) S.dialog.dev.name = el.value;
+  if (el.id === "add-name" && S.dialog) {
+    S.dialog.name = el.value;
+    const ready = document.querySelector('[data-action="add-confirm"]');
+    if (ready) ready.disabled = !addReady();
   }
+  if (["add-knobs", "add-faders", "add-buttons"].includes(el.id) && S.dialog) {
+    S.dialog[el.id.slice(4)] = Math.max(0, Math.min(64, parseInt(el.value, 10) || 0));
+    const ready = document.querySelector('[data-action="add-confirm"]');
+    if (ready) ready.disabled = !addReady();
+  }
+  if (el.dataset.buttonUrl && d) replaceKind(d, parseInt(el.dataset.buttonUrl, 10), `url:${el.value.trim()}`);
   updateSaveButton();
+}
+
+function addReady() {
+  const a = S.dialog;
+  const counted = a.type !== "smc";
+  return a.name.trim() !== "" && (a.type === "diy" || a.port !== "") && (!counted || a.knobs + a.faders + a.buttons > 0);
 }
 
 function onChange(e) {
   const el = e.target;
+  const d = board();
+  if (el.dataset.pick && d) {
+    const field = onPick(d, picked(d), el);
+    render();
+    if (field) startRecording(field, d.id, false);
+    updateSaveButton();
+    return;
+  }
+  if (el.dataset.enable) {
+    const dev = deviceById(el.dataset.enable);
+    if (dev) {
+      dev.enabled = el.checked;
+      saveBoard(dev);
+    }
+    return;
+  }
   switch (el.id) {
     case "profile-select":
-      draft.profile = parseInt(el.value, 10);
+      if (d) d.profile = parseInt(el.value, 10);
       render();
       break;
-    case "invert":
-      draft.invertKnobs = el.checked;
+    case "board-select":
+      S.board = el.value;
+      S.importNote = "";
+      render();
       break;
     case "language-select":
-      draft.language = el.value;
-      send({ type: "setLanguage", code: draft.language });
+      S.draft.language = el.value;
+      send({ type: "setLanguage", code: el.value });
       break;
     case "hide-icon":
-      draft.hideTrayIcon = el.checked;
-      render();
-      break;
-    case "tray-icon-style":
-      draft.trayIcon = el.value;
+      S.draft.hideTrayIcon = el.checked;
       render();
       break;
     case "show-profile-list":
-      draft.showProfileList = el.checked;
+      S.draft.showProfileList = el.checked;
       break;
-    case "speed-select":
-      draft.speed = el.value;
+    case "dlg-port":
+      S.dialog.dev.port = el.value;
       break;
-    case "port-select":
-      draft.port = el.value;
+    case "dlg-baud":
+      S.dialog.dev.baudRate = parseInt(el.value, 10);
+      break;
+    case "dlg-speed":
+      S.dialog.dev.speed = el.value;
+      break;
+    case "dlg-lights":
+      S.dialog.dev.lights = el.value === "off" ? "" : el.value;
+      break;
+    case "add-port":
+      S.dialog.port = el.value;
       render();
       break;
-    case "baud-select":
-      draft.baudRate = parseInt(el.value, 10);
+    case "add-baud":
+      S.dialog.baud = parseInt(el.value, 10);
       break;
   }
   updateSaveButton();
 }
 
+// The drawn controls take Enter and Space as buttons do, and the arrow keys walk between them.
+function onControlKeydown(e) {
+  const ctl = e.target.closest && e.target.closest(".smc .ctl");
+  if (!ctl) return;
+  const d = board();
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!d) return;
+    select(d, parseInt(ctl.dataset.control, 10));
+    render();
+    return;
+  }
+  const step = { ArrowLeft: -1, ArrowUp: -1, ArrowRight: 1, ArrowDown: 1 }[e.key];
+  if (!step) return;
+  e.preventDefault();
+  const all = [...document.querySelectorAll(".smc .ctl")];
+  const next = all[all.indexOf(ctl) + step];
+  if (next) next.focus();
+}
+
+// While boards are being set up one after another, the next one's Add follows the last one's
+// calibration; once they are all in, the Boards tab shows them.
+function nextInSetup() {
+  if (!S.setup) return;
+  if (S.setup.done < S.setup.total) {
+    openAdd();
+    return;
+  }
+  S.setup = null;
+  S.tab = "boards";
+}
+
+// --- Messages from Go ---------------------------------------------------------
+
+// Go opens Settings on "general", "boards" or "about".
+function tabFor(tab) {
+  return tab === "boards" || tab === "about" ? tab : "general";
+}
+
 function onMessage(msg) {
   switch (msg.type) {
+    case "room":
+      fitLists();
+      break;
     case "init":
-      init = msg;
-      draft = clone(msg.setup);
-      labels = Object.assign({}, msg.labels || {});
-      activeTab = msg.tab || "general";
-      connection = msg.connection || connection;
-      if (activeTab === "connection") send({ type: "listPorts" });
-      draft.profile = clampIndex(draft.profile, draft.profiles.length);
-      saved = clone(draft);
+      S.init = msg;
+      S.draft = clone(msg.settings || { devices: [] });
+      S.draft.devices = S.draft.devices || [];
+      S.saved = clone(S.draft);
+      S.labels = Object.assign({}, msg.labels || {});
+      S.status = msg.status || {};
+      S.live = msg.values || {};
+      S.tab = tabFor(msg.tab);
+      S.wizard = msg.wizard || null;
+      if (S.wizard) S.dialog = { kind: "wizard", id: S.wizard.device };
+      send({ type: "listPorts" });
       render();
       break;
     case "strings":
       render();
       break;
     case "saved":
-      draft = clone(msg.setup);
-      draft.profile = clampIndex(draft.profile, draft.profiles.length);
-      saved = clone(draft);
+      S.draft = clone(msg.settings);
+      S.draft.devices = S.draft.devices || [];
+      S.saved = clone(S.draft);
       render();
       break;
-    case "imported":
-      draft = clone(msg.setup);
-      draft.profile = clampIndex(draft.profile, draft.profiles.length);
-      importNote = msg.skipped && msg.skipped.length ? t("import_skipped", { items: msg.skipped.join(", ") }) : "";
+    case "deviceSaved":
+      upsertDevice(msg.device);
       render();
       break;
-    case "ports":
-      ports = msg.ports || [];
-      if (activeTab === "connection") render();
-      break;
-    // Go-initiated: the board connected, dropped or got blocked by another app.
-    case "connection":
-      connection = { connected: !!msg.connected, busy: !!msg.busy, port: msg.port || "" };
-      if (activeTab === "connection") {
-        send({ type: "listPorts" });
-        render();
+    case "added": {
+      const adding = S.dialog && S.dialog.kind === "adding" ? S.dialog : null;
+      S.board = msg.device;
+      if (S.setup) S.setup.done++;
+      if (adding && adding.counted) {
+        S.dialog = { kind: "wizard", id: msg.device };
+        send({ type: "calibrate", device: msg.device });
+      } else {
+        S.dialog = null;
+        nextInSetup();
       }
-      break;
-    case "importFailed":
-      importNote = t("import_failed");
-      render();
-      break;
-    case "jobMenuToggle": {
-      const jobs = activeProfile().jobs[msg.knob] || (activeProfile().jobs[msg.knob] = []);
-      const k = jobKey(msg.job);
-      const idx = jobs.findIndex((j) => jobKey(j) === k);
-      if (msg.checked && idx < 0) jobs.push(msg.job);
-      if (!msg.checked && idx >= 0) jobs.splice(idx, 1);
       render();
       break;
     }
-    case "jobMenuClear":
-      activeProfile().jobs[msg.knob] = [];
+    case "deviceRemoved":
+      removeDevice(msg.device);
       render();
       break;
+    case "profileImported": {
+      const d = deviceById(msg.device);
+      if (d && msg.profile) {
+        d.profiles.push(msg.profile);
+        d.profile = d.profiles.length - 1;
+        S.board = d.id;
+      }
+      S.importNote = msg.skipped && msg.skipped.length ? t("import_skipped", { items: msg.skipped.join(", ") }) : "";
+      render();
+      break;
+    }
+    case "exportFailed":
+      S.importNote = t("profile.export_failed");
+      render();
+      break;
+    case "importFailed":
+      S.importNote = t("import_failed");
+      render();
+      break;
+    case "status":
+      S.status[msg.device] = { connected: !!msg.connected, busy: !!msg.busy, port: msg.port || "" };
+      if (S.tab !== "about" || S.dialog) render();
+      break;
+    case "values":
+      showValues(msg.device, msg.values || []);
+      break;
+    case "moved":
+      touched(msg.device, msg.control);
+      break;
+    case "pressed":
+      pressed(msg.device, msg.key);
+      break;
+    // Go-initiated: a shortcut, the tray or a button switched a board's profile, already saved.
+    case "profile":
+      for (const s of [S.draft, S.saved]) {
+        const d = deviceById(msg.device, s);
+        if (d) d.profile = clampIndex(msg.profile, d.profiles.length);
+      }
+      render();
+      break;
+    // Go-initiated: a button changed a board's light pattern, already saved.
+    case "lights":
+      for (const s of [S.draft, S.saved]) {
+        const d = deviceById(msg.device, s);
+        if (d) d.lights = msg.pattern;
+      }
+      if (S.dialog && S.dialog.kind === "gear" && S.dialog.id === msg.device) S.dialog.dev.lights = msg.pattern;
+      render();
+      break;
+    case "wizard": {
+      if (msg.end) {
+        S.wizard = null;
+        if (S.dialog && S.dialog.kind === "wizard") S.dialog = null;
+        nextInSetup();
+        render();
+        break;
+      }
+      const before = S.wizard;
+      S.wizard = msg;
+      if (!S.dialog || S.dialog.kind !== "wizard") S.dialog = { kind: "wizard", id: msg.device };
+      const same =
+        before &&
+        ["device", "control", "stage", "count", "warning", "other", "index", "done"].every((k) => before[k] === msg[k]);
+      if (!same) render();
+      break;
+    }
+    case "ports":
+      S.ports = msg.ports || [];
+      S.midiInputs = msg.midi || [];
+      if (S.dialog && S.dialog.kind === "gear") refreshGearPorts();
+      if (S.dialog && S.dialog.kind === "add") {
+        if (S.dialog.type === "smc" && !S.dialog.port) {
+          S.dialog.port = S.midiInputs.find((n) => n.toLowerCase().includes("smc-mixer")) || "";
+        }
+        render();
+      }
+      break;
+    case "buttonAppPicked": {
+      const d = board();
+      if (!d) break;
+      const value = msg.mode === "open" ? msg.path : msg.exe;
+      S.appNames[value] = msg.name;
+      replaceKind(d, msg.button, `${msg.mode}:${value}`);
+      render();
+      break;
+    }
+    case "jobMenuToggle": {
+      const d = board();
+      if (!d) break;
+      if (msg.knob >= BUTTON_MENU_BASE) toggleAction(d, msg.knob - BUTTON_MENU_BASE, msg.job.action, msg.checked);
+      else toggleJob(d, msg.knob, msg.job, msg.checked);
+      render();
+      break;
+    }
+    case "jobMenuClear": {
+      const d = board();
+      if (!d) break;
+      if (msg.knob >= BUTTON_MENU_BASE) setActions(d, msg.knob - BUTTON_MENU_BASE, []);
+      else jobsOf(d, msg.knob).length = 0;
+      render();
+      break;
+    }
     case "appPicked": {
-      const jobs = activeProfile().jobs[msg.knob] || (activeProfile().jobs[msg.knob] = []);
-      if (!hasJob(jobs, msg.entry.job)) jobs.push(msg.entry.job);
-      if (!init.catalog.some((c) => jobKey(c.job) === jobKey(msg.entry.job))) init.catalog.push(msg.entry);
+      const d = board();
+      if (!d) break;
+      const jobs = jobsOf(d, msg.knob);
+      if (!jobs.some((j) => jobKey(j) === jobKey(msg.entry.job))) jobs.push(msg.entry.job);
+      if (!S.init.catalog.some((c) => jobKey(c.job) === jobKey(msg.entry.job))) S.init.catalog.push(msg.entry);
       render();
       break;
     }
     case "recorded":
-      if (msg.shortcut) labels[shortcutKeyJSON(msg.shortcut)] = msg.label;
-      applyRecorded(msg.field, msg.shortcut);
+      if (msg.shortcut) S.labels[JSON.stringify({ vk: msg.shortcut.vk, mods: msg.shortcut.mods, key: msg.shortcut.key })] = msg.label;
+      if (S.recording) applyRecorded(S.recording, msg.shortcut);
       stopRecording(true);
       break;
     case "rejected":
+      if (S.recording) {
+        S.recording.rejected = msg.reason || "invalid";
+        render();
+      }
       break;
-    // Go-initiated, not a reply to any message this page sent: a hotkey or a
-    // tray profile click moved the active profile while Settings was open.
-    case "profile":
-      draft.profile = clampIndex(msg.profile, draft.profiles.length);
-      if (saved) saved.profile = draft.profile; // Go has already saved the switch
-      render();
-      break;
-    // Go-initiated: Calibration finished with a different column mapping
-    // while this window was already open, so the draft's columns are stale.
-    case "columns":
-      draft.columns = msg.columns;
-      if (saved) saved.columns = clone(msg.columns); // Calibration saved them already
-      render();
-      break;
-    // Go-initiated: the window was already open and got asked to switch tab
-    // (e.g. the tray's About item) instead of opening a new one.
+    // Go-initiated: the window was already open and got asked to show a tab (the tray's About).
     case "tab":
-      activeTab = msg.tab || activeTab;
+      S.tab = tabFor(msg.tab || S.tab);
       render();
       break;
   }
+  if (S.draft) updateSaveButton();
 }
 
-document.getElementById("root").addEventListener(
-  "click",
-  (e) => {
-    if (!swallowClick) return;
-    swallowClick = false;
-    e.stopPropagation();
-    e.preventDefault();
-  },
-  true
-);
 document.getElementById("root").addEventListener("click", onClick);
 document.getElementById("root").addEventListener("input", onInput);
 document.getElementById("root").addEventListener("change", onChange);
-document.getElementById("root").addEventListener("pointerdown", onGripPointerDown);
-document.getElementById("root").addEventListener("pointermove", onDragMove);
-document.getElementById("root").addEventListener("pointerup", onDragEnd);
-document.getElementById("root").addEventListener("pointercancel", onDragEnd);
-document.getElementById("root").addEventListener("keydown", onKnobKeydown);
+document.getElementById("root").addEventListener("keydown", onControlKeydown);
 document.getElementById("btn-close").addEventListener("click", () => send({ type: "close" }));
 document.getElementById("btn-save").addEventListener("click", doSave);
 
 window.addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" || recording || dialog) return;
+  if (e.key === "Escape" && S.menu) {
+    S.menu = false;
+    render();
+    return;
+  }
+  if (e.key !== "Enter" || S.recording || S.dialog) return;
   if ((e.target.tagName || "").toLowerCase() === "textarea") return;
   e.preventDefault();
   doSave();
 });
 
 connect("root", onMessage);
+
+window.addEventListener("resize", fitLists);

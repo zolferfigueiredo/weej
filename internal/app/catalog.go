@@ -14,7 +14,6 @@ import (
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/draw"
 	"github.com/zolferfigueiredo/weej/internal/platform/display"
-	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 )
 
@@ -47,18 +46,18 @@ func sectionName(s core.Section) string {
 	}
 }
 
-func (app *App) screenCount(setup core.Setup) int {
+func (app *App) screenCount(devices []core.Device) int {
 	externals := 0
 	for _, m := range display.Monitors() {
 		if m.Screen+1 > externals {
 			externals = m.Screen + 1
 		}
 	}
-	return core.ScreenCount(externals, setup)
+	return core.ScreenCount(externals, devices)
 }
 
-func assignedAnywhere(setup core.Setup, kind core.JobKind) bool {
-	for _, p := range setup.Profiles {
+func assignedAnywhere(devices []core.Device, kind core.JobKind) bool {
+	for _, p := range allProfiles(devices) {
 		for _, row := range p.Jobs {
 			for _, j := range row {
 				if j.Kind == kind {
@@ -70,7 +69,43 @@ func assignedAnywhere(setup core.Setup, kind core.JobKind) bool {
 	return false
 }
 
-func (app *App) buildCatalog(setup core.Setup) []catalogEntry {
+// actionIcons is each button action's icon, by the action, or by the prefix of one that takes a
+// setting (pickers.js actionIcon).
+func (app *App) actionIcons() map[string]string {
+	ink := app.glyphInk()
+	icon := func(kind draw.GlyphKind) string { return pngDataURL(draw.Glyph(kind, 32, ink)) }
+	return map[string]string{
+		string(core.ActionPlayPause):       icon(draw.GlyphPlayPause),
+		string(core.ActionPlay):            icon(draw.GlyphPlay),
+		string(core.ActionPause):           icon(draw.GlyphPause),
+		string(core.ActionStop):            icon(draw.GlyphStop),
+		string(core.ActionPreviousTrack):   icon(draw.GlyphPreviousTrack),
+		string(core.ActionNextTrack):       icon(draw.GlyphNextTrack),
+		string(core.ActionVolumeUp):        icon(draw.GlyphVolumeUp),
+		string(core.ActionVolumeDown):      icon(draw.GlyphVolumeDown),
+		string(core.ActionMuteAll):         icon(draw.GlyphSpeakerMuted),
+		string(core.ActionMuteMic):         icon(draw.GlyphMicMuted),
+		string(core.ActionNightLight):      icon(draw.GlyphMoon),
+		string(core.ActionScreensOff):      icon(draw.GlyphScreen),
+		string(core.ActionLockPC):          icon(draw.GlyphLock),
+		string(core.ActionSleepPC):         icon(draw.GlyphPower),
+		string(core.ActionPreviousProfile): icon(draw.GlyphArrowLeft),
+		string(core.ActionNextProfile):     icon(draw.GlyphArrowRight),
+		string(core.ActionOpenSettings):    icon(draw.GlyphGear),
+		string(core.ActionNextLights):      icon(draw.GlyphBulb),
+		string(core.ActionPreviousLights):  icon(draw.GlyphBulb),
+		string(core.ActionLightsOn):        icon(draw.GlyphBulbOn),
+		string(core.ActionLightsOff):       icon(draw.GlyphBulbOff),
+		"open:":                            icon(draw.GlyphApp),
+		"close:":                           icon(draw.GlyphCloseApp),
+		"url:":                             icon(draw.GlyphGlobe),
+		"keys:":                            icon(draw.GlyphKeyboard),
+		"profile:":                         icon(draw.GlyphList),
+		"mute:":                            icon(draw.GlyphSpeakerMuted),
+	}
+}
+
+func (app *App) buildCatalog(devices []core.Device) []catalogEntry {
 	tr := app.trFunc()
 	ink := app.glyphInk()
 	glyphIcon := func(kind draw.GlyphKind) string { return pngDataURL(draw.Glyph(kind, 32, ink)) }
@@ -90,10 +125,10 @@ func (app *App) buildCatalog(setup core.Setup) []catalogEntry {
 	add(core.Job{Kind: core.JobMicrophone}, draw.GlyphMic)
 	add(core.Job{Kind: core.JobSystemSounds}, draw.GlyphSpeaker)
 
-	if display.HasBuiltinBrightness() || assignedAnywhere(setup, core.JobBuiltinBrightness) {
+	if display.HasBuiltinBrightness() || assignedAnywhere(devices, core.JobBuiltinBrightness) {
 		add(core.Job{Kind: core.JobBuiltinBrightness}, draw.GlyphSun)
 	}
-	n := app.screenCount(setup)
+	n := app.screenCount(devices)
 	for i := 0; i < n; i++ {
 		add(core.Job{Kind: core.JobBrightness, Screen: i}, draw.GlyphSun)
 	}
@@ -109,7 +144,7 @@ func (app *App) buildCatalog(setup core.Setup) []catalogEntry {
 
 	type named struct{ exe, name string }
 	var apps []named
-	for _, exe := range app.discoverApps(setup) {
+	for _, exe := range app.discoverApps(devices) {
 		apps = append(apps, named{exe: exe, name: app.resolveApp(exe)})
 	}
 	sort.Slice(apps, func(i, j int) bool { return strings.ToLower(apps[i].name) < strings.ToLower(apps[j].name) })
@@ -126,10 +161,12 @@ func (app *App) buildCatalog(setup core.Setup) []catalogEntry {
 	return out
 }
 
-func (app *App) discoverApps(setup core.Setup) []string {
+func (app *App) discoverApps(devices []core.Device) []string {
 	set := map[string]struct{}{}
-	for _, exe := range setup.Apps() {
-		set[exe] = struct{}{}
+	for _, d := range devices {
+		for _, exe := range d.Apps() {
+			set[exe] = struct{}{}
+		}
 	}
 	for _, k := range core.KnownApps {
 		if app.resolveAppPath(k.Exe) != "" {
@@ -238,16 +275,7 @@ func (app *App) forgetApp(exe string) {
 	app.appCacheMu.Unlock()
 }
 
-func (app *App) iconPreviews() map[string]string {
-	light := sys.TaskbarLight()
-	out := map[string]string{}
-	for _, style := range []core.IconStyle{core.IconMixer, core.IconDial, core.IconApp} {
-		out[string(style)] = pngDataURL(draw.TrayIcon(draw.IconStyle(style), true, 32, light))
-	}
-	return out
-}
-
-func (app *App) shortcutLabels(setup core.Setup) map[string]string {
+func (app *App) shortcutLabels(s core.Settings) map[string]string {
 	labels := map[string]string{}
 	ctrlName := app.ctrlLabelName()
 	add := func(s *core.Shortcut) {
@@ -260,10 +288,19 @@ func (app *App) shortcutLabels(setup core.Setup) map[string]string {
 		}
 		labels[string(data)] = core.Label(*s, ctrlName)
 	}
-	add(setup.Next)
-	add(setup.Previous)
-	for _, p := range setup.Profiles {
-		add(p.Shortcut)
+	for _, d := range s.Devices {
+		add(d.Next)
+		add(d.Previous)
+		for _, p := range d.Profiles {
+			add(p.Shortcut)
+			for _, actions := range p.Buttons {
+				for _, a := range actions {
+					if keys, ok := a.Keys(); ok {
+						add(&keys)
+					}
+				}
+			}
+		}
 	}
 	return labels
 }
@@ -280,3 +317,11 @@ func pngDataURL(img *image.NRGBA) string {
 }
 
 func appIconDataURL(px int) string { return pngDataURL(draw.AppIcon(px)) }
+
+func allProfiles(devices []core.Device) []core.DeviceProfile {
+	var out []core.DeviceProfile
+	for _, d := range devices {
+		out = append(out, d.Profiles...)
+	}
+	return out
+}

@@ -225,17 +225,10 @@ type Shortcut struct {
 	Key  string `json:"key"`
 }
 
+// Profile is a board's jobs by column, as the Engine reads them (Device.EngineSetup).
 type Profile struct {
-	Name     string    `json:"name"`
-	Jobs     [][]Job   `json:"jobs"`
-	Shortcut *Shortcut `json:"shortcut,omitempty"`
-}
-
-func (p Profile) JobsOf(knob int) []Job {
-	if knob < 0 || knob >= len(p.Jobs) {
-		return nil
-	}
-	return p.Jobs[knob]
+	Name string
+	Jobs [][]Job
 }
 
 type Speed string
@@ -271,23 +264,6 @@ func ParseSpeed(s string) Speed {
 	}
 }
 
-type IconStyle string
-
-const (
-	IconMixer IconStyle = "mixer"
-	IconDial  IconStyle = "dial"
-	IconApp   IconStyle = "app"
-)
-
-func ParseIconStyle(s string) IconStyle {
-	switch IconStyle(s) {
-	case IconDial, IconApp:
-		return IconStyle(s)
-	default:
-		return IconMixer
-	}
-}
-
 // Letter names knob i as on the box: A to Z, then A2 to Z2, A3 and so on, with no limit.
 func Letter(i int) string {
 	s := string(rune('A' + i%26))
@@ -297,21 +273,13 @@ func Letter(i int) string {
 	return s
 }
 
+// Setup is one board as the Engine reads it (Device.EngineSetup): a column per control, -1 for
+// one with no jobs to run.
 type Setup struct {
-	Columns      []int
-	Profiles     []Profile
-	Active       int
-	Next         *Shortcut
-	Previous     *Shortcut
-	Invert       bool
-	HideIcon     bool
-	ShowProfiles bool
-	Icon         IconStyle
-	Speed        Speed
-	// Port is a COM port to use instead of finding the board automatically; empty means automatic.
-	Port string
-	// Baud is the serial speed; 0 means DefaultBaud.
-	Baud int
+	Columns  []int
+	Profiles []Profile
+	Active   int
+	Speed    Speed
 }
 
 func (s Setup) activeJobs() [][]Job {
@@ -364,33 +332,6 @@ func (s Setup) MenuOrder() []int {
 	return keys
 }
 
-func (s Setup) Apps() []string {
-	set := map[string]struct{}{}
-	for _, p := range s.Profiles {
-		for _, row := range p.Jobs {
-			for _, j := range row {
-				if j.Kind == JobApp {
-					set[j.Exe] = struct{}{}
-				}
-			}
-		}
-	}
-	out := make([]string, 0, len(set))
-	for e := range set {
-		out = append(out, e)
-	}
-	sort.Strings(out)
-	return out
-}
-
-func (s Setup) Stepped(by int) int {
-	n := len(s.Profiles)
-	if n == 0 {
-		return 0
-	}
-	return ((s.Active+by)%n + n) % n
-}
-
 func Percent(s float64) int {
 	v := int(s*100 + 0.5)
 	if v < 0 {
@@ -415,10 +356,3 @@ const DefaultBaud = 9600
 
 // BaudRates are the speeds offered in Settings; a board's sketch has to use the same one.
 var BaudRates = []int{9600, 19200, 38400, 57600, 115200}
-
-func (s Setup) BaudRate() int {
-	if s.Baud <= 0 {
-		return DefaultBaud
-	}
-	return s.Baud
-}

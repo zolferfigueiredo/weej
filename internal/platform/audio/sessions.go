@@ -230,6 +230,31 @@ func (a *Audio) applyMic(level float64) {
 	}
 }
 
+func (a *Audio) toggleMicMute() {
+	dev, err := a.defaultEndpoint(wca.ECapture)
+	if err != nil {
+		a.logOnce("default-capture-endpoint", "Could not find the default input device: "+err.Error())
+		return
+	}
+	defer dev.Release()
+
+	var vol *wca.IAudioEndpointVolume
+	if err := dev.Activate(wca.IID_IAudioEndpointVolume, wca.CLSCTX_ALL, nil, &vol); err != nil {
+		a.logOnce("activate-mic-volume", "Could not activate the input volume control: "+err.Error())
+		return
+	}
+	defer vol.Release()
+
+	var muted bool
+	if err := vol.GetMute(&muted); err != nil {
+		a.logOnce("get-mic-mute", "Could not read the microphone mute: "+err.Error())
+		return
+	}
+	if err := vol.SetMute(!muted, eventCtx); err != nil {
+		a.logOnce("set-mic-mute", "Could not mute the microphone: "+err.Error())
+	}
+}
+
 func (a *Audio) applySystemSounds(level float64) {
 	dev, err := a.defaultEndpoint(wca.ERender)
 	if err != nil {
