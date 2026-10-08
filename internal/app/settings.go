@@ -69,12 +69,30 @@ func (app *App) closeSettings() {
 	}
 }
 
-func (app *App) onSettingsMessage(data []byte) {
-	var probe struct {
-		Type   string `json:"type"`
-		Device string `json:"device"`
+// messageProbe is what every page message has: its type, and the board it is about. setDevice
+// sends the whole board under "device" rather than its id, so a string field there would fail
+// to decode and drop the message.
+type messageProbe struct {
+	Type   string
+	Device string
+}
+
+func probeMessage(data []byte) (messageProbe, bool) {
+	var raw struct {
+		Type   string          `json:"type"`
+		Device json.RawMessage `json:"device"`
 	}
-	if err := json.Unmarshal(data, &probe); err != nil {
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return messageProbe{}, false
+	}
+	probe := messageProbe{Type: raw.Type}
+	_ = json.Unmarshal(raw.Device, &probe.Device)
+	return probe, true
+}
+
+func (app *App) onSettingsMessage(data []byte) {
+	probe, ok := probeMessage(data)
+	if !ok {
 		return
 	}
 	// Page messages arrive inside a WebView2 callback, so anything that opens a window or a
