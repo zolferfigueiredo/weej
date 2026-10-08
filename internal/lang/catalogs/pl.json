@@ -218,6 +218,8 @@
   "short.warmth": "Ciepło",
   "shortcut": "Skrót",
   "shortcut.also_used": "Używane też przez {names}",
+  "shortcut.clash": "Ta płytka używa już tego skrótu. Spróbuj innego.",
+  "shortcut.taken": "Inna aplikacja używa już tego skrótu. Spróbuj innego.",
   "shortcut_tip": "Użyj Ctrl lub Alt z klawiszem. Delete usuwa skrót, Escape anuluje.",
   "skip": "Pomiń",
   "smc.bank_left": "Poprzedni bank",

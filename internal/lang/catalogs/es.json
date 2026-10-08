@@ -214,6 +214,8 @@
   "short.warmth": "Calidez",
   "shortcut": "Atajo",
   "shortcut.also_used": "También en uso por {names}",
+  "shortcut.clash": "Esta placa ya usa ese atajo. Prueba otro.",
+  "shortcut.taken": "Otra app ya usa ese atajo. Prueba otro.",
   "shortcut_tip": "Usa Ctrl o Alt con una tecla. Borrar lo elimina, Escape cancela.",
   "skip": "Omitir",
   "smc.bank_left": "Banco anterior",

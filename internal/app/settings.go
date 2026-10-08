@@ -555,9 +555,11 @@ func (app *App) handleSettingsKey(data []byte) {
 	}
 	shortcut := core.Shortcut{VK: msg.VK, Mods: mods, Key: msg.Key}
 
-	reject := func() {
+	// reason tells the page why: "invalid", "clash" with another of the board's shortcuts, or
+	// "taken" by another app, which Windows lets hold a combination alone.
+	reject := func(reason string) {
 		winui.Beep()
-		win.Send(map[string]any{"type": "rejected", "field": msg.Field})
+		win.Send(map[string]any{"type": "rejected", "field": msg.Field, "reason": reason})
 	}
 
 	// A button presses its keys rather than listening for them, so any key will do and nothing
@@ -568,11 +570,11 @@ func (app *App) handleSettingsKey(data []byte) {
 	}
 
 	if !core.Valid(shortcut) {
-		reject()
+		reject("invalid")
 		return
 	}
 	if app.clashesWithDraft(shortcut, msg.Field, msg.Draft) {
-		reject()
+		reject("clash")
 		return
 	}
 
@@ -582,7 +584,8 @@ func (app *App) handleSettingsKey(data []byte) {
 		hk.Unregister(shortcutProbeHotkeyID)
 	}
 	if !registered {
-		reject()
+		app.log("Shortcut " + core.Label(shortcut, "Ctrl") + " is in use by another app")
+		reject("taken")
 		return
 	}
 

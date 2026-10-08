@@ -212,6 +212,8 @@
   "short.warmth": "색온도",
   "shortcut": "단축키",
   "shortcut.also_used": "{names}에서도 사용 중",
+  "shortcut.clash": "이 보드에서 이미 이 단축키를 사용 중입니다. 다른 단축키를 누르세요.",
+  "shortcut.taken": "다른 앱이 이 단축키를 사용 중입니다. 다른 단축키를 누르세요.",
   "shortcut_tip": "Ctrl 또는 Alt를 키와 함께 사용하세요. Delete는 지우고 Escape는 취소합니다.",
   "skip": "건너뛰기",
   "smc.bank_left": "이전 뱅크",

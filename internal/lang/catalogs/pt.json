@@ -214,6 +214,8 @@
   "short.warmth": "Temperatura",
   "shortcut": "Atalho",
   "shortcut.also_used": "Também usado por {names}",
+  "shortcut.clash": "Esta placa já usa esse atalho. Tente outro.",
+  "shortcut.taken": "Outro app já usa esse atalho. Tente outro.",
   "shortcut_tip": "Use Ctrl ou Alt com uma tecla. Apagar limpa o atalho, Esc cancela.",
   "skip": "Pular",
   "smc.bank_left": "Banco anterior",

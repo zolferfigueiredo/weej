@@ -195,6 +195,9 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 ### Calibration dialog
 - First the 0% and the 100% readings, each an instruction in subtitle type with Next as the primary button. Then one control at a time: the step count, the instruction, a press counter for a button, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.
 
+### Shortcut keys
+- A set shortcut shows each key as a keycap inside its button: a small raised face (`--keycap-bg`) with a hairline edge (`--keycap-border`) a pixel thicker at the bottom, caption type at 600 weight, arrows drawn as ← ↑ → ↓. A refused combination turns the button's text to the Warning color and says why.
+
 ### Tabs (Settings' Pivot)
 - Underlined style: unselected tabs sit in secondary text; the selected tab goes to primary text, 600 weight, with a 2px accent underline inset 4px from each edge. The Boards tab has one toolbar instead: the board and profile menus, a ⋯ flyout menu (the profile's dialog, add, remove, import, export, the board's settings), and Draw | List at its right end.
 

@@ -214,6 +214,8 @@
   "short.warmth": "Warmth",
   "shortcut": "Shortcut",
   "shortcut.also_used": "Also used by {names}",
+  "shortcut.clash": "This board already uses that shortcut. Try another.",
+  "shortcut.taken": "Another app uses that shortcut. Try another.",
   "shortcut_tip": "Use Ctrl or Alt with a key. Delete clears it, Escape cancels.",
   "skip": "Skip",
   "smc.bank_left": "Previous bank",

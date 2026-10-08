@@ -214,6 +214,8 @@
   "short.warmth": "Farbtemperatur",
   "shortcut": "Kurzbefehl",
   "shortcut.also_used": "Auch genutzt von {names}",
+  "shortcut.clash": "Dieses Board nutzt diesen Kurzbefehl schon. Probiere einen anderen.",
+  "shortcut.taken": "Eine andere App nutzt diesen Kurzbefehl. Probiere einen anderen.",
   "shortcut_tip": "Verwende Strg oder Alt mit einer Taste. Die Rückschritttaste löscht ihn, Escape bricht ab.",
   "skip": "Überspringen",
   "smc.bank_left": "Vorherige Bank",

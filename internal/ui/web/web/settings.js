@@ -755,6 +755,10 @@ function onMessage(msg) {
       stopRecording(true);
       break;
     case "rejected":
+      if (S.recording) {
+        S.recording.rejected = msg.reason || "invalid";
+        render();
+      }
       break;
     // Go-initiated: the window was already open and got asked to show a tab (the tray's About).
     case "tab":

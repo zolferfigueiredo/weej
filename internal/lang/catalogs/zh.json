@@ -212,6 +212,8 @@
   "short.warmth": "色温",
   "shortcut": "快捷键",
   "shortcut.also_used": "{names} 也在使用",
+  "shortcut.clash": "此设备板已在使用该快捷键。请换一个。",
+  "shortcut.taken": "其他应用已占用该快捷键。请换一个。",
   "shortcut_tip": "请将 Ctrl 或 Alt 与一个按键组合使用。Delete 清除，Escape 取消。",
   "skip": "跳过",
   "smc.bank_left": "上一组",

@@ -214,6 +214,8 @@
   "short.warmth": "Chaleur",
   "shortcut": "Raccourci",
   "shortcut.also_used": "Aussi utilisé par {names}",
+  "shortcut.clash": "Ce boîtier utilise déjà ce raccourci. Essayez-en un autre.",
+  "shortcut.taken": "Une autre app utilise déjà ce raccourci. Essayez-en un autre.",
   "shortcut_tip": "Utilisez Ctrl ou Alt avec une touche. Supprimer l’efface, Échap annule.",
   "skip": "Ignorer",
   "smc.bank_left": "Banque précédente",

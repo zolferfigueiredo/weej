@@ -212,6 +212,8 @@
   "short.warmth": "色温度",
   "shortcut": "ショートカット",
   "shortcut.also_used": "{names} でも使用中",
+  "shortcut.clash": "このボードはこのショートカットを使用中です。別のキーを押してください。",
+  "shortcut.taken": "ほかのアプリがこのショートカットを使用中です。別のキーを押してください。",
   "shortcut_tip": "Ctrl または Alt とキーを組み合わせてください。Delete で消去、Escape でキャンセル。",
   "skip": "スキップ",
   "smc.bank_left": "前のバンク",

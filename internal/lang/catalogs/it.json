@@ -214,6 +214,8 @@
   "short.warmth": "Calore",
   "shortcut": "Abbreviazione",
   "shortcut.also_used": "Usata anche da {names}",
+  "shortcut.clash": "Questa scheda usa già questi tasti. Prova con altri.",
+  "shortcut.taken": "Un’altra app usa già questi tasti. Prova con altri.",
   "shortcut_tip": "Usa Ctrl o Alt con un tasto. Cancella la elimina, Esc annulla.",
   "skip": "Salta",
   "smc.bank_left": "Banco precedente",
