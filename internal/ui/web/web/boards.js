@@ -2,12 +2,10 @@
 // listed with what each control does.
 import { pageHeight, roomHeight, send, t } from "./bridge.js";
 import { boardSVG, showValue, smcButtonIcon, smcSVG } from "./device.js";
-import { actionPicks, buttonLines, buttonParams, controlLabel, jobLines, jobPicks, shortcutControl } from "./pickers.js";
+import { actionPicks, buttonLines, buttonParams, controlLabel, jobLines, jobPicks } from "./pickers.js";
 import {
   S,
   actionsOf,
-  activeProfile,
-  alsoUsedBy,
   buttonKey,
   clampIndex,
   clip,
@@ -67,39 +65,48 @@ export function renderBoards() {
     </div>`;
     return;
   }
-  const picks = shownBoards()
-    .map(
-      (b) => `
-          <div class="row board-pick${b.id === d.id ? " on" : ""}">
-            <button class="pick-board" type="button" role="tab" data-action="board-tab" data-board="${escAttr(b.id)}" aria-selected="${b.id === d.id}">
-              <span class="row-title">${esc(clip(b.name, 30))}</span>
-              <span class="row-desc">${esc(t("device.type." + b.type))}</span>
-            </button>
-            <button class="btn btn-icon" type="button" data-action="gear" data-board="${escAttr(b.id)}" title="${escAttr(t("boards.settings_of", { name: b.name }))}" aria-label="${escAttr(t("boards.settings_of", { name: b.name }))}">${GEAR_ICON}</button>
-          </div>`
-    )
+  const boards = shownBoards()
+    .map((b) => `<option value="${escAttr(b.id)}"${b.id === d.id ? " selected" : ""}>${esc(clip(b.name, 30))}</option>`)
     .join("");
-  const body = d.view === "list" ? `<div class="board-bar">${viewBar(d)}</div>${listView(d)}` : drawView(d);
+  const i = clampIndex(d.profile, d.profiles.length);
+  const profiles = d.profiles
+    .map((_, n) => `<option value="${n}"${n === i ? " selected" : ""}>${esc(clip(profileLabel(d, n), 30))}</option>`)
+    .join("");
+  const body = d.view === "list" ? listView(d) : drawView(d);
   keepScroll(() => {
     panel.innerHTML = `
     <div class="tabpanel" role="tabpanel">
-      <div class="general-grid">
-        <div class="general-col">
-          <div class="group"><div class="card" role="tablist">${picks}</div></div>
-        </div>
-        <div class="general-col">
-          ${profileCard(d)}
-          <div class="group-foot">
-            <button class="btn" type="button" data-action="import-profile">${esc(t("profile.import"))}</button>
-            <button class="btn" type="button" data-action="export-profile">${esc(t("profile.export"))}</button>
-            ${S.importNote ? `<span class="group-note">${esc(S.importNote)}</span>` : ""}
-          </div>
-        </div>
+      <div class="board-toolbar">
+        <select class="select select-inline" id="board-select" aria-label="${escAttr(t("boards.title"))}">${boards}</select>
+        <select class="select select-inline" id="profile-select" aria-label="${escAttr(t("profile"))}">${profiles}</select>
+        <span class="menu-anchor">
+          <button class="btn btn-icon" type="button" data-action="board-menu" aria-haspopup="menu" aria-expanded="${!!S.menu}" title="${escAttr(t("profile"))}" aria-label="${escAttr(t("profile"))}">&#x22ef;</button>
+          ${S.menu ? boardMenu(d) : ""}
+        </span>
+        <span class="spacer"></span>
+        ${viewBar(d)}
       </div>
+      ${S.importNote ? `<p class="group-note">${esc(S.importNote)}</p>` : ""}
       ${body}
     </div>`;
     fitLists();
   });
+}
+
+// The toolbar's menu: the profile shown, and the board's own settings.
+function boardMenu(d) {
+  const item = (action, label, disabled = false) =>
+    `<button class="menu-item" type="button" role="menuitem" data-action="${action}" data-board="${escAttr(d.id)}"${disabled ? " disabled" : ""}>${esc(label)}</button>`;
+  return `<div class="menu" role="menu">
+            ${item("edit-profile", t("profile.edit"))}
+            ${item("add-profile", t("add_profile"))}
+            ${item("remove-profile", t("remove_profile"), d.profiles.length <= 1)}
+            <div class="menu-sep"></div>
+            ${item("import-profile", t("profile.import"))}
+            ${item("export-profile", t("profile.export"))}
+            <div class="menu-sep"></div>
+            ${item("gear", t("boards.settings"))}
+          </div>`;
 }
 
 const LIST_ROWS = 10;
@@ -133,42 +140,6 @@ export function fitLists() {
 }
 
 export const GEAR_ICON = `<svg class="gear" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.6 1h2.8l.4 1.9 1.1.6 1.8-.7 1.4 2.4-1.4 1.3v1.2l1.4 1.3-1.4 2.4-1.8-.7-1.1.6-.4 1.9H6.6l-.4-1.9-1.1-.6-1.8.7-1.4-2.4 1.4-1.3V7.8L1.9 6.5l1.4-2.4 1.8.7 1.1-.6z"/><circle cx="8" cy="8" r="2.2"/></svg>`;
-
-function profileCard(d) {
-  const p = activeProfile(d);
-  const i = clampIndex(d.profile, d.profiles.length);
-  const options = d.profiles
-    .map((_, n) => `<option value="${n}"${n === i ? " selected" : ""}>${esc(clip(profileLabel(d, n), 30))}</option>`)
-    .join("");
-  const others = alsoUsedBy(p.shortcut, d.id);
-  return `
-      <div class="group">
-        <div class="group-head">
-          <h2 class="group-title">${esc(t("profile"))}</h2>
-          <select class="select select-inline" id="profile-select">${options}</select>
-          <span class="spacer"></span>
-          <span class="segmented">
-            <button class="btn btn-icon" type="button" data-action="add-profile" title="${escAttr(t("add_profile"))}" aria-label="${escAttr(t("add_profile"))}">+</button>
-            <button class="btn btn-icon" type="button" data-action="remove-profile" title="${escAttr(t("remove_profile"))}" aria-label="${escAttr(t("remove_profile"))}"${d.profiles.length <= 1 ? " disabled" : ""}>&minus;</button>
-          </span>
-        </div>
-        <div class="card">
-          <div class="row">
-            <div class="row-main"><span class="row-title">${esc(t("name"))}</span></div>
-            <div class="row-control">
-              <input class="input input-name" id="profile-name" type="text" value="${escAttr(p.name)}" placeholder="${escAttr(t("profile_n", { n: String(i + 1) }))}" />
-            </div>
-          </div>
-          <div class="row">
-            <div class="row-main">
-              <span class="row-title">${esc(t("shortcut"))}</span>
-              ${others.length ? `<span class="row-desc">${esc(t("shortcut.also_used", { names: others.join(", ") }))}</span>` : ""}
-            </div>
-            <div class="row-control">${shortcutControl("profile:" + i, p.shortcut, d.id)}</div>
-          </div>
-        </div>
-      </div>`;
-}
 
 // --- Draw --------------------------------------------------------------------
 
@@ -212,10 +183,7 @@ function drawView(d) {
   }
   return `
       <div class="device-row">
-        <div class="group">
-          <div class="group-head">${viewBar(d)}</div>
-          <div class="card device-card">${svg}</div>
-        </div>
+        <div class="card device-card">${svg}</div>
         ${isSMC(d) ? smcInspector(d, k) : boardInspector(d, k)}
         <div class="group-foot device-foot"><span class="group-note">${esc(t(isSMC(d) ? "smc.hint" : "board.hint"))}</span></div>
       </div>`;
@@ -225,22 +193,20 @@ function smcInspector(d, id) {
   const button = isButton(d, id);
   const empty = button ? !actionsOf(d, id).length : !jobsOf(d, id).length;
   return `
-        <div class="group inspector">
-          <div class="group-head">
+        <div class="card inspector">
+          <div class="inspector-head">
             ${button ? smcButtonIcon(id) : ""}<h2 class="group-title">${esc(controlName(d, id))}</h2>
             <span class="spacer"></span>
             <button class="btn" type="button" data-action="clear-control"${empty ? " disabled" : ""}>${esc(t("clear"))}</button>
           </div>
-          <div class="card inspector-card" data-keep-scroll="control-${d.id}-${id}">${button ? actionPicks(d, id) : jobPicks(d, id)}</div>
+          <div class="inspector-list" data-keep-scroll="control-${d.id}-${id}">${button ? actionPicks(d, id) : jobPicks(d, id)}</div>
         </div>`;
 }
 
 function boardInspector(d, k) {
   if (!d.controls.length) {
     return `
-        <div class="group inspector">
-          <div class="card inspector-card"><p class="inspector-empty">${esc(t("board.empty"))}</p></div>
-        </div>`;
+        <div class="card inspector"><p class="inspector-empty">${esc(t("board.empty"))}</p></div>`;
   }
   const kind = kindOf(d, k);
   const button = kind === "button";
@@ -255,14 +221,14 @@ function boardInspector(d, k) {
     .map(([dir, arrow]) => `<button class="btn btn-icon" type="button" data-action="move-control" data-dir="${dir}" title="${escAttr(t("board." + dir))}" aria-label="${escAttr(t("board." + dir))}"${canMove(d, k, dir) ? "" : " disabled"}>${arrow}</button>`)
     .join("");
   return `
-        <div class="group inspector">
-          <div class="group-head">
+        <div class="card inspector">
+          <div class="inspector-head">
             <h2 class="group-title">${esc(controlName(d, k))}</h2>
             <span class="spacer"></span>
             <button class="btn" type="button" data-action="clear-control"${empty ? " disabled" : ""}>${esc(t("clear"))}</button>
           </div>
-          ${S.arrange[d.id] ? `<div class="card board-edit"><div class="arrow-keys">${moves}</div></div>` : ""}
-          <div class="card inspector-card" data-keep-scroll="board-${d.id}-${k}">${button ? actionPicks(d, key) : jobPicks(d, k)}</div>
+          ${S.arrange[d.id] ? `<div class="board-edit"><div class="arrow-keys">${moves}</div></div>` : ""}
+          <div class="inspector-list" data-keep-scroll="board-${d.id}-${k}">${button ? actionPicks(d, key) : jobPicks(d, k)}</div>
         </div>`;
 }
 

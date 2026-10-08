@@ -161,16 +161,27 @@ function keysShortcut(value) {
 }
 
 // A shortcut's button: what it is, or Record, with a × to clear it.
+const ARROWS = { Left: "←", Up: "↑", Right: "→", Down: "↓" };
+
+// A shortcut's label, "Ctrl+Alt+Left", as one keycap per key; a key named "+" ends it in "++".
+function keycaps(label) {
+  const keys = label.endsWith("++") ? [...label.slice(0, -2).split("+"), "+"] : label.split("+");
+  return `<span class="keys">${keys.map((k) => `<kbd class="keycap">${esc(ARROWS[k] || k)}</kbd>`).join("")}</span>`;
+}
+
 export function shortcutControl(field, shortcut, deviceId, dialog = false) {
   const r = S.recording;
   const isRecording = r && r.field === field && r.device === deviceId && r.dialog === dialog;
-  const label = isRecording ? t("press_shortcut") : shortcut ? shortcutLabel(shortcut) : t("record_shortcut");
   const data = `data-field="${escAttr(field)}" data-device="${escAttr(deviceId)}"${dialog ? ' data-dialog="1"' : ""}`;
-  const removeBtn =
-    shortcut && !isRecording
-      ? `<button class="btn btn-icon btn-subtle" type="button" data-action="remove-shortcut" ${data} title="${escAttr(t("remove_shortcut"))}" aria-label="${escAttr(t("remove_shortcut"))}">&times;</button>`
-      : "";
-  return `<button class="btn" type="button" data-action="record" ${data}>${esc(label)}</button>${removeBtn}`;
+  if (shortcut && !isRecording) {
+    const label = shortcutLabel(shortcut);
+    return `<button class="btn keys-btn" type="button" data-action="record" ${data} title="${escAttr(label)}" aria-label="${escAttr(label)}">${keycaps(label)}</button><button class="btn btn-icon btn-subtle" type="button" data-action="remove-shortcut" ${data} title="${escAttr(t("remove_shortcut"))}" aria-label="${escAttr(t("remove_shortcut"))}">&times;</button>`;
+  }
+  if (isRecording && r.rejected) {
+    const why = { taken: "shortcut.taken", clash: "shortcut.clash" }[r.rejected] || "shortcut_tip";
+    return `<button class="btn rejected" type="button" data-action="record" ${data}>${esc(t(why))}</button>`;
+  }
+  return `<button class="btn" type="button" data-action="record" ${data}>${esc(t(isRecording ? "press_shortcut" : "record_shortcut"))}</button>`;
 }
 
 // What sets the part of an action after its ":": an address box, keys to record or an app.

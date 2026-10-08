@@ -41,6 +41,8 @@ review, the verdict, DESIGN.md, and every shipping raster carrying its provenanc
   --card-bg-hover: #f5f5f5;
   --control-bg: #ffffff;
   --control-border: rgba(0, 0, 0, 0.09);
+  --keycap-bg: #f3f3f3;
+  --keycap-border: rgba(0, 0, 0, 0.16);
   --border: rgba(0, 0, 0, 0.08);
   --divider: rgba(0, 0, 0, 0.06);
   --text: #1a1a1a;
@@ -63,6 +65,8 @@ review, the verdict, DESIGN.md, and every shipping raster carrying its provenanc
     --card-bg-hover: #323232;
     --control-bg: #2c2c2c;
     --control-border: rgba(255, 255, 255, 0.12);
+    --keycap-bg: #3a3a3a;
+    --keycap-border: rgba(255, 255, 255, 0.2);
     --border: rgba(255, 255, 255, 0.08);
     --divider: rgba(255, 255, 255, 0.07);
     --text: #ffffff;
@@ -82,6 +86,8 @@ review, the verdict, DESIGN.md, and every shipping raster carrying its provenanc
   --card-bg-hover: #323232;
   --control-bg: #2c2c2c;
   --control-border: rgba(255, 255, 255, 0.12);
+  --keycap-bg: #3a3a3a;
+  --keycap-border: rgba(255, 255, 255, 0.2);
   --border: rgba(255, 255, 255, 0.08);
   --divider: rgba(255, 255, 255, 0.07);
   --text: #ffffff;
@@ -295,24 +301,11 @@ p {
   cursor: pointer;
 }
 
-.general-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  align-items: start;
-  gap: 14px 20px;
-}
-
-.general-col {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-
-@media (max-width: 760px) {
-  .general-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
+/* General is one list down the middle, so a wide window doesn't stretch its rows. */
+.general-list {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
 }
 
 .button-param {
@@ -950,10 +943,6 @@ select.select,
   gap: 4px 20px;
 }
 
-.device-row .group-head {
-  min-height: 28px;
-}
-
 .device-foot {
   grid-column: 1 / -1;
 }
@@ -962,8 +951,23 @@ select.select,
   padding: 4px 6px;
 }
 
+/* The control picked: its name and Clear, then its jobs or actions. */
+.inspector {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--divider);
+}
+
 /* No height of its own, so the drawing sets the row's and the list scrolls inside it. */
-.inspector-card {
+.inspector-list {
   flex: 1 1 auto;
   height: 0;
   min-height: 240px;
@@ -976,7 +980,7 @@ select.select,
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .inspector-card {
+  .inspector-list {
     flex: none;
     height: 300px;
   }
@@ -1165,6 +1169,7 @@ select.select,
   display: flex;
   justify-content: center;
   padding: 8px 12px;
+  border-bottom: 1px solid var(--divider);
 }
 
 .arrow-keys {
@@ -1260,32 +1265,89 @@ select.select,
   stroke-linejoin: round;
 }
 
-/* A board in the Boards tab's list: its name picks it, and its gear opens its settings. */
-.board-pick.on {
-  background: var(--card-bg-hover);
-  box-shadow: inset 3px 0 0 var(--accent);
+.btn.rejected {
+  color: var(--warning);
 }
 
-.pick-board {
+/* A shortcut as keys: each one a keycap, its lower edge a little thicker. */
+.btn.keys-btn {
+  padding: 3px;
+}
+
+.keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.keycap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--keycap-border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--keycap-bg);
+  color: var(--text);
+  font: 600 var(--fs-caption) / 1 var(--font);
+}
+
+.board-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-anchor {
+  position: relative;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-flyout);
+}
+
+.menu-item {
   appearance: none;
   border: 0;
   background: none;
-  color: inherit;
+  color: var(--text);
   font: inherit;
   text-align: left;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  padding: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
 }
 
-.board-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: var(--card-bg-hover);
+}
+
+.menu-item:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+  background: none;
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--divider);
 }
 
 .empty-state {
@@ -1334,10 +1396,18 @@ select.select,
   min-width: 44px;
 }
 
+/* The panel takes the height between the tabs and the footer, so About can sit in its middle. */
+#panel {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
 .about {
+  flex: 1 1 auto;
   align-items: center;
+  justify-content: center;
   text-align: center;
-  padding-top: 4px;
   gap: 0;
 }
 

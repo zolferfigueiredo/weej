@@ -256,7 +256,13 @@ function onClick(e) {
   }
 
   const target = e.target.closest("[data-action]");
-  if (!target) return;
+  // Any click but the one on its own button closes the toolbar menu.
+  const closing = S.menu && !(target && target.dataset.action === "board-menu");
+  if (closing) S.menu = false;
+  if (!target) {
+    if (closing) render();
+    return;
+  }
   const d = board();
 
   switch (target.dataset.action) {
@@ -273,6 +279,14 @@ function onClick(e) {
     case "gear":
       send({ type: "listPorts" });
       openGear(target.dataset.board);
+      render();
+      break;
+    case "board-menu":
+      S.menu = !S.menu;
+      render();
+      break;
+    case "edit-profile":
+      if (d) S.dialog = { kind: "profile", id: d.id };
       render();
       break;
     case "add-board":
@@ -416,9 +430,11 @@ function onClick(e) {
       break;
     case "import-profile":
       if (d) send({ type: "importProfile", device: d.id });
+      render();
       break;
     case "export-profile":
       if (d) send({ type: "exportProfile", device: d.id, profile: activeProfile(d) });
+      render();
       break;
     case "check-updates":
       send({ type: "checkUpdates" });
@@ -491,6 +507,11 @@ function onChange(e) {
   switch (el.id) {
     case "profile-select":
       if (d) d.profile = parseInt(el.value, 10);
+      render();
+      break;
+    case "board-select":
+      S.board = el.value;
+      S.importNote = "";
       render();
       break;
     case "language-select":
@@ -734,6 +755,10 @@ function onMessage(msg) {
       stopRecording(true);
       break;
     case "rejected":
+      if (S.recording) {
+        S.recording.rejected = msg.reason || "invalid";
+        render();
+      }
       break;
     // Go-initiated: the window was already open and got asked to show a tab (the tray's About).
     case "tab":
@@ -752,6 +777,11 @@ document.getElementById("btn-close").addEventListener("click", () => send({ type
 document.getElementById("btn-save").addEventListener("click", doSave);
 
 window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && S.menu) {
+    S.menu = false;
+    render();
+    return;
+  }
   if (e.key !== "Enter" || S.recording || S.dialog) return;
   if ((e.target.tagName || "").toLowerCase() === "textarea") return;
   e.preventDefault();

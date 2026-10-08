@@ -69,12 +69,30 @@ func (app *App) closeSettings() {
 	}
 }
 
-func (app *App) onSettingsMessage(data []byte) {
-	var probe struct {
-		Type   string `json:"type"`
-		Device string `json:"device"`
+// messageProbe is what every page message has: its type, and the board it is about. setDevice
+// sends the whole board under "device" rather than its id, so a string field there would fail
+// to decode and drop the message.
+type messageProbe struct {
+	Type   string
+	Device string
+}
+
+func probeMessage(data []byte) (messageProbe, bool) {
+	var raw struct {
+		Type   string          `json:"type"`
+		Device json.RawMessage `json:"device"`
 	}
-	if err := json.Unmarshal(data, &probe); err != nil {
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return messageProbe{}, false
+	}
+	probe := messageProbe{Type: raw.Type}
+	_ = json.Unmarshal(raw.Device, &probe.Device)
+	return probe, true
+}
+
+func (app *App) onSettingsMessage(data []byte) {
+	probe, ok := probeMessage(data)
+	if !ok {
 		return
 	}
 	// Page messages arrive inside a WebView2 callback, so anything that opens a window or a
@@ -555,9 +573,11 @@ func (app *App) handleSettingsKey(data []byte) {
 	}
 	shortcut := core.Shortcut{VK: msg.VK, Mods: mods, Key: msg.Key}
 
-	reject := func() {
+	// reason tells the page why: "invalid", "clash" with another of the board's shortcuts, or
+	// "taken" by another app, which Windows lets hold a combination alone.
+	reject := func(reason string) {
 		winui.Beep()
-		win.Send(map[string]any{"type": "rejected", "field": msg.Field})
+		win.Send(map[string]any{"type": "rejected", "field": msg.Field, "reason": reason})
 	}
 
 	// A button presses its keys rather than listening for them, so any key will do and nothing
@@ -568,11 +588,11 @@ func (app *App) handleSettingsKey(data []byte) {
 	}
 
 	if !core.Valid(shortcut) {
-		reject()
+		reject("invalid")
 		return
 	}
 	if app.clashesWithDraft(shortcut, msg.Field, msg.Draft) {
-		reject()
+		reject("clash")
 		return
 	}
 
@@ -582,7 +602,8 @@ func (app *App) handleSettingsKey(data []byte) {
 		hk.Unregister(shortcutProbeHotkeyID)
 	}
 	if !registered {
-		reject()
+		app.log("Shortcut " + core.Label(shortcut, "Ctrl") + " is in use by another app")
+		reject("taken")
 		return
 	}
 

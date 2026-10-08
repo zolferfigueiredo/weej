@@ -16,6 +16,8 @@ export const S = {
   selected: {},
   // Per board, whether the Draw view's controls are being moved.
   arrange: {},
+  // Whether the Boards tab's toolbar menu is open.
+  menu: false,
   dialog: null,
   // recording is { field, device, dialog }: dialog when the gear's dialog owns the shortcut.
   recording: null,

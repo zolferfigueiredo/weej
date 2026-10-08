@@ -2,7 +2,7 @@
 // anything is removed.
 import { t } from "./bridge.js";
 import { shortcutControl } from "./pickers.js";
-import { S, alsoUsedBy, clone, controlName, deviceById, devices, esc, escAttr, statusOf } from "./state.js";
+import { S, alsoUsedBy, clampIndex, clone, controlName, deviceById, devices, esc, escAttr, statusOf } from "./state.js";
 
 export function openGear(id) {
   const d = deviceById(id);
@@ -19,6 +19,7 @@ export function renderDialog() {
   if (dlg.kind === "gear") html = gearDialog(dlg);
   else if (dlg.kind === "add") html = addDialog(dlg);
   else if (dlg.kind === "wizard") html = wizardDialog(dlg);
+  else if (dlg.kind === "profile") html = profileDialog(dlg);
   else html = confirmDialog(dlg);
   document.getElementById("root").insertAdjacentHTML("beforeend", `<div class="dialog-scrim">${html}</div>`);
 }
@@ -200,6 +201,28 @@ function wizardDialog(dlg) {
           <span class="spacer"></span>
           <button class="btn" type="button" data-action="wizard-op" data-op="cancel">${esc(t("cancel"))}</button>
           ${primary}
+        </div>
+      </div>`;
+}
+
+// The profile shown on a board: its name and shortcut, edited as part of the draft Apply saves.
+function profileDialog(dlg) {
+  const d = deviceById(dlg.id);
+  if (!d) return "";
+  const i = clampIndex(d.profile, d.profiles.length);
+  const p = d.profiles[i];
+  const others = alsoUsedBy(p.shortcut, d.id);
+  const name = `<input class="input input-name" id="profile-name" type="text" value="${escAttr(p.name)}" placeholder="${escAttr(t("profile_n", { n: String(i + 1) }))}" />`;
+  return `
+      <div class="dialog dialog-wide" role="dialog" aria-modal="true">
+        <div class="dialog-title">${esc(t("profile"))}</div>
+        <div class="dialog-body form">
+          ${field(t("name"), name)}
+          ${field(t("shortcut"), shortcutControl("profile:" + i, p.shortcut, d.id), others.length ? t("shortcut.also_used", { names: others.join(", ") }) : "")}
+        </div>
+        <div class="dialog-actions">
+          <span class="spacer"></span>
+          <button class="btn btn-primary" type="button" data-action="cancel-dialog">${esc(t("close"))}</button>
         </div>
       </div>`;
 }
