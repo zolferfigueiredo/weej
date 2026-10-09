@@ -258,20 +258,74 @@ const MOCK_KNOB_GLYPH =
 
 const MOCK_APP_ICON = svgIcon("#0078d4", MOCK_KNOB_GLYPH);
 
-const MOCK_JOB_ICONS = {
-  master: svgIcon("#0078d4"),
-  microphone: svgIcon("#5b2d91"),
-  systemSounds: svgIcon("#0078d4"),
-  brightness: svgIcon("#ca5010"),
-  contrast: svgIcon("#ca5010"),
-  builtinBrightness: svgIcon("#ca5010"),
-  nightLight: svgIcon("#8764b8"),
-  externalKeyboard: svgIcon("#107c10"),
-  zoom: svgIcon("#008272"),
-  otherApps: svgIcon("#5d5d5d"),
-  focusedApp: svgIcon("#5d5d5d"),
-  app: svgIcon("#5d5d5d"),
+// Go's glyphs as internal/app/catalog.go picks them, read from ../mockglyphs.json, which
+// tools/mockglyphs writes; without it the preview shows no icons.
+const MOCK_JOB_GLYPHS = {
+  master: "speaker",
+  microphone: "mic",
+  systemSounds: "speaker",
+  builtinBrightness: "sun",
+  brightness: "sun",
+  contrast: "contrast",
+  nightLight: "moon",
+  externalKeyboard: "keyboard",
+  zoom: "zoom",
+  focusedApp: "app",
+  otherApps: "app",
+  app: "app",
 };
+
+const MOCK_ACTION_GLYPHS = {
+  "media.playpause": "playPause",
+  "media.play": "play",
+  "media.pause": "pause",
+  "media.stop": "stop",
+  "media.previous": "previousTrack",
+  "media.next": "nextTrack",
+  "volume.up": "volumeUp",
+  "volume.down": "volumeDown",
+  "mute.all": "speakerMuted",
+  "mute.mic": "micMuted",
+  nightlight: "moon",
+  "screens.off": "screen",
+  "pc.lock": "lock",
+  "pc.sleep": "power",
+  "profile.previous": "arrowLeft",
+  "profile.next": "arrowRight",
+  settings: "gear",
+  "lights.next": "bulb",
+  "lights.previous": "bulb",
+  "lights.on": "bulbOn",
+  "lights.off": "bulbOff",
+  "open:": "app",
+  "close:": "closeApp",
+  "url:": "globe",
+  "keys:": "keyboard",
+  "profile:": "list",
+  "mute:": "speakerMuted",
+};
+
+let mockGlyphs = null;
+
+function loadMockGlyphs() {
+  return fetch("../mockglyphs.json")
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null);
+}
+
+function mockDark() {
+  return new URLSearchParams(location.search).get("theme") === "dark";
+}
+
+// White on dark and black on light, as Go's glyphInk draws them.
+function mockGlyph(name) {
+  const ink = mockGlyphs && mockGlyphs[mockDark() ? "dark" : "light"];
+  return (ink && ink[name]) || "";
+}
+
+function mockJobIcon(kind) {
+  return mockGlyph(MOCK_JOB_GLYPHS[kind]);
+}
 
 // A standalone copy of internal/lang/catalogs/en.json: the mock only runs
 // outside WebView2, where Go never sends a "strings" payload, so the preview
@@ -526,7 +580,51 @@ function mockMIDI(id) {
   };
 }
 
-const MOCK_MAKERS = { diy: mockDIY, smc: mockSMC, midi: mockMIDI };
+// Five of each kind with jobs and readings, for screenshots (?devices=demo&theme=dark&view=list).
+function mockDemo(id) {
+  const controls = [];
+  for (const kind of ["knob", "fader", "button"]) for (let i = 0; i < 5; i++) controls.push(mockKnob(controls.length, kind));
+  return {
+    id,
+    name: "Studio",
+    type: "diy",
+    enabled: true,
+    port: "COM9",
+    baudRate: 9600,
+    speed: "slow",
+    controls,
+    layout: [[0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14]],
+    view: new URLSearchParams(location.search).get("view") === "list" ? "list" : "draw",
+    profiles: [
+      {
+        name: "Default",
+        jobs: [
+          [{ kind: "master" }],
+          [{ kind: "brightness", screen: 0 }, { kind: "brightness", screen: 1 }],
+          [{ kind: "nightLight" }],
+          [{ kind: "zoom" }],
+          [{ kind: "microphone" }],
+          [{ kind: "app", exe: "discord.exe" }],
+          [{ kind: "app", exe: "spotify.exe" }],
+          [{ kind: "focusedApp" }],
+          [{ kind: "otherApps" }],
+          [{ kind: "systemSounds" }],
+          [],
+          [],
+          [],
+          [],
+          [],
+        ],
+        buttons: { 10: ["media.playpause"], 11: ["media.next"], 12: ["volume.up"], 13: ["mute.mic"], 14: ["profile.next"] },
+      },
+      { name: "Gaming", shortcut: { vk: 49, mods: 3, key: "1" }, jobs: controls.map((_, k) => (k === 0 ? [{ kind: "master" }] : [])), buttons: {} },
+    ],
+    profile: 0,
+  };
+}
+
+const MOCK_MAKERS = { diy: mockDIY, smc: mockSMC, midi: mockMIDI, demo: mockDemo };
+const MOCK_VALUES = { demo: [740, 512, 205, 0, 900, 1023, 615, 310, 860, 130, -1, -1, -1, -1, -1] };
 
 // Served from the repository root, the preview reads the real English catalog, so every string
 // shows; anywhere else it keeps the sample copy above.
@@ -543,23 +641,23 @@ function mockSettingsInit(enStrings) {
   for (const d of devices) for (const p of d.profiles) if (p.shortcut) labels[mockShortcutKeyJSON(p.shortcut)] = mockShortcutLabel(p.shortcut);
   const status = {};
   const values = {};
-  for (const d of devices) {
+  devices.forEach((d, i) => {
     status[d.id] = { connected: d.enabled, busy: false, port: d.port || "COM6" };
-    values[d.id] = d.controls.map((c, k) => (c.kind === "button" ? -1 : (k * 211) % 1024));
-  }
+    values[d.id] = MOCK_VALUES[kinds[i]] || d.controls.map((c, k) => (c.kind === "button" ? -1 : (k * 211) % 1024));
+  });
   const catalog = [
-    { section: "volume", job: { kind: "master" }, title: "Master volume", short: "Master volume", icon: MOCK_JOB_ICONS.master },
-    { section: "volume", job: { kind: "microphone" }, title: "Microphone volume", short: "Microphone volume", icon: MOCK_JOB_ICONS.microphone },
-    { section: "volume", job: { kind: "systemSounds" }, title: "System sounds", short: "System sounds", icon: MOCK_JOB_ICONS.systemSounds },
-    { section: "brightness", job: { kind: "brightness", screen: 0 }, title: "Screen 1 brightness", short: "Screen 1", icon: MOCK_JOB_ICONS.brightness },
-    { section: "brightness", job: { kind: "brightness", screen: 1 }, title: "Screen 2 brightness", short: "Screen 2", icon: MOCK_JOB_ICONS.brightness },
-    { section: "contrast", job: { kind: "contrast", screen: 0 }, title: "Screen 1 contrast", short: "Screen 1", icon: MOCK_JOB_ICONS.contrast },
-    { section: "nightLight", job: { kind: "nightLight" }, title: "Night light warmth", short: "Warmth", icon: MOCK_JOB_ICONS.nightLight },
-    { section: "zoom", job: { kind: "zoom" }, title: "Screen zoom", short: "Screen zoom", icon: MOCK_JOB_ICONS.zoom },
-    { section: "apps", job: { kind: "otherApps" }, title: "Other apps", short: "Other apps", icon: MOCK_JOB_ICONS.otherApps },
-    { section: "apps", job: { kind: "focusedApp" }, title: "Focused app", short: "Focused app", icon: MOCK_JOB_ICONS.focusedApp },
-    { section: "apps", job: { kind: "app", exe: "discord.exe" }, title: "Discord", short: "Discord", icon: MOCK_JOB_ICONS.app },
-    { section: "apps", job: { kind: "app", exe: "spotify.exe" }, title: "Spotify", short: "Spotify", icon: MOCK_JOB_ICONS.app },
+    { section: "volume", job: { kind: "master" }, title: "Master volume", short: "Master volume", icon: mockJobIcon("master") },
+    { section: "volume", job: { kind: "microphone" }, title: "Microphone volume", short: "Microphone volume", icon: mockJobIcon("microphone") },
+    { section: "volume", job: { kind: "systemSounds" }, title: "System sounds", short: "System sounds", icon: mockJobIcon("systemSounds") },
+    { section: "brightness", job: { kind: "brightness", screen: 0 }, title: "Screen 1 brightness", short: "Screen 1", icon: mockJobIcon("brightness") },
+    { section: "brightness", job: { kind: "brightness", screen: 1 }, title: "Screen 2 brightness", short: "Screen 2", icon: mockJobIcon("brightness") },
+    { section: "contrast", job: { kind: "contrast", screen: 0 }, title: "Screen 1 contrast", short: "Screen 1", icon: mockJobIcon("contrast") },
+    { section: "nightLight", job: { kind: "nightLight" }, title: "Night light warmth", short: "Warmth", icon: mockJobIcon("nightLight") },
+    { section: "zoom", job: { kind: "zoom" }, title: "Screen zoom", short: "Screen zoom", icon: mockJobIcon("zoom") },
+    { section: "apps", job: { kind: "otherApps" }, title: "Other apps", short: "Other apps", icon: mockJobIcon("otherApps") },
+    { section: "apps", job: { kind: "focusedApp" }, title: "Focused app", short: "Focused app", icon: mockJobIcon("focusedApp") },
+    { section: "apps", job: { kind: "app", exe: "discord.exe" }, title: "Discord", short: "Discord", icon: mockJobIcon("app") },
+    { section: "apps", job: { kind: "app", exe: "spotify.exe" }, title: "Spotify", short: "Spotify", icon: mockJobIcon("app") },
   ];
   const smcButtons = [];
   for (let s = 0; s < 8; s++) for (const first of [16, 8, 0, 24]) smcButtons.push(128 + first + s);
@@ -568,7 +666,7 @@ function mockSettingsInit(enStrings) {
     type: "init",
     lang: "en",
     strings: enStrings,
-    theme: { dark: false, accent: "#0078d4" },
+    theme: { dark: mockDark(), accent: "#0078d4" },
     icon: MOCK_APP_ICON,
     tab: new URLSearchParams(location.search).get("tab") || "general",
     version: "2.0.0",
@@ -584,6 +682,7 @@ function mockSettingsInit(enStrings) {
     language: "en",
     settings: { version: 2, devices, added: devices.length, hideTrayIcon: false, showProfileList: true, language: "en" },
     catalog,
+    actionIcons: Object.fromEntries(Object.entries(MOCK_ACTION_GLYPHS).map(([action, glyph]) => [action, mockGlyph(glyph)])),
     labels,
     nightLightExperimental: true,
     status,
@@ -652,7 +751,8 @@ function startSettingsMock(post, enStrings) {
   return (msg) => {
     switch (msg.type) {
       case "ready":
-        loadMockStrings(enStrings).then((strings) => {
+        Promise.all([loadMockStrings(enStrings), loadMockGlyphs()]).then(([strings, glyphs]) => {
+          mockGlyphs = glyphs;
           init = mockSettingsInit(strings);
           post(init);
           window.weejMock = { post };
@@ -724,7 +824,7 @@ function startSettingsMock(post, enStrings) {
           post({
             type: "appPicked",
             knob: msg.knob,
-            entry: { section: "apps", job: { kind: "app", exe: "vlc.exe" }, title: "VLC", short: "VLC", icon: MOCK_JOB_ICONS.app },
+            entry: { section: "apps", job: { kind: "app", exe: "vlc.exe" }, title: "VLC", short: "VLC", icon: mockJobIcon("app") },
           });
         }, 200);
         break;
