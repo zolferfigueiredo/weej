@@ -347,7 +347,7 @@ const MOCK_EN_STRINGS = {
   press_shortcut: "Press Shortcut",
   previous_profile: "Previous profile",
   profile: "Profile",
-  profile_list: "Profile list",
+  profile_list: "Profile list in tray menu",
   profile_n: "Profile {n}",
   profiles: "Profiles",
   quit: "Quit WeeJ",
