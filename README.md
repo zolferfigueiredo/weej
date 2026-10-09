@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshot.png" width="462" alt="WeeJ Settings: five knobs, each with the jobs it does">
+  <img src="docs/screenshots/boards-draw-light.png" alt="WeeJ Settings, Boards tab: a drawing of the board, with Knob A set to Master volume">
 </p>
 
 ## Install
