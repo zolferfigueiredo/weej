@@ -181,7 +181,7 @@
   "profile.export": "Експорт…",
   "profile.export_failed": "Не вдалося зберегти профіль.",
   "profile.import": "Імпорт…",
-  "profile_list": "Список профілів",
+  "profile_list": "Список профілів у меню області сповіщень",
   "profile_n": "Профіль {n}",
   "profiles": "Профілі",
   "quit": "Завершити WeeJ",

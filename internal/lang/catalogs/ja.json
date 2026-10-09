@@ -178,7 +178,7 @@
   "profile.export": "エクスポート…",
   "profile.export_failed": "プロファイルを保存できませんでした。",
   "profile.import": "インポート…",
-  "profile_list": "プロファイル一覧",
+  "profile_list": "通知領域メニューのプロファイル一覧",
   "profile_n": "プロファイル {n}",
   "profiles": "プロファイル",
   "quit": "WeeJ を終了",
