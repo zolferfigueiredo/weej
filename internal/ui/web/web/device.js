@@ -133,10 +133,10 @@ function controlG(opts, id, extra, body, transform) {
   return `<g class="${c}" id="ctl-${id}" data-action="select-control" data-control="${id}" role="button" tabindex="0" aria-label="${esc(title)}"${id === opts.selected ? ' aria-current="true"' : ""}${transform ? ` transform="${transform}"` : ""}><title>${esc(title)}</title>${body}</g>`;
 }
 
-function labelText(opts, id, y) {
+function labelText(opts, id, y, max = LABEL_MAX) {
   const l = opts.label(id);
   const more = l.more ? ` +${l.more}` : "";
-  const text = fitLabel(l.text, LABEL_MAX - (more ? labelWidth(more) : 0)) + more;
+  const text = fitLabel(l.text, max - (more ? labelWidth(more) : 0)) + more;
   return `<text class="label${l.empty ? " empty" : ""}" y="${y}">${esc(text)}</text>`;
 }
 
@@ -202,6 +202,7 @@ export function smcSVG(opts) {
 // A board is drawn in rows of cells, each as tall as its tallest control; at least as big as the
 // SMC-Mixer, so a small board isn't drawn huge, centred in that.
 const CELL = 16;
+const CELL_LABEL_MAX = CELL - (PITCH - LABEL_MAX);
 const ROW_GAP = 4;
 const KIND_H = { knob: 16, fader: 41, button: 14 };
 const BOARD_FADER = { top: 2.6, len: 30 };
@@ -222,11 +223,11 @@ export function boardSVG(opts) {
       const v = opts.value(k);
       let body;
       if (kind === "fader") {
-        body = faderBody(v, BOARD_FADER.top, BOARD_FADER.len) + labelText(opts, k, BOARD_FADER.top + BOARD_FADER.len + 6.2);
+        body = faderBody(v, BOARD_FADER.top, BOARD_FADER.len) + labelText(opts, k, BOARD_FADER.top + BOARD_FADER.len + 6.2, CELL_LABEL_MAX);
       } else if (kind === "button") {
-        body = `<rect class="face" x="-3.5" y="0.6" width="7" height="7" rx="1"/>${dot(opts.assigned(k), 2.6, 1.5)}` + labelText(opts, k, 11.7);
+        body = `<rect class="face" x="-3.5" y="0.6" width="7" height="7" rx="1"/>${dot(opts.assigned(k), 2.6, 1.5)}` + labelText(opts, k, 11.7, CELL_LABEL_MAX);
       } else {
-        body = knobBody(v, KNOB_R + 0.6) + labelText(opts, k, 13.7);
+        body = knobBody(v, KNOB_R + 0.6) + labelText(opts, k, 13.7, CELL_LABEL_MAX);
       }
       const extra = kind + (v < 0 && kind !== "button" ? " unknown" : "") + (opts.waiting(k) ? " waiting" : "");
       out += controlG(opts, k, extra, body, `translate(${x0 + i * CELL} ${y})`);
