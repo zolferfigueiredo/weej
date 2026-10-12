@@ -137,10 +137,6 @@ func (app *App) buildMenu() []winui.MenuItem {
 	items = append(items, winui.MenuItem{Separator: true})
 	items = append(items, app.updateMenuItem(s))
 	items = append(items, winui.MenuItem{Text: app.tr("auto"), Children: app.autoUpdateMenuItems(s.UpdateEvery)})
-	items = append(items, winui.MenuItem{
-		Text: app.tr("auto_install"), Checked: app.installsAutomatically(), Disabled: !sys.IsInstalledCopy(app.self),
-		OnClick: app.toggleInstallUpdates,
-	})
 
 	items = append(items, winui.MenuItem{Separator: true})
 	items = append(items, winui.MenuItem{Text: app.tr("quit"), OnClick: app.quit})
@@ -229,18 +225,13 @@ func (app *App) autoUpdateMenuItems(every int) []winui.MenuItem {
 				if err := app.persistSettings(cur); err != nil {
 					app.log("Could not save settings: " + err.Error())
 				}
+				if win := app.settingsWin; win != nil {
+					win.Send(map[string]any{"type": "updateEvery", "updateEvery": seconds})
+				}
 			},
 		})
 	}
 	return items
-}
-
-func (app *App) toggleInstallUpdates() {
-	cur := app.snapshotSettings()
-	cur.InstallUpdates = !cur.InstallUpdates
-	if err := app.persistSettings(cur); err != nil {
-		app.log("Could not save settings: " + err.Error())
-	}
 }
 
 func (app *App) quit() {

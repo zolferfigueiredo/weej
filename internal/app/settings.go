@@ -261,6 +261,7 @@ func (app *App) handleSettingsSave(data []byte) {
 	next := app.snapshotSettings()
 	next.Devices = page.Devices
 	next.HideIcon, next.ShowProfiles = page.HideIcon, page.ShowProfiles
+	next.UpdateEvery, next.InstallUpdates = page.UpdateEvery, page.InstallUpdates
 	app.applySettings(next)
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "saved", "settings": settingsJSON(app.snapshotSettings())})

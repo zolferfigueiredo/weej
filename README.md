@@ -107,7 +107,7 @@ Upstream deej already runs on Windows; WeeJ is a different take on the same idea
 - **Night light** is stored by Windows in an undocumented setting, so a future Windows update could break it. That's why it's marked Experimental.
 - **Screen zoom** uses the Magnification API, and a **VIA keyboard's backlight** goes over USB HID.
 - The tray icon, its menu and the indicator are native Win32. The Settings, Language and Update windows are pages in WebView2, laid out like Windows 11's own Settings and following its light or dark theme and accent color.
-- **Check for updates…** asks GitHub for the newest release and sends nothing about you. An update downloads that release's zip, checks it against the release's SHA-256, and installs only into the installed copy (`%LOCALAPPDATA%\Programs\WeeJ`). Then WeeJ closes for a moment and opens again as the new version, which says so in a notification. With **Install automatically** on, as it is by default, this happens as soon as a check finds a new version, after Settings is closed if it is open; with it off, the notification or **Install version … now** in the menu does it in one click.
+- **Check for updates…** asks GitHub for the newest release and sends nothing about you. An update downloads that release's zip, checks it against the release's SHA-256, and installs only into the installed copy (`%LOCALAPPDATA%\Programs\WeeJ`). Then WeeJ closes for a moment and opens again as the new version, which says so in a notification. With **Install updates automatically** on in Settings, as it is by default, this happens as soon as a check finds a new version, after Settings is closed if it is open; with it off, the notification or **Install version … now** in the menu does it in one click.
 - Only one copy runs at a time. Opening WeeJ again while it runs brings up Settings, which is the way back with the tray icon hidden.
 
 <details>
@@ -115,7 +115,7 @@ Upstream deej already runs on Windows; WeeJ is a different take on the same idea
 
 The icon is WeeJ's app icon, drawn in code in [internal/draw](internal/draw). Pointing at it names each connected board with its profile.
 
-A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut, and Calibrate (not on an SMC-Mixer). Then Settings, Language and Reconnect, then Launch at login, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never) and Install automatically (on by default), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
+A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut, and Calibrate (not on an SMC-Mixer). Then Settings, Language and Reconnect, then Launch at login, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
 
 </details>
 
@@ -124,7 +124,7 @@ A left click, or Enter on the focused icon, opens Settings. A right click opens 
 
 **Settings** has three tabs, laid out in groups as Windows Settings is: **General** for your boards and the app, **Boards** for what each board's controls do, and **About**.
 
-**General** is one list down the middle of the window: your boards, then the app's own settings. Each board's row has a switch on the left that turns the board on or off, its name, its status (Connected in green, Disconnected or Off) and a gear for its settings. The very first time, with no boards yet, it asks how many you have and adds each in turn, and **Add board** adds one more. Under **App** come **Language**, **Hide tray icon**, which removes the icon (open WeeJ again to get back to Settings), and **Profile list**, which puts each board's profiles in the tray menu.
+**General** is one list down the middle of the window: your boards, then the app's own settings. Each board's row has a switch on the left that turns the board on or off, its name, its status (Connected in green, Disconnected or Off) and a gear for its settings. The very first time, with no boards yet, it asks how many you have and adds each in turn, and **Add board** adds one more. Under **App** come **Language**, **Hide tray icon**, which removes the icon (open WeeJ again to get back to Settings), and **Profile list**, which puts each board's profiles in the tray menu. Under **Updates** come **Check for updates automatically**, weekly unless the tray menu's Check automatically says daily, and **Install updates automatically**, which installs a new version as soon as it is found and opens WeeJ again (both on by default).
 
 **Add board** asks for a name and a type: **DIY (Arduino)**, **SMC-Mixer** or **Other MIDI**. A DIY board also asks for its COM port and baud rate, an Other MIDI board for its MIDI input, and both for how many knobs, faders and buttons it has; calibration follows. A port or input another board uses says so. An SMC-Mixer's controls are known, so it is ready at once.
 

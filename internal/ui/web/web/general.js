@@ -51,6 +51,26 @@ export function renderGeneral() {
           </div>
         </div>
       </div>
+
+      <div class="group">
+        <h2 class="group-title">${esc(t("general.updates"))}</h2>
+        <div class="card">
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("general.auto_update"))}</span>
+              <span class="row-desc">${esc(t(draft.updateEvery === 86400 ? "general.auto_update_daily" : "general.auto_update_weekly"))}</span>
+            </div>
+            <div class="row-control"><input class="toggle" id="auto-update" type="checkbox" role="switch"${draft.updateEvery > 0 ? " checked" : ""} /></div>
+          </div>
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("general.auto_install"))}</span>
+              <span class="row-desc">${esc(t("general.auto_install_note"))}</span>
+            </div>
+            <div class="row-control"><input class="toggle" id="auto-install" type="checkbox" role="switch"${draft.installUpdates ? " checked" : ""} /></div>
+          </div>
+        </div>
+      </div>
     </div>`;
 }
 
