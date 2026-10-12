@@ -49,9 +49,13 @@ func (app *App) openSettings(tab string) {
 		OnClose: func() {
 			app.mu.Lock()
 			app.settingsWin = nil
+			restart := app.restartPending
 			app.mu.Unlock()
 			// Closing mid-recording would otherwise leave the saved hotkeys switched off.
 			app.registerHotkeys(app.snapshotSettings())
+			if restart {
+				app.loop.Invoke(app.restartIntoUpdate)
+			}
 		},
 	}, app.onSettingsMessage)
 	if err != nil {

@@ -33,6 +33,17 @@ func TestNewerVersion(t *testing.T) {
 	}
 }
 
+func TestRestartArgsWaitOnlyForThisCopy(t *testing.T) {
+	got := RestartArgs([]string{"COM6", "--wait-pid", "100", "--log", "x.log", "--wait-pid", "200"}, 300)
+	want := []string{"COM6", "--log", "x.log", "--wait-pid", "300"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Errorf("RestartArgs = %q, want %q", got, want)
+	}
+	if got := RestartArgs(nil, 7); strings.Join(got, " ") != "--wait-pid 7" {
+		t.Errorf("RestartArgs(nil) = %q, want only the wait", got)
+	}
+}
+
 func TestUpdateCheckSchedule(t *testing.T) {
 	now := time.Now()
 	hour := time.Hour

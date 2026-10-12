@@ -88,7 +88,7 @@ WeeJ's three windows (Settings, the first-run Language prompt, Update progress) 
 
 That constraint shapes everything. Density stays native-Settings: grouped cards of rows (SettingsCard), a left label plus a right-aligned control, hairline dividers between rows, generous but not loose vertical rhythm between groups. Color stays restrained to the bone: the accent appears only on the primary action, the active tab's underline, a focused toggle, and nothing else. Depth is almost entirely absent; a 1px border carries every card, and only what floats above the page (the job picker, the dialogs) earns a shadow.
 
-The three windows share one visual system (one stylesheet, one component set) but differ in posture: Settings is a working document (tabs, dense rows, two persistent footer actions) with its few dialogs (a board's settings, Add board, calibration, confirm), while Language and Update are small, centered, single-purpose moments with no chrome beyond a title, body text and one or two buttons.
+The three windows share one visual system (one stylesheet, one component set) but differ in posture: Settings is a working document (tabs, dense rows, two persistent footer actions) with its few dialogs (a board's settings, Add board, calibration, confirm), while Language and Update are small, centered, single-purpose moments with no chrome beyond a title, body text and Language's buttons or Update's progress bar (Update has no button: WeeJ restarts on its own once it is done).
 
 **Key Characteristics:**
 - Segoe UI Variable throughout; no secondary/display typeface

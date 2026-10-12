@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+// installer/weej.iss closes a running WeeJ by these two names.
 const MainWindowClass = "WeeJ.Main"
 
 const mutexName = `Local\com.zolfer.weej`

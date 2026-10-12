@@ -21,12 +21,20 @@ func (app *App) fetchRelease(ctx context.Context) (updater.Release, error) {
 	return updater.Check(ctx, app.updateSite())
 }
 
+// checkUpdateComplete says so in a notification, since an update installed on its own restarts
+// WeeJ without anyone watching.
 func (app *App) checkUpdateComplete() {
 	s := app.snapshotSettings()
 	if s.UpdatedTo == "" || s.UpdatedTo != core.AppVersion {
 		return
 	}
-	app.loop.Alert(app.tr("update_complete"), app.trVars("now_using", v1("version", core.AppVersion)))
+	title, text := app.tr("update_complete"), app.trVars("now_using", v1("version", core.AppVersion))
+	if s.HideIcon {
+		app.loop.Alert(title, text)
+	} else {
+		// Queued behind refreshTray's Invoke, which adds the icon a notification needs.
+		app.loop.Invoke(func() { app.tray.Balloon(title, text) })
+	}
 	s2 := app.snapshotSettings()
 	s2.UpdatedTo = ""
 	if err := app.persistSettings(s2); err != nil {
@@ -36,6 +44,12 @@ func (app *App) checkUpdateComplete() {
 
 func (app *App) postTestNotification() {
 	app.notifyUpdateAvailable(core.NextPatch(core.AppVersion))
+}
+
+// installsAutomatically is Install automatically where it can work: only the installed copy
+// updates itself.
+func (app *App) installsAutomatically() bool {
+	return app.snapshotSettings().InstallUpdates && updater.WhichCopy(app.self) == updater.Installed
 }
 
 func (app *App) autoCheckUpdate() {
@@ -60,17 +74,28 @@ func (app *App) autoCheckUpdate() {
 			if err != nil {
 				return
 			}
-			if core.IsNewer(rel.Version, core.AppVersion) && s.NotifiedVersion != rel.Version {
-				s2 := app.snapshotSettings()
-				s2.NotifiedVersion = rel.Version
-				if err := app.persistSettings(s2); err != nil {
-					app.log("Could not save settings: " + err.Error())
+			if core.IsNewer(rel.Version, core.AppVersion) {
+				if app.installsAutomatically() {
+					app.install(rel, false)
+				} else {
+					app.notifyOnce(rel.Version)
 				}
-				app.notifyUpdateAvailable(rel.Version)
 			}
 			app.refreshTray()
 		})
 	}()
+}
+
+func (app *App) notifyOnce(version string) {
+	s := app.snapshotSettings()
+	if s.NotifiedVersion == version {
+		return
+	}
+	s.NotifiedVersion = version
+	if err := app.persistSettings(s); err != nil {
+		app.log("Could not save settings: " + err.Error())
+	}
+	app.notifyUpdateAvailable(version)
 }
 
 func (app *App) notifyUpdateAvailable(version string) {
@@ -89,6 +114,14 @@ func (app *App) notifyUpdateAvailable(version string) {
 		app.trVars("available", v1("version", version)),
 		app.trVars("click_to_update", v1("version", core.AppVersion)),
 	)
+}
+
+// onBalloonClick updates, as the notification of a new version says a click does. The one after
+// an update has nothing to do.
+func (app *App) onBalloonClick() {
+	if v := app.snapshotSettings().AvailableVersion; v != "" && core.IsNewer(v, core.AppVersion) {
+		app.startUpdateNow()
+	}
 }
 
 func (app *App) manualCheckUpdate() {
@@ -127,6 +160,10 @@ func (app *App) manualCheckUpdate() {
 				app.loop.Alert(app.tr("up_to_date"), app.trVars("newest", v1("version", core.AppVersion)))
 				return
 			}
+			if app.installsAutomatically() {
+				app.install(rel, true)
+				return
+			}
 			choice := app.loop.Ask(
 				app.trVars("available", v1("version", rel.Version)),
 				app.trVars("update_question", v1("version", core.AppVersion)),
@@ -147,7 +184,14 @@ func (app *App) startUpdateNow() {
 			app.openUpdatePageURL()
 		}
 	default:
-		app.beginInstall()
+		version := app.snapshotSettings().AvailableVersion
+		app.mu.Lock()
+		rel := app.lastRelease
+		app.mu.Unlock()
+		if rel.Version != version {
+			rel = updater.Release{Version: version}
+		}
+		app.install(rel, true)
 	}
 }
 
@@ -159,22 +203,111 @@ func (app *App) openUpdatePageURL() {
 	openURL(updater.PageURL(v))
 }
 
-func (app *App) beginInstall() {
+// install puts the update in place and restarts WeeJ into it. With a window it shows how far it
+// got and asks what to do if it fails; without one, as Install automatically runs it, a failure
+// only notifies, which leaves the update a click away.
+func (app *App) install(rel updater.Release, withWindow bool) {
 	app.mu.Lock()
 	if app.installing {
 		app.mu.Unlock()
 		return
 	}
-	app.installing = true
-	app.installStep = updater.Downloading
-	rel := app.lastRelease
+	pending := app.restartPending
+	if !pending {
+		app.installing = true
+		app.installStep = updater.Downloading
+	}
 	app.mu.Unlock()
-
-	version := app.snapshotSettings().AvailableVersion
-	if rel.Version != version {
-		rel.Version = version
+	if pending {
+		if withWindow {
+			app.restartIntoUpdate()
+		}
+		return
 	}
 
+	if withWindow {
+		app.openUpdateWindow()
+		app.pushUpdateProgress(rel.Version, updater.Downloading, false)
+	}
+
+	go func() {
+		ctx := context.Background()
+		var err error
+		// After a restart WeeJ remembers the version it found but not its checksum.
+		if rel.SHA256 == "" {
+			var fetched updater.Release
+			if fetched, err = app.fetchRelease(ctx); err == nil {
+				rel = fetched
+			}
+		}
+		if err == nil {
+			err = updater.Install(ctx, app.updateSite(), rel, app.self, func(step updater.Step) {
+				app.loop.Invoke(func() {
+					app.mu.Lock()
+					app.installStep = step
+					app.mu.Unlock()
+					app.pushUpdateProgress(rel.Version, step, step == updater.Done)
+				})
+			})
+		}
+		app.loop.Invoke(func() { app.installDone(rel.Version, err, withWindow) })
+	}()
+}
+
+func (app *App) installDone(version string, err error, withWindow bool) {
+	app.mu.Lock()
+	app.installing = false
+	app.mu.Unlock()
+
+	if err != nil {
+		app.log("Could not install the update: " + err.Error())
+		if !withWindow {
+			app.notifyOnce(version)
+			app.refreshTray()
+			return
+		}
+		app.closeUpdateWindow()
+		choice := app.loop.Ask(app.tr("update_failed"), translateUpdaterError(app, err), []string{app.tr("download"), app.tr("cancel")})
+		if choice == 0 {
+			app.openUpdatePageURL()
+		}
+		return
+	}
+
+	s := app.snapshotSettings()
+	s.UpdatedTo = version
+	if err := app.persistSettings(s); err != nil {
+		app.log("Could not save settings: " + err.Error())
+	}
+	// Settings may hold edits not applied yet, so an update nobody asked for waits for it to close.
+	if !withWindow && app.settingsWin != nil {
+		app.mu.Lock()
+		app.restartPending = true
+		app.mu.Unlock()
+		app.refreshTray()
+		return
+	}
+	app.restartIntoUpdate()
+}
+
+func (app *App) restartIntoUpdate() {
+	if err := updater.Reopen(app.self, app.launchArgs); err != nil {
+		app.closeUpdateWindow()
+		app.loop.Alert(core.AppName, app.trVars("reopen_failed", v1("error", err.Error())))
+		return
+	}
+	app.shutdown()
+	app.loop.Quit(0)
+}
+
+func translateUpdaterError(app *App, err error) string {
+	if uerr, ok := err.(*updater.Error); ok {
+		return app.tr(uerr.Key)
+	}
+	return app.tr("download_failed")
+}
+
+func (app *App) openUpdateWindow() {
 	win, err := web.Open(app.loop.Invoke, "update", web.Options{
 		Title: core.AppName, Width: 420, Height: 160, NoClose: true,
 		OnClose: func() {
@@ -185,53 +318,11 @@ func (app *App) beginInstall() {
 	}, app.onUpdateMessage)
 	if err != nil {
 		app.log("Could not open the update window: " + err.Error())
-		app.mu.Lock()
-		app.installing = false
-		app.mu.Unlock()
 		return
 	}
 	app.mu.Lock()
 	app.updateWin = win
 	app.mu.Unlock()
-	app.pushUpdateProgress(version, updater.Downloading, false)
-
-	go func() {
-		installErr := updater.Install(context.Background(), app.updateSite(), rel, app.self, func(step updater.Step) {
-			app.loop.Invoke(func() {
-				app.mu.Lock()
-				app.installStep = step
-				app.mu.Unlock()
-				app.pushUpdateProgress(version, step, step == updater.Done)
-			})
-		})
-		app.loop.Invoke(func() {
-			app.mu.Lock()
-			app.installing = false
-			app.mu.Unlock()
-
-			if installErr != nil {
-				app.closeUpdateWindow()
-				reason := translateUpdaterError(app, installErr)
-				choice := app.loop.Ask(app.tr("update_failed"), reason, []string{app.tr("download"), app.tr("cancel")})
-				if choice == 0 {
-					app.openUpdatePageURL()
-				}
-				return
-			}
-			s := app.snapshotSettings()
-			s.UpdatedTo = version
-			if err := app.persistSettings(s); err != nil {
-				app.log("Could not save settings: " + err.Error())
-			}
-		})
-	}()
-}
-
-func translateUpdaterError(app *App, err error) string {
-	if uerr, ok := err.(*updater.Error); ok {
-		return app.tr(uerr.Key)
-	}
-	return app.tr("download_failed")
 }
 
 func (app *App) closeUpdateWindow() {
@@ -260,21 +351,11 @@ func (app *App) onUpdateMessage(data []byte) {
 	if err := json.Unmarshal(data, &probe); err != nil {
 		return
 	}
-	switch probe.Type {
-	case "ready":
+	if probe.Type == "ready" {
 		if win := app.updateWin; win != nil {
 			payload := app.baseInitFields()
 			payload["icon"] = appIconDataURL(64)
 			win.Send(payload)
 		}
-	case "reopen":
-		app.loop.Invoke(func() {
-			if err := updater.Reopen(app.self, app.launchArgs); err != nil {
-				app.loop.Alert(core.AppName, app.trVars("reopen_failed", v1("error", err.Error())))
-				return
-			}
-			app.shutdown()
-			app.loop.Quit(0)
-		})
 	}
 }

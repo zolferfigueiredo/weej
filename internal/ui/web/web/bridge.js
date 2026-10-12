@@ -336,6 +336,7 @@ const MOCK_EN_STRINGS = {
   add_profile: "Add a profile",
   apply: "Apply",
   auto: "Check automatically",
+  auto_install: "Install automatically",
   available: "WeeJ {version} is available",
   calibrate: "Calibrate",
   cancel: "Cancel",
@@ -413,7 +414,6 @@ const MOCK_EN_STRINGS = {
   remove_profile_info: "Its knob choices and shortcut go with it.",
   remove_shortcut: "Remove shortcut",
   remove_this_profile: "Remove this profile?",
-  reopen: "Reopen",
   reopen_failed: "Couldn't reopen: {error} Quit and open it yourself.",
   "seconds_left.one": "{n} second left",
   "seconds_left.other": "{n} seconds left",
@@ -920,8 +920,6 @@ function startUpdateMock(post, enStrings) {
         setTimeout(() => {
           post({ type: "update", heading: T("updating_to", { version: "1.0.1" }), status: T("installed", { version: "1.0.1" }), done: true });
         }, 3000);
-        break;
-      case "reopen":
         break;
     }
   };

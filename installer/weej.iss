@@ -29,7 +29,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 #else
 ArchitecturesAllowed=x86compatible
 #endif
-AppMutex=Local\com.zolfer.weej
+; No AppMutex: [Code] closes a running copy itself instead of asking the user to.
 CloseApplications=yes
 RestartApplications=no
 OutputBaseFilename=WeeJ-{#AppVersion}-{#Arch}-setup
@@ -69,7 +69,8 @@ japanese.LaunchAtLogin=ログイン時に WeeJ を起動する
 korean.LaunchAtLogin=로그인할 때 WeeJ 실행
 
 [Tasks]
-Name: "login"; Description: "{cm:LaunchAtLogin}"; Flags: unchecked
+; Only on a first install, so installing over WeeJ keeps what was chosen in its menu since.
+Name: "login"; Description: "{cm:LaunchAtLogin}"; Flags: unchecked; Check: not IsUpgrade
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "WeeJ.exe"; Flags: ignoreversion
@@ -87,3 +88,57 @@ Filename: "{app}\WeeJ.exe"; Description: "{cm:LaunchProgram,WeeJ}"; Flags: nowai
 
 [UninstallDelete]
 Type: files; Name: "{app}\WeeJ.exe.old"
+
+[Code]
+const
+  // mutexName and MainWindowClass in internal/platform/sys/instance.go.
+  AppMutexName = 'Local\com.zolfer.weej';
+  AppWindowClass = 'WeeJ.Main';
+  UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{82E4CB37-0DB9-4E44-B883-8C04E719EA7D}_is1';
+
+function RegisterWindowMessage(Name: String): Longint;
+  external 'RegisterWindowMessageW@user32.dll stdcall';
+
+// Quits a running WeeJ the way WeeJ.exe --quit does (the WeeJ.Quit message to its main window),
+// so nobody has to find it in the notification area first.
+function CloseRunningApp(): Boolean;
+var
+  Wnd: HWND;
+  Waited: Integer;
+begin
+  if not CheckForMutexes(AppMutexName) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  Wnd := FindWindowByClassName(AppWindowClass);
+  if Wnd <> 0 then
+    PostMessage(Wnd, RegisterWindowMessage('WeeJ.Quit'), 0, 0);
+  Waited := 0;
+  while CheckForMutexes(AppMutexName) and (Waited < 10000) do
+  begin
+    Sleep(100);
+    Waited := Waited + 100;
+  end;
+  Result := not CheckForMutexes(AppMutexName);
+end;
+
+function IsUpgrade(): Boolean;
+begin
+  Result := RegKeyExists(HKCU, UninstallKey);
+end;
+
+// Runs when installing starts, so cancelling the wizard leaves WeeJ running.
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  if CloseRunningApp() then
+    Result := ''
+  else
+    Result := FmtMessage(SetupMessage(msgSetupAppRunningError), ['WeeJ']);
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+    CloseRunningApp();
+end;
