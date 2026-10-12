@@ -69,7 +69,7 @@ You need:
 - **Any number of knobs.** As many as your sketch sends, named A to Z, then A2, B2 and on. Pots wired the other way round need nothing: calibration sees which way each one turns.
 - **Same firmware.** Speaks the deej serial protocol, unchanged, at 9600 baud or whatever your sketch uses.
 - **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in the menu and in Settings changes it at once, open windows included.
-- **Lives in the tray.** A left click opens Settings and a right click opens the menu. It reconnects on its own, can launch at login, and installs updates in one click.
+- **Lives in the tray.** A left click opens Settings and a right click opens the menu. It reconnects on its own, can launch at login, and installs updates by itself.
 
 ## What a knob can do
 
@@ -107,7 +107,7 @@ Upstream deej already runs on Windows; WeeJ is a different take on the same idea
 - **Night light** is stored by Windows in an undocumented setting, so a future Windows update could break it. That's why it's marked Experimental.
 - **Screen zoom** uses the Magnification API, and a **VIA keyboard's backlight** goes over USB HID.
 - The tray icon, its menu and the indicator are native Win32. The Settings, Language and Update windows are pages in WebView2, laid out like Windows 11's own Settings and following its light or dark theme and accent color.
-- **Check for updates…** asks GitHub for the newest release and sends nothing about you. An update downloads that release's zip, checks it against the release's SHA-256, and installs only into the installed copy (`%LOCALAPPDATA%\Programs\WeeJ`).
+- **Check for updates…** asks GitHub for the newest release and sends nothing about you. An update downloads that release's zip, checks it against the release's SHA-256, and installs only into the installed copy (`%LOCALAPPDATA%\Programs\WeeJ`). Then WeeJ closes for a moment and opens again as the new version, which says so in a notification. With **Install automatically** on, as it is by default, this happens as soon as a check finds a new version, after Settings is closed if it is open; with it off, the notification or **Install version … now** in the menu does it in one click.
 - Only one copy runs at a time. Opening WeeJ again while it runs brings up Settings, which is the way back with the tray icon hidden.
 
 <details>
@@ -115,7 +115,7 @@ Upstream deej already runs on Windows; WeeJ is a different take on the same idea
 
 The icon is WeeJ's app icon, drawn in code in [internal/draw](internal/draw). Pointing at it names each connected board with its profile.
 
-A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut, and Calibrate (not on an SMC-Mixer). Then Settings, Language and Reconnect, then Launch at login, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
+A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut, and Calibrate (not on an SMC-Mixer). Then Settings, Language and Reconnect, then Launch at login, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never) and Install automatically (on by default), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
 
 </details>
 

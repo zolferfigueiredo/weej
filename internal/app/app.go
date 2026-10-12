@@ -93,6 +93,8 @@ type App struct {
 	installing  bool
 	installStep updater.Step
 	lastRelease updater.Release
+	// restartPending is an update installed on its own, waiting for Settings to close.
+	restartPending bool
 
 	shutdownOnce sync.Once
 }

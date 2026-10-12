@@ -17,6 +17,7 @@ type Settings struct {
 	Language         string
 	ShowDataInMenu   bool
 	UpdateEvery      int
+	InstallUpdates   bool
 	LastUpdateCheck  time.Time
 	AvailableVersion string
 	NotifiedVersion  string
@@ -29,7 +30,7 @@ type Settings struct {
 const settingsVersion = 2
 
 func DefaultSettings() Settings {
-	return Settings{ShowProfiles: true, ShowDataInMenu: true, UpdateEvery: 604800}
+	return Settings{ShowProfiles: true, ShowDataInMenu: true, UpdateEvery: 604800, InstallUpdates: true}
 }
 
 // The on-disk shape, key order fixed so EncodeSettings is deterministic.
@@ -42,6 +43,7 @@ type settingsJSON struct {
 	Language         string       `json:"language"`
 	ShowDataInMenu   bool         `json:"showDataInMenu"`
 	UpdateEvery      int          `json:"updateEvery"`
+	InstallUpdates   bool         `json:"installUpdates"`
 	LastUpdateCheck  *time.Time   `json:"lastUpdateCheck,omitempty"`
 	AvailableVersion string       `json:"availableVersion"`
 	NotifiedVersion  string       `json:"notifiedVersion"`
@@ -92,6 +94,7 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		Language:         s.Language,
 		ShowDataInMenu:   s.ShowDataInMenu,
 		UpdateEvery:      s.UpdateEvery,
+		InstallUpdates:   s.InstallUpdates,
 		AvailableVersion: s.AvailableVersion,
 		NotifiedVersion:  s.NotifiedVersion,
 		UpdatedTo:        s.UpdatedTo,
@@ -194,6 +197,9 @@ func DecodeSettings(data []byte, profileName string) Settings {
 	}
 	if v, ok := take[int](raw, "updateEvery"); ok && (v == 0 || v == 86400 || v == 604800) {
 		s.UpdateEvery = v
+	}
+	if v, ok := take[bool](raw, "installUpdates"); ok {
+		s.InstallUpdates = v
 	}
 	if v, ok := take[time.Time](raw, "lastUpdateCheck"); ok {
 		s.LastUpdateCheck = v

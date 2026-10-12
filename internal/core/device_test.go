@@ -101,8 +101,17 @@ func boardFixture() Settings {
 	smc.Profiles[0].Shortcut = &Shortcut{VK: 0x70, Mods: 2, Key: "F1"}
 	s.Devices = []Device{diy, smc}
 	s.Added = 3
-	s.Language, s.ShowProfiles = "it", false
+	s.Language, s.ShowProfiles, s.InstallUpdates = "it", false, false
 	return s
+}
+
+func TestSettingsInstallUpdatesUnlessTurnedOff(t *testing.T) {
+	if s := DecodeSettings([]byte(`{"version":2}`), "Default"); !s.InstallUpdates {
+		t.Error("a file from before Install automatically has it off, want it on")
+	}
+	if s := DecodeSettings([]byte(`{"version":2,"installUpdates":false}`), "Default"); s.InstallUpdates {
+		t.Error("installUpdates false read as on")
+	}
 }
 
 func TestSettingsRoundTrip(t *testing.T) {

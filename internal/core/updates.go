@@ -79,6 +79,20 @@ func NextPatch(version string) string {
 	return strings.Join(parts, ".")
 }
 
+// RestartArgs drops the --wait-pid of earlier restarts: that process is gone, and Windows may
+// have given its id to another one the new copy would then wait on.
+func RestartArgs(args []string, pid int) []string {
+	out := make([]string, 0, len(args)+2)
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--wait-pid" {
+			i++
+			continue
+		}
+		out = append(out, args[i])
+	}
+	return append(out, "--wait-pid", strconv.Itoa(pid))
+}
+
 func IsDue(every int, last, now time.Time) bool {
 	return every > 0 && now.Sub(last) >= time.Duration(every)*time.Second
 }

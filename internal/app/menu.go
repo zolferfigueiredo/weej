@@ -16,7 +16,7 @@ import (
 )
 
 func (app *App) setupTray(l *winui.Loop) {
-	app.tray = l.NewTray(func() { app.openSettings("") }, app.showTrayMenu, func() { app.manualCheckUpdate() })
+	app.tray = l.NewTray(func() { app.openSettings("") }, app.showTrayMenu, app.onBalloonClick)
 	app.hud = l.NewHUD()
 	l.OnThemeChange(func() {
 		app.refreshTray()
@@ -137,6 +137,10 @@ func (app *App) buildMenu() []winui.MenuItem {
 	items = append(items, winui.MenuItem{Separator: true})
 	items = append(items, app.updateMenuItem(s))
 	items = append(items, winui.MenuItem{Text: app.tr("auto"), Children: app.autoUpdateMenuItems(s.UpdateEvery)})
+	items = append(items, winui.MenuItem{
+		Text: app.tr("auto_install"), Checked: app.installsAutomatically(), Disabled: !sys.IsInstalledCopy(app.self),
+		OnClick: app.toggleInstallUpdates,
+	})
 
 	items = append(items, winui.MenuItem{Separator: true})
 	items = append(items, winui.MenuItem{Text: app.tr("quit"), OnClick: app.quit})
@@ -183,10 +187,10 @@ func (app *App) languageMenuItems(current string) []winui.MenuItem {
 
 func (app *App) updateMenuItem(s core.Settings) winui.MenuItem {
 	app.mu.Lock()
-	checking, installing, step := app.checking, app.installing, app.installStep
+	checking, installing, step, pending := app.checking, app.installing, app.installStep, app.restartPending
 	app.mu.Unlock()
 
-	if checking || installing {
+	if checking || installing || pending {
 		return winui.MenuItem{Text: app.updateStepText(step, s.AvailableVersion), Disabled: true}
 	}
 	if s.AvailableVersion != "" && core.IsNewer(s.AvailableVersion, core.AppVersion) {
@@ -229,6 +233,14 @@ func (app *App) autoUpdateMenuItems(every int) []winui.MenuItem {
 		})
 	}
 	return items
+}
+
+func (app *App) toggleInstallUpdates() {
+	cur := app.snapshotSettings()
+	cur.InstallUpdates = !cur.InstallUpdates
+	if err := app.persistSettings(cur); err != nil {
+		app.log("Could not save settings: " + err.Error())
+	}
 }
 
 func (app *App) quit() {
