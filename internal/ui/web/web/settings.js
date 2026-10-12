@@ -525,6 +525,14 @@ function onChange(e) {
     case "show-profile-list":
       S.draft.showProfileList = el.checked;
       break;
+    // Daily or weekly is picked in the tray menu; switching checks back on keeps that choice.
+    case "auto-update":
+      S.draft.updateEvery = el.checked ? S.saved.updateEvery || 604800 : 0;
+      render();
+      break;
+    case "auto-install":
+      S.draft.installUpdates = el.checked;
+      break;
     case "dlg-port":
       S.dialog.dev.port = el.value;
       break;
@@ -614,6 +622,12 @@ function onMessage(msg) {
       S.draft = clone(msg.settings);
       S.draft.devices = S.draft.devices || [];
       S.saved = clone(S.draft);
+      render();
+      break;
+    // The tray menu changed how often to check, so Apply mustn't put the old value back.
+    case "updateEvery":
+      if (!S.saved) break;
+      for (const s of [S.draft, S.saved]) s.updateEvery = msg.updateEvery;
       render();
       break;
     case "deviceSaved":
