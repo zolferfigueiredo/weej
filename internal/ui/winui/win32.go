@@ -65,8 +65,7 @@ const (
 
 	wsExToolWindow = 0x00000080
 
-	swHide           = 0
-	swShowNoActivate = 4
+	swHide = 0
 
 	idcArrow = 32512
 

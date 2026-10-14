@@ -14,6 +14,7 @@ import (
 
 var (
 	procUpdateLayeredWindow = user32.NewProc("UpdateLayeredWindow")
+	procSetWindowPos        = user32.NewProc("SetWindowPos")
 
 	hudClassOnce sync.Once
 )
@@ -28,6 +29,12 @@ const (
 	wsExTopMost     = 0x00000008
 
 	ulwAlpha = 0x00000002
+
+	hwndTopmost   = ^uintptr(0) // HWND_TOPMOST, (HWND)-1
+	swpNoSize     = 0x0001
+	swpNoMove     = 0x0002
+	swpNoActivate = 0x0010
+	swpShowWindow = 0x0040
 
 	hudHoldDuration  = 1 * time.Second
 	hudFadeSteps     = 10
@@ -95,7 +102,7 @@ func (h *HUD) Show(key string, work image.Rectangle, scale float64, bmp *image.N
 	y := work.Max.Y - int(math.Round(24*scale)) - hgt
 
 	renderHUD(hw, bmp, x, y)
-	showWindow(hw.hwnd, swShowNoActivate)
+	raiseHUD(hw.hwnd)
 
 	stop := h.loop.After(hudHoldDuration, func() {
 		h.fadeStep(hw, gen, 0)
@@ -148,6 +155,12 @@ func ensureHUDClass() {
 		}
 		_, _ = registerClassExW(&wc)
 	})
+}
+
+// raiseHUD shows the HUD above every window, on every show: WS_EX_TOPMOST from creation alone
+// left it under ordinary windows.
+func raiseHUD(hwnd windows.HWND) {
+	procSetWindowPos.Call(uintptr(hwnd), hwndTopmost, 0, 0, 0, 0, swpNoMove|swpNoSize|swpNoActivate|swpShowWindow)
 }
 
 func hudWndProc(hwnd windows.HWND, msg uint32, wparam, lparam uintptr) uintptr {
