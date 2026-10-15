@@ -174,7 +174,7 @@ Needs Windows 10 or 11 and Go 1.27 (`winget install GoLang.Go`).
 run.bat
 ```
 
-`run.bat` quits any running copy it built, builds with `build.bat` and runs the new build in the terminal, where it prints live knob values so you can see which physical knob is which input. Its first run also turns on the repository's git hook, which refuses commits made directly on `main`. `build.bat` runs the tests, draws the icons, embeds them and the version into the exe and produces `build\WeeJ.exe`.
+`run.bat` quits any running copy it built, builds with `build.bat --console --fast` (without the tests) and runs the new build in the terminal, where it prints live knob values so you can see which physical knob is which input. Its first run also turns on the repository's git hook, which refuses commits made directly on `main`. `build.bat` runs the tests, draws the icons, embeds them and the version into the exe and produces `build\WeeJ.exe`.
 
 ```bash
 run.bat COM6                  # force a specific port
