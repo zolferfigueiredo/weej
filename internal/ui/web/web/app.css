@@ -1403,8 +1403,10 @@ select.select,
   flex-direction: column;
 }
 
+/* Centred at its content's width, so the separators span the widest line and no more. */
 .about {
   flex: 1 1 auto;
+  align-self: center;
   align-items: center;
   justify-content: center;
   text-align: center;
@@ -1420,12 +1422,24 @@ select.select,
   margin: 12px 0 0;
 }
 
-.about-check {
+.about-btn {
   margin-top: 14px;
 }
 
 .about-line {
   margin-top: 6px;
+}
+
+.about-by {
+  font-size: var(--fs-caption);
+  margin: 10px 0 4px;
+}
+
+.about-sep {
+  align-self: stretch;
+  margin: 14px 0 8px;
+  border: 0;
+  border-top: 1px solid var(--divider);
 }
 
 .dialog-wide {
