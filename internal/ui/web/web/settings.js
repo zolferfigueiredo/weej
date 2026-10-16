@@ -103,26 +103,22 @@ function updateSaveButton() {
   document.getElementById("btn-save").disabled = !hasChanges();
 }
 
-function hostnameOf(url) {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return url;
-  }
-}
-
 function renderAbout() {
   const init = S.init;
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel about" role="tabpanel">
       <img class="about-icon" src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" />
       <h2 class="about-name">WeeJ</h2>
-      <p class="row-desc">${esc(t("version", { version: init.version }))}</p>
-      <button class="btn about-check" type="button" data-action="check-updates">${esc(t("check"))}</button>
+      <p class="about-line about-by">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">Zolfer Figueiredo</a></p>
+      <p class="about-line">${esc(t("version", { version: init.version }))}</p>
+      <button class="btn about-btn" type="button" data-action="check-updates">${esc(t("check"))}</button>
+      <hr class="about-sep" />
       <p class="about-line"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
-      <p class="row-desc about-line">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">${esc(hostnameOf(init.madeBy))}</a></p>
-      <p class="row-desc about-line">${esc(t("on_macos"))} <a href="#" data-action="open-url" data-url="${escAttr(init.theej)}">TheeJ</a></p>
-      <p class="row-desc about-line">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
+      <p class="about-line">${esc(t("liked"))}</p>
+      <button class="btn about-btn" type="button" data-action="open-url" data-url="${escAttr(init.coffee)}">${esc(t("coffee"))}</button>
+      <hr class="about-sep" />
+      <p class="about-line">${esc(t("on_macos"))} <a href="#" data-action="open-url" data-url="${escAttr(init.theej)}">TheeJ</a></p>
+      <p class="about-line">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
     </div>`;
 }
 

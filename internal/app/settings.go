@@ -24,6 +24,7 @@ const (
 	madeByURL  = "https://zolfer.com"
 	deejURL    = "https://github.com/omriharel/deej"
 	theejURL   = "https://theej.zolfer.com"
+	coffeeURL  = "https://buymeacoffee.com/zolfer"
 )
 
 func (app *App) openSettings(tab string) {
@@ -199,6 +200,7 @@ func (app *App) sendSettingsInit() {
 	payload["madeBy"] = madeByURL
 	payload["deej"] = deejURL
 	payload["theej"] = theejURL
+	payload["coffee"] = coffeeURL
 	payload["icon"] = appIconDataURL(64)
 	payload["languages"] = languagesPayload()
 	payload["language"] = s.Language
@@ -642,7 +644,7 @@ func (app *App) handleSettingsOpenURL(data []byte) {
 		URL string `json:"url"`
 	}
 	_ = json.Unmarshal(data, &msg)
-	for _, allowed := range []string{websiteURL, madeByURL, deejURL, theejURL} {
+	for _, allowed := range []string{websiteURL, madeByURL, deejURL, theejURL, coffeeURL} {
 		if msg.URL == allowed {
 			openURL(msg.URL)
 			return

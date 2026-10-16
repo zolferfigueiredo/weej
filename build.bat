@@ -1,5 +1,6 @@
 @echo off
-rem Builds build\WeeJ.exe. Pass --console for a build that keeps its console window (run.bat uses this).
+rem Builds build\WeeJ.exe. Pass --console for a build that keeps its console window, and --fast to skip the
+rem tests (run.bat uses both).
 setlocal
 cd /d "%~dp0"
 
@@ -13,7 +14,14 @@ exit /b 1
 :have_go
 
 set "CONSOLE=0"
+set "FAST=0"
+:args
+if "%~1"=="" goto args_done
 if "%~1"=="--console" set "CONSOLE=1"
+if "%~1"=="--fast" set "FAST=1"
+shift
+goto args
+:args_done
 
 set "VALUEPART="
 for /f "tokens=1,* delims==" %%a in ('findstr /r /c:"^const AppVersion = " "internal\core\version.go"') do set "VALUEPART=%%b"
@@ -24,8 +32,10 @@ echo Couldn't read AppVersion from internal\core\version.go.
 exit /b 1
 :have_version
 
+if "%FAST%"=="1" goto tests_done
 "%GO%" test ./...
 if errorlevel 1 exit /b 1
+:tests_done
 
 "%GO%" run ./tools/mkicon winres
 if errorlevel 1 exit /b 1
