@@ -168,6 +168,7 @@
   "mixer.knob": "Manopola {n}",
   "mixer_port_note": "Scegli il tuo mixer MIDI per usarlo accanto alla scheda.",
   "name": "Nome",
+  "needs_calibration": "Da calibrare",
   "never": "Mai",
   "newest": "WeeJ {version} è la versione più recente disponibile.",
   "next_profile": "Profilo successivo",

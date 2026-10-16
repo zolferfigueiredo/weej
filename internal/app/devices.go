@@ -228,6 +228,9 @@ func (app *App) onRunnerStatus(r *runner, id string, connected, busy bool, port 
 	app.loop.Invoke(func() {
 		app.refreshTrayNow()
 		app.pushStatus(id)
+		if connected {
+			app.calibrateIfNeeded(id)
+		}
 	})
 }
 

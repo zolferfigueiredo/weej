@@ -109,7 +109,7 @@ Restrained by the brief, not by default: a single accent carries every call to a
 - **Card Surface** (`#fbfbfb` light / `#2c2c2c` dark): every SettingsCard, the job-picker flyout, and confirm dialogs.
 - **Control Surface** (`#ffffff` light / `#2c2c2c` dark): text inputs, selects, and secondary buttons, one step brighter than the card they usually sit inside.
 - **Primary Text** (`#1a1a1a` light / `#ffffff` dark) and **Secondary Text** (`#5d5d5d` light / `#c5c5c5` dark): row titles versus row descriptions/hints; both verified at or above 4.5:1 against their surface.
-- **Danger** (`#c42b1c` light / `#ff99a4` dark): Remove board and the remove dialogs' destructive action, and a port another app holds.
+- **Danger** (`#c42b1c` light / `#ff99a4` dark): Remove board and the remove dialogs' destructive action, a port another app holds, and Needs calibration on a control not found yet.
 - **Warning** (`#9d5d00` light / `#ffb956` dark): the calibration dialog's warning line (a control already found, a press on another button, nothing moved between 0% and 100%).
 - **Success** (`#0f7b0f` light / `#6ccb5f` dark): a board's Connected status, the one place a state is shown in color as well as words.
 

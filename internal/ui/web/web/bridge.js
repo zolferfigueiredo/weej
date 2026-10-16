@@ -390,6 +390,7 @@ const MOCK_EN_STRINGS = {
   login: "Launch at login",
   made_by: "Made by",
   name: "Name",
+  needs_calibration: "Needs calibration",
   never: "Never",
   newest: "WeeJ {version} is currently the newest version available.",
   next_profile: "Next profile",

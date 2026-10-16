@@ -167,6 +167,7 @@
   "mixer.knob": "旋钮 {n}",
   "mixer_port_note": "选择你的 MIDI 调音台，即可与板子一起使用。",
   "name": "名称",
+  "needs_calibration": "需要校准",
   "never": "从不",
   "newest": "WeeJ {version} 是目前最新的版本。",
   "next_profile": "下一个配置方案",

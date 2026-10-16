@@ -170,6 +170,7 @@
   "mixer.knob": "Pokrętło {n}",
   "mixer_port_note": "Wybierz mikser MIDI, aby używać go obok płytki.",
   "name": "Nazwa",
+  "needs_calibration": "Wymaga kalibracji",
   "never": "Nigdy",
   "newest": "WeeJ {version} to obecnie najnowsza dostępna wersja.",
   "next_profile": "Następny profil",

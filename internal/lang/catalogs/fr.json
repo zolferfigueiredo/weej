@@ -168,6 +168,7 @@
   "mixer.knob": "Bouton {n}",
   "mixer_port_note": "Choisissez votre table de mixage MIDI pour l’utiliser à côté de la carte.",
   "name": "Nom",
+  "needs_calibration": "À calibrer",
   "never": "Jamais",
   "newest": "WeeJ {version} est la version la plus récente.",
   "next_profile": "Profil suivant",

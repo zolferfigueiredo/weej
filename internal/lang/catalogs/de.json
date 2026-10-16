@@ -168,6 +168,7 @@
   "mixer.knob": "Regler {n}",
   "mixer_port_note": "Wähle deinen MIDI-Mixer, um ihn neben dem Board zu nutzen.",
   "name": "Name",
+  "needs_calibration": "Muss kalibriert werden",
   "never": "Nie",
   "newest": "WeeJ {version} ist die neueste verfügbare Version.",
   "next_profile": "Nächstes Profil",

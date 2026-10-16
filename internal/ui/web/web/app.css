@@ -1208,6 +1208,13 @@ select.select,
   color: var(--text-secondary);
 }
 
+.inspector-note {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--divider);
+  font-size: var(--fs-caption);
+  color: var(--danger);
+}
+
 .smc .waiting .face,
 .smc .waiting .well {
   stroke: var(--accent);

@@ -168,6 +168,7 @@
   "mixer.knob": "Control {n}",
   "mixer_port_note": "Elige tu mezclador MIDI para usarlo junto a la placa.",
   "name": "Nombre",
+  "needs_calibration": "Necesita calibración",
   "never": "Nunca",
   "newest": "WeeJ {version} es la versión más reciente disponible.",
   "next_profile": "Perfil siguiente",

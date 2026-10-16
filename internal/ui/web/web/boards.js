@@ -212,6 +212,9 @@ function boardInspector(d, k) {
   const button = kind === "button";
   const key = buttonKey(d, k);
   const empty = button ? !actionsOf(d, key).length : !jobsOf(d, k).length;
+  const found = d.controls[k].input >= 0;
+  // A MIDI button is keyed by the id it sends, so it can do nothing until calibration finds it.
+  const picks = button ? (key >= 0 ? actionPicks(d, key) : "") : jobPicks(d, k);
   const moves = [
     ["up", "&#x2191;"],
     ["left", "&#x2190;"],
@@ -228,7 +231,8 @@ function boardInspector(d, k) {
             <button class="btn" type="button" data-action="clear-control"${empty ? " disabled" : ""}>${esc(t("clear"))}</button>
           </div>
           ${S.arrange[d.id] ? `<div class="board-edit"><div class="arrow-keys">${moves}</div></div>` : ""}
-          <div class="inspector-list" data-keep-scroll="board-${d.id}-${k}">${button ? actionPicks(d, key) : jobPicks(d, k)}</div>
+          ${found ? "" : `<p class="inspector-note">${esc(t("needs_calibration"))}</p>`}
+          <div class="inspector-list" data-keep-scroll="board-${d.id}-${k}">${picks}</div>
         </div>`;
 }
 
@@ -244,7 +248,7 @@ function listView(d) {
           .map(
             (k) => `
             <div class="row clickable" id="row-${k}" role="button" tabindex="0" data-action="open-job-menu" data-control="${k}">
-              <div class="row-main"><span class="row-title">${esc(controlName(d, k))}</span></div>
+              <div class="row-main"><span class="row-title">${esc(controlName(d, k))}</span>${needsCalibration(d, k)}</div>
               <div class="row-control"><div class="job-list">${jobLines(jobsOf(d, k))}</div><span class="chev" aria-hidden="true">&#x2304;</span></div>
             </div>`
           )
@@ -256,7 +260,7 @@ function listView(d) {
         .map(
           (key) => `
             <div class="row clickable" id="brow-${key}" role="button" tabindex="0" data-action="open-button-menu" data-key="${key}">
-              <div class="row-main"><span class="row-title">${esc(controlName(d, controlOfKey(d, key)))}</span>${buttonParams(d, key)}</div>
+              <div class="row-main"><span class="row-title">${esc(controlName(d, controlOfKey(d, key)))}</span>${needsCalibration(d, controlOfKey(d, key))}${buttonParams(d, key)}</div>
               <div class="row-control"><div class="job-list">${buttonLines(d, key)}</div><span class="chev" aria-hidden="true">&#x2304;</span></div>
             </div>`
         )
@@ -273,6 +277,10 @@ function listView(d) {
         ${card(t("list.faders"), potRows(faders), "faders")}
         ${card(t("list.buttons"), buttonRows, "buttons")}
       </div>`;
+}
+
+function needsCalibration(d, k) {
+  return isSMC(d) || d.controls[k].input >= 0 ? "" : `<span class="row-desc warning">${esc(t("needs_calibration"))}</span>`;
 }
 
 // --- Live --------------------------------------------------------------------

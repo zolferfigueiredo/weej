@@ -167,6 +167,7 @@
   "mixer.knob": "ノブ {n}",
   "mixer_port_note": "MIDI ミキサーを選ぶと、ボードと一緒に使えます。",
   "name": "名前",
+  "needs_calibration": "キャリブレーションが必要",
   "never": "しない",
   "newest": "WeeJ {version} は現在入手できる最新バージョンです。",
   "next_profile": "次のプロファイル",
