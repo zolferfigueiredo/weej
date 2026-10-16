@@ -71,12 +71,15 @@ korean.LaunchAtLogin=로그인할 때 WeeJ 실행
 [Tasks]
 ; Only on a first install, so installing over WeeJ keeps what was chosen in its menu since.
 Name: "login"; Description: "{cm:LaunchAtLogin}"; Flags: unchecked; Check: not IsUpgrade
+; Windows lets only the user pin to the taskbar, so a desktop shortcut is what setup can offer.
+Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; Flags: unchecked; Check: not IsUpgrade
 
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "WeeJ.exe"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\WeeJ"; Filename: "{app}\WeeJ.exe"; AppUserModelID: "Zolfer.WeeJ"
+Name: "{autodesktop}\WeeJ"; Filename: "{app}\WeeJ.exe"; AppUserModelID: "Zolfer.WeeJ"; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "WeeJ"; ValueData: """{app}\WeeJ.exe"""; Tasks: login; Flags: uninsdeletevalue
