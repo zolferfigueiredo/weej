@@ -33,7 +33,7 @@
 
 ## Install
 
-1. [Download `WeeJ-<version>-x64-setup.exe`](https://github.com/zolferfigueiredo/weej/releases/latest), or `WeeJ-<version>-x86-setup.exe` on 32-bit Windows 10, and run it. It installs for your user only, so it needs no administrator rights, and it can launch WeeJ at login.
+1. [Download `WeeJ-<version>-x64-setup.exe`](https://github.com/zolferfigueiredo/weej/releases/latest), or `WeeJ-<version>-x86-setup.exe` on 32-bit Windows 10, and run it. It installs for your user only, so it needs no administrator rights, and it can launch WeeJ at login and add a desktop shortcut.
 2. The installer isn't code-signed, so SmartScreen may say "Windows protected your PC". Click **More info**, then **Run anyway**.
 3. Open WeeJ. It asks which language to use, starting from Windows' own. Its icon sits in the tray: if you don't see it, open **Show hidden icons** on the taskbar and drag it next to the clock.
 4. Plug in your boards. Settings opens and asks how many you have, then adds each in turn: its name and type, and for an Arduino or another MIDI controller, its port and a short calibration. An SMC-Mixer needs none. The Boards tab then sets what each knob, fader and button does.
