@@ -83,6 +83,12 @@ type App struct {
 	appPath    map[string]string
 	appIcon    map[string]string
 	exeIcons   map[exeIconKey]*image.NRGBA
+	// appMissAt is when each exe was last looked for and not found.
+	appMissAt map[string]time.Time
+	// installed is installedExes as of installedAt; installedBusy while it is being looked through.
+	installed     map[string]string
+	installedAt   time.Time
+	installedBusy bool
 
 	settingsWin        *web.Window
 	settingsPendingTab string
@@ -157,6 +163,7 @@ func Main(args []string) int {
 		appPath:           map[string]string{},
 		appIcon:           map[string]string{},
 		exeIcons:          map[exeIconKey]*image.NRGBA{},
+		appMissAt:         map[string]time.Time{},
 	}
 
 	return winui.Run(app.setup)

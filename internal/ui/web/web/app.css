@@ -926,9 +926,22 @@ button.popover-item {
   line-height: 1;
 }
 
+/* Its background runs to the window's edges, so rows scrolling under it stay hidden, but its line
+   is only as long as the tabs' line. */
 .footer {
   margin: auto -20px 0;
   padding: 10px 20px;
+  border-top: none;
+}
+
+.footer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: var(--divider);
 }
 
 select.select.select-inline,

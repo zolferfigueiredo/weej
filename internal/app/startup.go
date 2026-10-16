@@ -43,6 +43,7 @@ func (app *App) setup(l *winui.Loop) {
 	}
 
 	app.printStartupSummary()
+	app.refreshInstalled()
 
 	audioW, err := audio.Start(app.log)
 	if err != nil {

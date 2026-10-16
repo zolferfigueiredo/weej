@@ -115,7 +115,7 @@ Upstream deej already runs on Windows; WeeJ is a different take on the same idea
 
 The icon is WeeJ's app icon, drawn in code in [internal/draw](internal/draw). Pointing at it names each connected board with its profile.
 
-A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut. Then Settings and Language, then Launch at login, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
+A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut. Then Settings and Language, then Launch at startup, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
 
 </details>
 
@@ -124,7 +124,7 @@ A left click, or Enter on the focused icon, opens Settings. A right click opens 
 
 **Settings** has three tabs, laid out in groups as Windows Settings is: **General** for your boards and the app, **Boards** for what each board's controls do, and **About**.
 
-**General** is one list down the middle of the window: your boards, then the app's own settings. Each board's row has a switch on the left that turns the board on or off, its name, its status (Connected in green, Disconnected or Off) and a gear for its settings. The very first time, with no boards yet, it asks how many you have and adds each in turn, and **Add board** adds one more. Under **App** come **Language**, **Check for updates automatically**, weekly unless the tray menu's Check automatically says daily, and **Install updates automatically**, which installs a new version as soon as it is found and opens WeeJ again (both on by default). Under **Tray** come **Show icon**, which removes the icon when off (open WeeJ again to get back to Settings), and **Profile list**, which puts each board's profiles in the tray menu.
+**General** is one list down the middle of the window: your boards, then the app's own settings. Each board's row has a switch on the left that turns the board on or off, its name, its status (Connected in green, Disconnected or Off) and a gear for its settings. The very first time, with no boards yet, it asks how many you have and adds each in turn, and **Add board** adds one more. Under **App** come **Language**, **Launch at startup** (the installed copy only), **Check for updates automatically**, weekly unless the tray menu's Check automatically says daily, and **Install updates automatically**, which installs a new version as soon as it is found and opens WeeJ again (both on by default). Under **Tray** come **Show icon**, which removes the icon when off (open WeeJ again to get back to Settings), and **Profile list**, which puts each board's profiles in the tray menu.
 
 **Add board** asks for a name and a type: **DIY (Arduino)**, **SMC-Mixer** or **Other MIDI**. A DIY board also asks for its COM port and baud rate, an Other MIDI board for its MIDI input, and both for how many knobs, faders and buttons it has; calibration follows. A port or input another board uses says so. An SMC-Mixer's input is Automatic unless you pick one, and its controls are known, so it is ready at once.
 
@@ -136,7 +136,7 @@ A left click, or Enter on the focused icon, opens Settings. A right click opens 
 
 **About** shows the version, with Check for updates…, and links to the website, to zolfer.com and to TheeJ, WeeJ's sibling on macOS.
 
-**Apply** saves at once, makes each board's profile shown its active one, and leaves the window open. It stays greyed out until something differs from what's saved, and goes grey again once applied or when a change is undone. The switch, Add board, Remove board, the gear's own Save and the language take effect at once, without Apply. A knob given a new job, by Apply or by switching profiles, takes it over the next time you move it.
+**Apply** saves at once, makes each board's profile shown its active one, and leaves the window open. It stays greyed out until something differs from what's saved, and goes grey again once applied or when a change is undone. The switch, Add board, Remove board, the gear's own Save, the language and Launch at startup take effect at once, without Apply. A knob given a new job, by Apply or by switching profiles, takes it over the next time you move it.
 
 **Calibration** learns each control of a DIY or MIDI board: which input it is, which way it turns and where its ends are. It runs after Add board, and **Calibrate** in the board's gear runs it again. A board that connects with a control not found yet opens it by itself, for those controls, once each time WeeJ starts:
 
@@ -184,7 +184,7 @@ installer.bat                 # build dist\WeeJ-<version>-x64-setup.exe on this 
 
 `installer.bat` needs Inno Setup 6 (`winget install JRSoftware.InnoSetup`).
 
-**Run at login.** The installed copy turns this on with **Launch at login** in the menu. For a build run from this folder, `install.bat` starts it at login and restarts it if it crashes, logging to `%TEMP%\weej.log`; `install.bat --uninstall` removes it. Quit from the menu really does quit.
+**Run at login.** The installed copy turns this on with **Launch at startup** in the menu or in Settings. For a build run from this folder, `install.bat` starts it at login and restarts it if it crashes, logging to `%TEMP%\weej.log`; `install.bat --uninstall` removes it. Quit from the menu really does quit.
 
 **Release.** Raise `AppVersion` in [version.go](internal/core/version.go) and merge to `main` (pull requests go to `dev`, and `dev` merges to `main`). The [release workflow](.github/workflows/release.yml) sees a version with no release yet, builds the installers and zips for 64-bit and 32-bit Windows, `latest.json` and checksums, and publishes them as a GitHub release, tagging the merged commit `v<version>`. A pull request that changes the workflow or the installer builds everything without publishing. `release.bat` on `main` still tags a release by hand and prints the installer's download link; the workflow refuses a tag that isn't on `main`, so a release is always merged code. It runs on a Windows runner, so it also runs the tests of the Windows-only packages.
 

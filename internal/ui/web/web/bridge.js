@@ -387,7 +387,7 @@ const MOCK_EN_STRINGS = {
   language_note: "You can change it later in Settings or in the menu.",
   later: "Later",
   liked: "Did you like this project?",
-  login: "Launch at login",
+  login: "Launch at startup",
   made_by: "Made by",
   name: "Name",
   needs_calibration: "Needs calibration",
@@ -683,6 +683,8 @@ function mockSettingsInit(enStrings) {
       { code: "it", name: "Italiano" },
     ],
     language: "en",
+    login: false,
+    loginAvailable: true,
     settings: { version: 2, devices, added: devices.length, hideTrayIcon: false, showProfileList: true, language: "en", updateEvery: 604800, installUpdates: true },
     catalog,
     actionIcons: Object.fromEntries(Object.entries(MOCK_ACTION_GLYPHS).map(([action, glyph]) => [action, mockGlyph(glyph)])),
@@ -838,6 +840,9 @@ function startSettingsMock(post, enStrings) {
       }
       case "setLanguage":
         post({ type: "strings", lang: msg.code, strings: mockMergedStrings(msg.code, enStrings) });
+        break;
+      case "setLogin":
+        post({ type: "login", on: msg.on });
         break;
       case "key": {
         const hasMod = msg.ctrl || msg.alt;

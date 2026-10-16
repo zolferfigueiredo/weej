@@ -517,6 +517,10 @@ function onChange(e) {
       S.draft.language = el.value;
       send({ type: "setLanguage", code: el.value });
       break;
+    // Not part of Apply: it takes effect at once, as Language does.
+    case "login":
+      send({ type: "setLogin", on: el.checked });
+      break;
     case "show-icon":
       S.draft.hideTrayIcon = !el.checked;
       render();
@@ -616,6 +620,11 @@ function onMessage(msg) {
       break;
     case "strings":
       render();
+      break;
+    // Go-initiated: Launch at startup as it now is, after Settings or the tray menu changed it.
+    case "login":
+      S.init.login = !!msg.on;
+      if (S.tab === "general" && !S.dialog) render();
       break;
     case "saved":
       S.draft = clone(msg.settings);

@@ -136,6 +136,12 @@ func (app *App) onSettingsMessage(data []byte) {
 		app.loop.Invoke(func() { app.handleExportProfile(probe.Device, data) })
 	case "setLanguage":
 		app.handleSettingsSetLanguage(data)
+	case "setLogin":
+		var msg struct {
+			On bool `json:"on"`
+		}
+		_ = json.Unmarshal(data, &msg)
+		app.setLogin(msg.On)
 	case "record":
 		app.handleSettingsRecord()
 	case "key":
@@ -204,6 +210,8 @@ func (app *App) sendSettingsInit() {
 	payload["icon"] = appIconDataURL(192) // About shows it at 96, so it stays sharp at 200% scaling
 	payload["languages"] = languagesPayload()
 	payload["language"] = s.Language
+	payload["login"] = sys.LoginEnabled(app.self)
+	payload["loginAvailable"] = sys.IsInstalledCopy(app.self)
 	payload["settings"] = settingsJSON(s)
 	payload["catalog"] = app.buildCatalog(s.Devices)
 	payload["actionIcons"] = app.actionIcons()
