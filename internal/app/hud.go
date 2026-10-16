@@ -14,6 +14,7 @@ import (
 
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/draw"
+	"github.com/zolferfigueiredo/weej/internal/platform/audio"
 	"github.com/zolferfigueiredo/weej/internal/platform/display"
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
@@ -164,16 +165,15 @@ func (app *App) glyphFor(job core.Job, s float64) *image.NRGBA {
 	case core.JobZoom:
 		return draw.Glyph(draw.GlyphZoom, hudGlyphSourcePx, ink)
 	case core.JobApp:
-		if icon := app.cachedExeIcon(job.Exe, hudGlyphSourcePx); icon != nil {
+		if icon := app.exeIcon(app.resolveAppPath(job.Exe), hudGlyphSourcePx); icon != nil {
 			return icon
 		}
 		return draw.Glyph(draw.GlyphApp, hudGlyphSourcePx, ink)
 	case core.JobFocusedApp:
-		if app.audio != nil {
-			if exe := app.audio.FocusedExe(); exe != "" {
-				if icon := app.cachedExeIcon(exe, hudGlyphSourcePx); icon != nil {
-					return icon
-				}
+		// The app in front now, by its own process: the audio thread may not have got to this turn yet.
+		if _, path := audio.ForegroundApp(); path != "" {
+			if icon := app.exeIcon(path, hudGlyphSourcePx); icon != nil {
+				return icon
 			}
 		}
 		return draw.Glyph(draw.GlyphApp, hudGlyphSourcePx, ink)
@@ -182,12 +182,29 @@ func (app *App) glyphFor(job core.Job, s float64) *image.NRGBA {
 	}
 }
 
-func (app *App) cachedExeIcon(exe string, px int) *image.NRGBA {
-	path := app.lookupAppPath(exe)
+type exeIconKey struct {
+	path string
+	px   int
+}
+
+// exeIcon is the icon in the exe at path, read from the file the first time and then kept, since the
+// HUD redraws it at every step of a turn.
+func (app *App) exeIcon(path string, px int) *image.NRGBA {
 	if path == "" {
 		return nil
 	}
-	return winui.ExeIcon(path, px)
+	key := exeIconKey{path, px}
+	app.appCacheMu.Lock()
+	icon, ok := app.exeIcons[key]
+	app.appCacheMu.Unlock()
+	if ok {
+		return icon
+	}
+	icon = winui.ExeIcon(path, px)
+	app.appCacheMu.Lock()
+	app.exeIcons[key] = icon
+	app.appCacheMu.Unlock()
+	return icon
 }
 
 func (app *App) faceAt(scale float64) font.Face {

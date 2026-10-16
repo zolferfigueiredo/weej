@@ -170,6 +170,13 @@ func (a *Audio) exeForPID(pid uint32) string {
 }
 
 func lookupExeName(pid uint32) string {
+	if path := processImagePath(pid); path != "" {
+		return core.ExeName(path)
+	}
+	return ""
+}
+
+func processImagePath(pid uint32) string {
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, pid)
 	if err != nil {
 		return ""
@@ -181,7 +188,7 @@ func lookupExeName(pid uint32) string {
 	if err := windows.QueryFullProcessImageName(h, 0, &buf[0], &size); err != nil {
 		return ""
 	}
-	return core.ExeName(windows.UTF16ToString(buf[:size]))
+	return windows.UTF16ToString(buf[:size])
 }
 
 func (a *Audio) setSessionVolume(vol *wca.ISimpleAudioVolume, level float64) {

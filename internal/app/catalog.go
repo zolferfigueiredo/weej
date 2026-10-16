@@ -205,12 +205,6 @@ func (app *App) resolveAppPath(exe string) string {
 	return path
 }
 
-func (app *App) lookupAppPath(exe string) string {
-	app.appCacheMu.Lock()
-	defer app.appCacheMu.Unlock()
-	return app.appPath[strings.ToLower(exe)]
-}
-
 func (app *App) resolveApp(exe string) string {
 	exe = strings.ToLower(exe)
 	app.appCacheMu.Lock()
