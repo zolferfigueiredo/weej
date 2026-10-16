@@ -1,0 +1,25 @@
+//go:build windows
+
+package sys
+
+import (
+	"image/color"
+	"testing"
+)
+
+func TestPaletteShade(t *testing.T) {
+	// Windows' AccentPalette for its default blue accent.
+	p := []byte{
+		0x99, 0xEB, 0xFF, 0x00, 0x4C, 0xC2, 0xFF, 0x00, 0x00, 0x91, 0xF8, 0x00, 0x00, 0x78, 0xD4, 0x00,
+		0x00, 0x67, 0xC0, 0x00, 0x00, 0x3E, 0x92, 0x00, 0x00, 0x1A, 0x68, 0x00, 0xF7, 0x63, 0x0C, 0x00,
+	}
+	if c, _ := paletteShade(p, true); c != (color.RGBA{R: 0x4C, G: 0xC2, B: 0xFF, A: 0xFF}) {
+		t.Errorf("dark theme shade = %v, want Light2 #4CC2FF", c)
+	}
+	if c, _ := paletteShade(p, false); c != (color.RGBA{R: 0x00, G: 0x67, B: 0xC0, A: 0xFF}) {
+		t.Errorf("light theme shade = %v, want Dark1 #0067C0", c)
+	}
+	if _, ok := paletteShade(p[:16], true); ok {
+		t.Error("a short palette should not give a shade")
+	}
+}
