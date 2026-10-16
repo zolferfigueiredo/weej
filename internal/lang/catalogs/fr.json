@@ -108,6 +108,8 @@
   "installing": "Installation…",
   "job.brightness": "Luminosité de l’écran {n}",
   "job.builtin_brightness": "Luminosité de l’écran intégré",
+  "job.builtin_contrast": "Contraste de l’écran intégré",
+  "job.builtin_keyboard": "Rétroéclairage du clavier intégré",
   "job.contrast": "Contraste de l’écran {n}",
   "job.empty": "Vide",
   "job.external_keyboard": "Rétroéclairage du clavier externe",

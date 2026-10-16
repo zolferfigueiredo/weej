@@ -108,6 +108,8 @@
   "installing": "インストール中…",
   "job.brightness": "画面 {n} の輝度",
   "job.builtin_brightness": "内蔵ディスプレイの輝度",
+  "job.builtin_contrast": "内蔵ディスプレイのコントラスト",
+  "job.builtin_keyboard": "内蔵キーボードのバックライト",
   "job.contrast": "画面 {n} のコントラスト",
   "job.empty": "空",
   "job.external_keyboard": "外部キーボードのバックライト",

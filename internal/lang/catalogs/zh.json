@@ -108,6 +108,8 @@
   "installing": "正在安装…",
   "job.brightness": "屏幕 {n} 亮度",
   "job.builtin_brightness": "内建显示器亮度",
+  "job.builtin_contrast": "内建显示器对比度",
+  "job.builtin_keyboard": "内建键盘背光",
   "job.contrast": "屏幕 {n} 对比度",
   "job.empty": "空",
   "job.external_keyboard": "外接键盘背光",

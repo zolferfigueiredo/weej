@@ -108,6 +108,8 @@
   "installing": "Instalowanie…",
   "job.brightness": "Jasność ekranu {n}",
   "job.builtin_brightness": "Jasność wbudowanego ekranu",
+  "job.builtin_contrast": "Kontrast wbudowanego ekranu",
+  "job.builtin_keyboard": "Podświetlenie wbudowanej klawiatury",
   "job.contrast": "Kontrast ekranu {n}",
   "job.empty": "Puste",
   "job.external_keyboard": "Podświetlenie zewnętrznej klawiatury",

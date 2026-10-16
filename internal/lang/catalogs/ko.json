@@ -108,6 +108,8 @@
   "installing": "설치 중…",
   "job.brightness": "화면 {n} 밝기",
   "job.builtin_brightness": "내장 디스플레이 밝기",
+  "job.builtin_contrast": "내장 디스플레이 대비",
+  "job.builtin_keyboard": "내장 키보드 백라이트",
   "job.contrast": "화면 {n} 대비",
   "job.empty": "비어 있음",
   "job.external_keyboard": "외장 키보드 백라이트",

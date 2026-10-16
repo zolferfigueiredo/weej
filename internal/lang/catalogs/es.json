@@ -108,6 +108,8 @@
   "installing": "Instalando…",
   "job.brightness": "Brillo de la pantalla {n}",
   "job.builtin_brightness": "Brillo de la pantalla integrada",
+  "job.builtin_contrast": "Contraste de la pantalla integrada",
+  "job.builtin_keyboard": "Luz del teclado integrado",
   "job.contrast": "Contraste de la pantalla {n}",
   "job.empty": "Vacío",
   "job.external_keyboard": "Luz del teclado externo",

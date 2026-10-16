@@ -13,6 +13,7 @@ import { openAdd, openGear, refreshGearPorts, renderDialog } from "./dialogs.js"
 import { renderGeneral } from "./general.js";
 import {
   BUTTON_MENU_BASE,
+  actionLabel,
   jobKey,
   onPick,
   openButtonMenu,
@@ -27,6 +28,8 @@ import {
   buttonKey,
   clampIndex,
   clone,
+  controlName,
+  controlOfKey,
   currentBoard,
   deviceById,
   esc,
@@ -655,7 +658,13 @@ function onMessage(msg) {
         d.profile = d.profiles.length - 1;
         S.board = d.id;
       }
-      S.importNote = msg.skipped && msg.skipped.length ? t("import_skipped", { items: msg.skipped.join(", ") }) : "";
+      // A file from another system leaves its apps and keys out, named "Button C: Open an app".
+      const dropped = Object.entries(msg.dropped || {}).flatMap(([key, actions]) => {
+        const k = d ? controlOfKey(d, Number(key)) : -1;
+        return actions.map((a) => `${k >= 0 ? controlName(d, k) : key}: ${actionLabel(d, a)}`);
+      });
+      const skipped = [...(msg.skipped || []), ...dropped];
+      S.importNote = skipped.length ? t("import_skipped", { items: skipped.join(", ") }) : "";
       render();
       break;
     }

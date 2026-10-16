@@ -108,6 +108,8 @@
   "installing": "Установка…",
   "job.brightness": "Яркость экрана {n}",
   "job.builtin_brightness": "Яркость встроенного дисплея",
+  "job.builtin_contrast": "Контраст встроенного дисплея",
+  "job.builtin_keyboard": "Подсветка встроенной клавиатуры",
   "job.contrast": "Контраст экрана {n}",
   "job.empty": "Пусто",
   "job.external_keyboard": "Подсветка внешней клавиатуры",

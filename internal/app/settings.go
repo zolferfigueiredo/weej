@@ -393,7 +393,8 @@ func (app *App) handleSettingsPickApp(data []byte) {
 }
 
 // handleImportProfile reads a file Export wrote, or a deej config, as a new profile of a board.
-// Settings adds it to the board as an edit, which Apply saves.
+// Settings adds it to the board as an edit, which Apply saves, and names what was left out:
+// skipped as it is, and the dropped button actions by their buttons.
 func (app *App) handleImportProfile(id string) {
 	d, ok := app.device(id)
 	if !ok {
@@ -413,8 +414,7 @@ func (app *App) handleImportProfile(id string) {
 		app.sendImportFailed()
 		return
 	}
-	p, ok := core.DecodeProfileFile(data, d)
-	var skipped []string
+	p, skipped, dropped, ok := core.DecodeProfileFile(data, d, app.trVars)
 	if !ok {
 		imp, err := core.ImportDeej(data)
 		if err != nil {
@@ -429,7 +429,7 @@ func (app *App) handleImportProfile(id string) {
 		return
 	}
 	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "profileImported", "device": id, "profile": json.RawMessage(profile), "skipped": skipped})
+		win.Send(map[string]any{"type": "profileImported", "device": id, "profile": json.RawMessage(profile), "skipped": skipped, "dropped": dropped})
 	}
 }
 

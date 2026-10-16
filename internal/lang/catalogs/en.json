@@ -108,6 +108,8 @@
   "installing": "Installing…",
   "job.brightness": "Screen {n} brightness",
   "job.builtin_brightness": "Built-in display brightness",
+  "job.builtin_contrast": "Built-in display contrast",
+  "job.builtin_keyboard": "Built-in keyboard backlight",
   "job.contrast": "Screen {n} contrast",
   "job.empty": "Empty",
   "job.external_keyboard": "External keyboard backlight",

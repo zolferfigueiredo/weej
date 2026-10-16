@@ -108,6 +108,8 @@
   "installing": "Встановлення…",
   "job.brightness": "Яскравість екрана {n}",
   "job.builtin_brightness": "Яскравість вбудованого дисплея",
+  "job.builtin_contrast": "Контраст вбудованого дисплея",
+  "job.builtin_keyboard": "Підсвітка вбудованої клавіатури",
   "job.contrast": "Контраст екрана {n}",
   "job.empty": "Порожньо",
   "job.external_keyboard": "Підсвітка зовнішньої клавіатури",

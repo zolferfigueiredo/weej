@@ -108,6 +108,8 @@
   "installing": "Wird installiert…",
   "job.brightness": "Helligkeit von Display {n}",
   "job.builtin_brightness": "Helligkeit des integrierten Displays",
+  "job.builtin_contrast": "Kontrast des integrierten Displays",
+  "job.builtin_keyboard": "Beleuchtung der integrierten Tastatur",
   "job.contrast": "Kontrast von Display {n}",
   "job.empty": "Leer",
   "job.external_keyboard": "Beleuchtung der externen Tastatur",
