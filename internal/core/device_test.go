@@ -167,3 +167,17 @@ func TestSettingsDecodeTolerantly(t *testing.T) {
 		t.Errorf("ids = %v, added %d, want three different IDs and the count of every board added", ids, s.Added)
 	}
 }
+
+func TestRawAtIsNormalizeTheOtherWayRound(t *testing.T) {
+	d := NewDevice("d1", "Desk", DeviceSMC, 0, 0, 0, "Default")
+	d.Controls[8].Min, d.Controls[8].Max, d.Controls[8].Reverse = 100, 900, true
+	for _, k := range []int{0, 8} {
+		for _, u := range []float64{0, 0.3, 0.5, 1} {
+			raw := make([]int, MixerColumns)
+			raw[d.Controls[k].Input] = d.RawAt(k, u)
+			if got, want := d.Normalize(raw)[k], int(u*1023+0.5); got < want-1 || got > want+1 {
+				t.Errorf("control %d at %v reads %d, want %d", k, u, got, want)
+			}
+		}
+	}
+}

@@ -51,6 +51,7 @@ type Audio struct {
 	wake    chan struct{}
 
 	queries   chan chan []string
+	levels    chan levelQuery
 	micToggle chan struct{}
 
 	deviceChanged chan struct{}
@@ -92,6 +93,7 @@ func Start(log func(string)) (*Audio, error) {
 		pending:       map[targetKind]pendingValue{},
 		wake:          make(chan struct{}, 1),
 		queries:       make(chan chan []string),
+		levels:        make(chan levelQuery),
 		micToggle:     make(chan struct{}, 4),
 		deviceChanged: make(chan struct{}, 1),
 		startErr:      make(chan error, 1),
@@ -179,6 +181,28 @@ func (a *Audio) Playing() []string {
 	}
 }
 
+type levelQuery struct {
+	job  core.Job
+	resp chan float64
+}
+
+// Level is where a job's volume is now, 0 to 1: the output's, the input's or an app's. It can't
+// tell any other job's, nor an app's with no sound open.
+func (a *Audio) Level(job core.Job) (float64, bool) {
+	q := levelQuery{job: job, resp: make(chan float64, 1)}
+	select {
+	case a.levels <- q:
+	case <-a.stopped:
+		return 0, false
+	}
+	select {
+	case level := <-q.resp:
+		return level, level >= 0
+	case <-a.stopped:
+		return 0, false
+	}
+}
+
 // FocusedExe returns the last exe SetFocused resolved the foreground window to, so the HUD can
 // show its icon without forcing a round trip through the worker.
 func (a *Audio) FocusedExe() string {
@@ -236,6 +260,8 @@ func (a *Audio) run() {
 			a.pollNewSessions()
 		case respCh := <-a.queries:
 			respCh <- a.computePlaying()
+		case q := <-a.levels:
+			q.resp <- a.readLevel(q.job)
 		case <-a.micToggle:
 			a.toggleMicMute()
 		}

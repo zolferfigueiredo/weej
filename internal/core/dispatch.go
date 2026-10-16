@@ -224,6 +224,14 @@ func (e *Engine) ToggleMute(col int, setup Setup) bool {
 	return muted
 }
 
+// Last is a column's level as the engine last took it, 0 to 1, once it has been heard from.
+func (e *Engine) Last(col int) (float64, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	u, ok := e.lastApplied[col]
+	return u, ok
+}
+
 func (e *Engine) Lines() []Line {
 	e.mu.Lock()
 	defer e.mu.Unlock()

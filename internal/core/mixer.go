@@ -176,6 +176,9 @@ type MixerState struct {
 	pitch   [8][2]int
 	pitchOK [8]bool
 	last    int
+	// Seed is where a knob not heard from yet starts, on the raw scale, when it can tell: where
+	// its job is now. Without it, a knob starts in the middle.
+	Seed func(col int) (int, bool)
 }
 
 func NewMixerState() *MixerState {
@@ -243,6 +246,11 @@ func (m *MixerState) Feed(msg uint32) (changed bool, pressed int) {
 		pos := m.values[col]
 		if pos < 0 {
 			pos = 512
+			if m.Seed != nil {
+				if v, ok := m.Seed(col); ok {
+					pos = v
+				}
+			}
 		}
 		step := value & 0x3F
 		if value&0x40 != 0 {
@@ -269,6 +277,13 @@ func (m *MixerState) set(col, value int) bool {
 }
 
 func (m *MixerState) Values() []int { return append([]int(nil), m.values...) }
+
+// ForgetKnobs puts the knobs back to not heard from, so each starts again from where its job is.
+func (m *MixerState) ForgetKnobs() {
+	for col := knobFirstCC; col < knobFirstCC+vpotCount; col++ {
+		m.values[col] = -1
+	}
+}
 
 // MoveWatcher tells which columns moved far enough to be a hand on a control rather than a pot's
 // jitter. A column that reads -1 (a mixer control not heard from yet) counts as moved once it

@@ -166,6 +166,7 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 			OnStatus: func(connected, busy bool) { status(connected, busy, key.port) },
 			Lights:   key.typ == core.DeviceSMC,
 			Log:      app.log,
+			Seed:     func(col int) (int, bool) { return app.knobStart(r, col) },
 		})
 		if d, ok := app.device(id); ok {
 			port.SetLights(d.Lights)
@@ -176,6 +177,29 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 		port.Run(ctx, r.reconnect)
 	}()
 	return r
+}
+
+// knobStart is where an endless knob not heard from yet starts: where its first job is now, else
+// where it last was, so its first turn carries on from there instead of jumping.
+func (app *App) knobStart(r *runner, col int) (int, bool) {
+	d, ok := app.device(r.id)
+	if !ok {
+		return 0, false
+	}
+	for k, c := range d.Controls {
+		if c.Input != col || c.Kind == core.KindButton {
+			continue
+		}
+		u, ok := 0.0, false
+		if jobs := d.ActiveProfile().Jobs; k < len(jobs) && len(jobs[k]) > 0 && app.audio != nil {
+			u, ok = app.audio.Level(jobs[k][0])
+		}
+		if !ok {
+			u, ok = r.engine.Last(k)
+		}
+		return d.RawAt(k, u), ok
+	}
+	return 0, false
 }
 
 // portsOfOtherBoards lists the COM ports other DIY boards are set to, which finding a board
@@ -390,7 +414,7 @@ func (app *App) setProfiles(targets []core.HotkeyTarget) {
 		if next < 0 || next >= len(d.Profiles) {
 			continue
 		}
-		app.unmuteDevice(*d)
+		app.leaveProfile(*d)
 		d.Active = next
 		if hud == nil {
 			hud = d
@@ -409,14 +433,19 @@ func (app *App) setProfiles(targets []core.HotkeyTarget) {
 	app.showProfileHUD(*hud, len(s.Devices) > 1)
 }
 
-// unmuteDevice puts a board's muted controls back before its profile changes: the next profile
-// gives them other jobs, so a muted one could no longer be unmuted from its button.
-func (app *App) unmuteDevice(d core.Device) {
+// leaveProfile readies a board for another profile. Its muted controls come back first: the
+// next profile gives them other jobs, so a muted one could no longer be unmuted from its button.
+// An SMC-Mixer's knobs start again from where their new jobs are.
+func (app *App) leaveProfile(d core.Device) {
 	r := app.runnerFor(d.ID)
-	if r == nil || r.engine.UnmuteAll(d.EngineSetup()) == 0 {
+	if r == nil {
 		return
 	}
 	port := r.midiPort()
+	port.ForgetKnobs()
+	if r.engine.UnmuteAll(d.EngineSetup()) == 0 {
+		return
+	}
 	for key, actions := range d.ActiveButtons() {
 		for _, a := range actions {
 			if _, ok := a.MuteKnob(); ok {

@@ -132,6 +132,8 @@ type Config struct {
 	// Lights runs SetLights' pattern and the knob blink, on an SMC-Mixer.
 	Lights bool
 	Log    func(string)
+	// Seed is where a knob not heard from yet starts (core.MixerState.Seed).
+	Seed func(col int) (int, bool)
 }
 
 // Port is one MIDI board: its input and output, the mode it is in, and its lights.
@@ -146,6 +148,7 @@ type Port struct {
 	muteLEDs [256]atomic.Bool
 	pattern  atomic.Value
 	poke     chan struct{}
+	forget   atomic.Bool
 }
 
 func New(cfg Config) *Port {
@@ -177,6 +180,13 @@ func (p *Port) SetLights(pattern string) {
 	if p != nil {
 		p.pattern.Store(core.ParseLightPattern(pattern))
 		p.pokeLights()
+	}
+}
+
+// ForgetKnobs has the knobs start again from where their jobs are, as the next profile's.
+func (p *Port) ForgetKnobs() {
+	if p != nil {
+		p.forget.Store(true)
 	}
 }
 
@@ -314,6 +324,7 @@ func (p *Port) Run(ctx context.Context, reconnect <-chan struct{}) {
 func (p *Port) stream(ctx context.Context, ch <-chan uint32, reconnect <-chan struct{}) dropReason {
 	cfg := p.cfg
 	state := core.NewMixerState()
+	state.Seed = cfg.Seed
 	key := cfg.ID
 	if key == "" {
 		key = cfg.Device
@@ -346,6 +357,9 @@ func (p *Port) stream(ctx context.Context, ch <-chan uint32, reconnect <-chan st
 		case <-lights.paced:
 			lights.flush()
 		case msg := <-ch:
+			if p.forget.Swap(false) {
+				state.ForgetKnobs()
+			}
 			changed := false
 			feed := func(m uint32) {
 				daw := p.mode.DAW()

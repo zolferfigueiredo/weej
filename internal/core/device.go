@@ -1,6 +1,7 @@
 package core
 
 import (
+	"math"
 	"slices"
 	"strconv"
 )
@@ -219,6 +220,16 @@ func (d Device) Calibrated() bool {
 // reaches 0% and 100%; a fraction of its range, in thousandths.
 const potDeadZone = 20
 
+// ends are the raw readings a pot counts as 0% and 100%, before Reverse.
+func (c Control) ends() (lo, hi int) {
+	lo, hi = c.Min, c.Max
+	if hi <= lo {
+		lo, hi = 0, 1023
+	}
+	dead := (hi - lo) * potDeadZone / 1000
+	return lo + dead, hi - dead
+}
+
 // Normalize turns a raw frame into one value per control, 0 for 0% to 1023 for 100%. Buttons,
 // controls not found yet and inputs that haven't reported read -1.
 func (d Device) Normalize(raw []int) []int {
@@ -228,12 +239,7 @@ func (d Device) Normalize(raw []int) []int {
 		if c.Kind == KindButton || c.Input < 0 || c.Input >= len(raw) || raw[c.Input] < 0 {
 			continue
 		}
-		lo, hi := c.Min, c.Max
-		if hi <= lo {
-			lo, hi = 0, 1023
-		}
-		dead := (hi - lo) * potDeadZone / 1000
-		lo, hi = lo+dead, hi-dead
+		lo, hi := c.ends()
 		v := (raw[c.Input] - lo) * 1023 / max(hi-lo, 1)
 		v = min(max(v, 0), 1023)
 		if c.Reverse {
@@ -242,6 +248,17 @@ func (d Device) Normalize(raw []int) []int {
 		out[i] = v
 	}
 	return out
+}
+
+// RawAt is the raw reading Normalize takes as level u, 0 to 1, on control k.
+func (d Device) RawAt(k int, u float64) int {
+	c := d.Controls[k]
+	lo, hi := c.ends()
+	v := int(math.Round(min(max(u, 0), 1) * 1023))
+	if c.Reverse {
+		v = 1023 - v
+	}
+	return lo + (v*max(hi-lo, 1)+1022)/1023
 }
 
 // EngineSetup is the board as the Engine reads it: frames from Normalize, so each control is its

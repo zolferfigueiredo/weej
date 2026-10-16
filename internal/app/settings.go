@@ -221,12 +221,12 @@ func (app *App) sendSettingsInit() {
 }
 
 // applySettings saves new settings and makes everything follow them: the boards that run, their
-// lights, the shortcuts and the tray. A board whose profile changed gets its mutes back first.
+// lights, the shortcuts and the tray. A board whose profile changed leaves the old one first.
 func (app *App) applySettings(next core.Settings) {
 	cur := app.snapshotSettings()
 	for _, d := range cur.Devices {
 		if i := deviceIndex(next, d.ID); i < 0 || next.Devices[i].Active != d.Active {
-			app.unmuteDevice(d)
+			app.leaveProfile(d)
 		}
 	}
 	for i := range next.Devices {
