@@ -71,8 +71,7 @@ func (app *App) refreshTrayNow() {
 	}
 }
 
-// buildMenu has a section per board that is on: its name and status, its profiles, and Calibrate
-// for one that can be calibrated.
+// buildMenu has a section per board that is on: its name and status, and its profiles.
 func (app *App) buildMenu() []winui.MenuItem {
 	s := app.snapshotSettings()
 	labels := app.shortcutLabels(s)
@@ -112,18 +111,11 @@ func (app *App) buildMenu() []winui.MenuItem {
 				})
 			}
 		}
-		if d.Type != core.DeviceSMC {
-			items = append(items, winui.MenuItem{Text: app.tr("calibrate"), OnClick: func() {
-				app.openSettings("boards")
-				app.startWizard(id, nil)
-			}})
-		}
 		items = append(items, winui.MenuItem{Separator: true})
 	}
 
 	items = append(items, winui.MenuItem{Text: app.tr("settings"), OnClick: func() { app.openSettings("") }})
 	items = append(items, winui.MenuItem{Text: app.tr("language"), Children: app.languageMenuItems(s.Language)})
-	items = append(items, winui.MenuItem{Text: app.tr("reconnect"), OnClick: func() { app.requestReconnect("") }})
 
 	items = append(items, winui.MenuItem{Separator: true})
 	items = append(items, winui.MenuItem{
