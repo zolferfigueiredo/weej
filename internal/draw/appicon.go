@@ -2,7 +2,6 @@ package draw
 
 import (
 	"image"
-	"math"
 
 	"golang.org/x/image/vector"
 )
@@ -11,10 +10,6 @@ import (
 // supersamples at 4x and box-downsamples instead. Every size has the J cable, the tray's and the
 // window's included.
 const appIconSupersampleBelow = 48
-
-// The J cable's half-width never drops below this many pixels of the finished icon, so it still reads
-// at 16 to 24 px, where its design width would be a faint pixel. From 32 px up the design width wins.
-const appIconCableMinHW = 1.0
 
 const plateLipDepth = 41
 
@@ -50,14 +45,14 @@ func AppIcon(px int) *image.NRGBA {
 	if px <= appIconSupersampleBelow {
 		work = px * 4
 	}
-	img := renderAppIcon(work, px)
+	img := renderAppIcon(work)
 	if work != px {
 		img = boxDownsample(img, px)
 	}
 	return img
 }
 
-func renderAppIcon(work, px int) *image.NRGBA {
+func renderAppIcon(work int) *image.NRGBA {
 	s := float64(work) / 1024
 	p := func(v float64) float32 { return float32(v * s) }
 	canvas := image.NewNRGBA(image.Rect(0, 0, work, work))
@@ -69,8 +64,7 @@ func renderAppIcon(work, px int) *image.NRGBA {
 	cable.lineTo(901, 840)
 	cable.quadTo(pt{901, 973}, pt{819, 973})
 	cable.quadTo(pt{748, 973}, pt{748, 901})
-	hw := math.Max(31*s, appIconCableMinHW*float64(work)/float64(px))
-	fillMask(canvas, strokeMask(work, cable.scaled(s), hw), ledOrange)
+	fillMask(canvas, strokeMask(work, cable.scaled(s), 31*s), ledOrange)
 	plug := mask(work, func(z *vector.Rasterizer) {
 		addRoundedRect(z, p(717), p(809), p(61), p(92), p(15))
 	})
