@@ -115,7 +115,7 @@ Upstream deej already runs on Windows; WeeJ is a different take on the same idea
 
 The icon is WeeJ's app icon, drawn in code in [internal/draw](internal/draw). Pointing at it names each connected board with its profile.
 
-A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut, and Calibrate (not on an SMC-Mixer). Then Settings, Language and Reconnect, then Launch at login, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
+A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut. Then Settings and Language, then Launch at login, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
 
 </details>
 
@@ -138,7 +138,7 @@ A left click, or Enter on the focused icon, opens Settings. A right click opens 
 
 **Apply** saves at once, makes each board's profile shown its active one, and leaves the window open. It stays greyed out until something differs from what's saved, and goes grey again once applied or when a change is undone. The switch, Add board, Remove board, the gear's own Save and the language take effect at once, without Apply. A knob given a new job, by Apply or by switching profiles, takes it over the next time you move it.
 
-**Calibration** learns each control of a DIY or MIDI board: which input it is, which way it turns and where its ends are. It runs after Add board, and **Calibrate** in the board's gear or in the tray menu runs it again:
+**Calibration** learns each control of a DIY or MIDI board: which input it is, which way it turns and where its ends are. It runs after Add board, and **Calibrate** in the board's gear runs it again:
 
 1. Turn every knob and fader to 0%, and press **Next**.
 2. Turn every knob and fader to 100%, and press **Next**. Each one's two ends give its travel and which way it turns, so a pot wired the other way round just works.
