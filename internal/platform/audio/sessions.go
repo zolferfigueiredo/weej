@@ -267,21 +267,25 @@ func (a *Audio) readLevel(job core.Job) float64 {
 	return float64(level)
 }
 
-func (a *Audio) toggleMicMute() {
+func (a *Audio) toggleMicMute() MicState {
 	vol := a.endpointVolume(wca.ECapture)
 	if vol == nil {
-		return
+		return MicState{}
 	}
 	defer vol.Release()
 
 	var muted bool
 	if err := vol.GetMute(&muted); err != nil {
 		a.logOnce("get-mic-mute", "Could not read the microphone mute: "+err.Error())
-		return
+		return MicState{}
 	}
 	if err := vol.SetMute(!muted, eventCtx); err != nil {
 		a.logOnce("set-mic-mute", "Could not mute the microphone: "+err.Error())
+		return MicState{}
 	}
+	var level float32
+	_ = vol.GetMasterVolumeLevelScalar(&level)
+	return MicState{Muted: !muted, OK: true, Level: float64(level)}
 }
 
 func (a *Audio) applySystemSounds(level float64) {

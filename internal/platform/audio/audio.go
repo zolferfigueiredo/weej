@@ -52,7 +52,7 @@ type Audio struct {
 
 	queries   chan chan []string
 	levels    chan levelQuery
-	micToggle chan struct{}
+	micToggle chan chan MicState
 
 	deviceChanged chan struct{}
 	startErr      chan error
@@ -94,7 +94,7 @@ func Start(log func(string)) (*Audio, error) {
 		wake:          make(chan struct{}, 1),
 		queries:       make(chan chan []string),
 		levels:        make(chan levelQuery),
-		micToggle:     make(chan struct{}, 4),
+		micToggle:     make(chan chan MicState),
 		deviceChanged: make(chan struct{}, 1),
 		startErr:      make(chan error, 1),
 		stop:          make(chan struct{}),
@@ -155,11 +155,25 @@ func (a *Audio) SetOtherApps(mapped []string, s float64) {
 
 func (a *Audio) SetFocused(s float64) { a.enqueue(targetFocused, pendingValue{level: s}) }
 
+// MicState is the default microphone after a mute: OK is false when there is none.
+type MicState struct {
+	Muted, OK bool
+	Level     float64
+}
+
 // ToggleMicMute mutes the default microphone, or unmutes it if it is muted.
-func (a *Audio) ToggleMicMute() {
+func (a *Audio) ToggleMicMute() MicState {
+	resp := make(chan MicState, 1)
 	select {
-	case a.micToggle <- struct{}{}:
-	default:
+	case a.micToggle <- resp:
+	case <-a.stopped:
+		return MicState{}
+	}
+	select {
+	case s := <-resp:
+		return s
+	case <-a.stopped:
+		return MicState{}
 	}
 }
 
@@ -262,8 +276,8 @@ func (a *Audio) run() {
 			respCh <- a.computePlaying()
 		case q := <-a.levels:
 			q.resp <- a.readLevel(q.job)
-		case <-a.micToggle:
-			a.toggleMicMute()
+		case resp := <-a.micToggle:
+			resp <- a.toggleMicMute()
 		}
 	}
 }

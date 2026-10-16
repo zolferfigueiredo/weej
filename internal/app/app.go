@@ -25,7 +25,8 @@ import (
 
 type NightLight interface {
 	Set(s float64)
-	Toggle()
+	// Toggle reports whether Night light is now on, when it could change it.
+	Toggle() (on, ok bool)
 }
 
 type Zoom interface {

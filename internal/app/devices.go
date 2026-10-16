@@ -3,6 +3,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
+	"github.com/zolferfigueiredo/weej/internal/draw"
 	"github.com/zolferfigueiredo/weej/internal/platform/audio"
 	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
 	"github.com/zolferfigueiredo/weej/internal/platform/serialport"
@@ -368,10 +370,22 @@ func (app *App) runButtonAction(action core.ButtonAction, r *runner, d core.Devi
 		winui.MediaKey(winui.VKVolumeMute)
 	case core.ActionMuteMic:
 		if app.audio != nil {
-			app.audio.ToggleMicMute()
+			go func() {
+				if mic := app.audio.ToggleMicMute(); mic.Muted {
+					app.showGlyphHUD(draw.GlyphMicMuted, 0)
+				} else if mic.OK {
+					app.showGlyphHUD(draw.GlyphMic, mic.Level)
+				}
+			}()
 		}
 	case core.ActionNightLight:
-		app.nightlight.Toggle()
+		go func() {
+			if on, ok := app.nightlight.Toggle(); ok && on {
+				app.showGlyphHUD(draw.GlyphMoon, 1)
+			} else if ok {
+				app.showGlyphHUD(draw.GlyphMoon, 0)
+			}
+		}()
 	case core.ActionScreensOff:
 		winui.ScreensOff()
 	case core.ActionLockPC:
@@ -493,7 +507,7 @@ func (app *App) applyLights(devices []core.Device) {
 }
 
 // changeLights changes the light pattern of the board a button is on, or of every SMC-Mixer when
-// that board has none, and saves it as Settings would.
+// that board has none, saves it as Settings would and names it in the HUD.
 func (app *App) changeLights(id string, change func(string) string) {
 	app.loop.Invoke(func() {
 		s := app.snapshotSettings()
@@ -518,6 +532,18 @@ func (app *App) changeLights(id string, change func(string) string) {
 				win.Send(map[string]any{"type": "lights", "device": s.Devices[i].ID, "pattern": s.Devices[i].Lights})
 			}
 		}
+		first := s.Devices[changed[0]]
+		name := app.tr("lights." + cmp.Or(first.Lights, "off"))
+		mixers := 0
+		for _, d := range s.Devices {
+			if d.Type == core.DeviceSMC {
+				mixers++
+			}
+		}
+		if mixers > 1 && len(changed) == 1 {
+			name = first.Name + " · " + name
+		}
+		app.showLightsHUD(name, first.Lights != "")
 	})
 }
 

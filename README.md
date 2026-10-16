@@ -59,7 +59,7 @@ You need:
 - **Any number of boards.** deej Arduinos, M-VAVE SMC-Mixers and other MIDI controllers side by side, each with its own port, settings, profiles and calibration, and each switched on or off on its own.
 - **One knob, several jobs.** The volume of Windows, your mic, one app, the focused app or every other app, a screen's brightness or contrast, Night light, a keyboard backlight, screen zoom. Tick several, of any kind, and they all follow the knob. A fader does the same.
 - **Buttons that do things.** Play, pause and skip, mute an app or the mic, press a shortcut, open an app or a website, lock the PC, turn off the screens or switch profiles, from any button on a board.
-- **An on-screen indicator.** A flyout in the style of Windows 11's own shows up on the display the knob controls, with the app's own icon for an app's volume. Switching profiles shows the new profile's name.
+- **An on-screen indicator.** A flyout in the style of Windows 11's own shows up on the display the knob controls, with the app's own icon for an app's volume. Switching profiles shows the new profile's name, and a button that mutes the mic, turns Night light on or off or changes the button lights shows that too.
 - **A short calibration.** Adding an Arduino or a MIDI board takes every knob and fader to 0%, then to 100%, then each back to 0% in turn, and each button pressed three times. WeeJ learns which input each one is, which way it turns and where its ends are.
 - **Profiles on a shortcut.** Each board has its own profiles, switched from the tray or with a shortcut from any app. One shortcut can switch several boards at once.
 - **No jumps.** A knob takes up a new job the next time you move it, so switching profiles or plugging a board in never jumps the volume or a screen. An SMC-Mixer's endless knobs carry on from where their job is.
@@ -151,7 +151,7 @@ A sound plays as each control is found and each press counts, so you can keep yo
 <details>
 <summary><b>On-screen feedback</b></summary>
 
-Turning a knob shows a flyout like the one Windows shows for its own volume keys, on the display that knob controls: a speaker, microphone, sun, half-filled circle, moon, keyboard or magnifying glass, or the app's own icon, with the level. It follows the light or dark theme. Switching profiles shows the profile's name the same way.
+Turning a knob shows a flyout like the one Windows shows for its own volume keys, on the display that knob controls: a speaker, microphone, sun, half-filled circle, moon, keyboard or magnifying glass, or the app's own icon, with the level. It follows the light or dark theme. Switching profiles shows the profile's name the same way. A button that mutes the microphone shows it muted, or its level once unmuted, one that turns Night light on or off shows a moon, full or empty, and one that changes an SMC-Mixer's button lights names the new pattern.
 
 The indicator tracks the knob live. Everything but the volumes only changes once the knob has been still for a moment (the Speed setting), so a turn lands as one clean change when you let go instead of flickering a screen through every position on the way. The volumes follow the knob immediately.
 
