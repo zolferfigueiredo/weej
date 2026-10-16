@@ -1403,18 +1403,17 @@ select.select,
   flex-direction: column;
 }
 
-/* Centred at its content's width, so the separators span the widest line and no more. */
 .about {
   flex: 1 1 auto;
-  align-self: center;
   align-items: center;
   justify-content: center;
   text-align: center;
   gap: 0;
+  padding: 24px 0;
 }
 
 .about-icon {
-  border-radius: 14px;
+  border-radius: 21px;
 }
 
 .about-name {
