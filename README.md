@@ -62,7 +62,7 @@ You need:
 - **An on-screen indicator.** A flyout in the style of Windows 11's own shows up on the display the knob controls, with the app's own icon for an app's volume. Switching profiles shows the new profile's name.
 - **A short calibration.** Adding an Arduino or a MIDI board takes every knob and fader to 0%, then to 100%, then each back to 0% in turn, and each button pressed three times. WeeJ learns which input each one is, which way it turns and where its ends are.
 - **Profiles on a shortcut.** Each board has its own profiles, switched from the tray or with a shortcut from any app. One shortcut can switch several boards at once.
-- **No jumps.** A knob takes up a new job the next time you move it, so switching profiles never jumps the volume or a screen.
+- **No jumps.** A knob takes up a new job the next time you move it, so switching profiles or plugging a board in never jumps the volume or a screen.
 - **Real per-app volume.** Windows keeps a volume for every app, and WeeJ turns that same slider you see in the Volume mixer. Nothing is captured or delayed.
 - **Follows your audio device.** Switch outputs or inputs, Bluetooth headphones included, and the knobs follow.
 - **Button lights on the SMC-Mixer.** 29 patterns, from Fire and Rain to a binary clock, and three EQs that move with whatever your PC plays. A button lights up while you hold it, and a strip's LED blinks while you turn its knob.

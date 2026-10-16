@@ -110,6 +110,7 @@ func TestEngineSkipsUnknownMixerValues(t *testing.T) {
 		Speed:    SpeedSuperFast,
 	}
 	e.Handle([]int{-1, 512}, setup, false)
+	e.Handle([]int{-1, 600}, setup, false)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -139,6 +140,7 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 		Speed:    SpeedSuperFast,
 	}
 
+	e.Handle([]int{512}, setup, false)
 	e.Handle([]int{1023}, setup, false)
 	if !e.ToggleMute(0, setup) {
 		t.Fatal("first toggle did not mute")
@@ -151,7 +153,7 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if !reflect.DeepEqual(a.values, []float64{1, 0, 0}) {
-		t.Errorf("applied values = %v, want [1 0 0]: the sync, the mute, then the fader's new spot on unmute", a.values)
+		t.Errorf("applied values = %v, want [1 0 0]: the move, the mute, then the fader's new spot on unmute", a.values)
 	}
 }
 

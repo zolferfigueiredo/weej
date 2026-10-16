@@ -72,6 +72,7 @@ func TestEngineSetupFeedsTheEngineByControl(t *testing.T) {
 	d.Profiles[0].Jobs = [][]Job{{master}, {mic}, {Job{Kind: JobSystemSounds}}}
 	rec := &recordApplier{}
 	e := NewEngine(rec)
+	e.Handle(d.Normalize([]int{512, 0, 0, 0, 512}), d.EngineSetup(), false)
 	e.Handle(d.Normalize([]int{0, 1023, 0, 0, 1023}), d.EngineSetup(), false)
 	want := map[JobKind]float64{JobMaster: 1, JobMicrophone: 0}
 	if len(rec.calls) != 2 {

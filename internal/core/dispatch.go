@@ -119,10 +119,11 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 			e.lastApplied[index] = u
 			continue
 		}
-		// After a connect nothing is known yet, so every mapped knob applies its position once, as in TheeJ.
+		// The first reading after a connect is only a baseline, so nothing changes until a turn.
 		previous, ok := e.lastApplied[index]
 		if !ok {
-			previous = -1
+			e.lastApplied[index] = u
+			continue
 		}
 		extreme := u <= 0 || u >= 1
 		if u == previous {
