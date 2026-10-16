@@ -7,11 +7,9 @@ import (
 )
 
 // Below this size the thin tracks and cap shadows alias badly rendered directly, so AppIcon
-// supersamples at 4x and box-downsamples instead.
+// supersamples at 4x and box-downsamples instead. Every size has the J cable, the tray's and the
+// window's included.
 const appIconSupersampleBelow = 48
-
-// Below this size the J cable crowds the W, so small icons draw the W alone on a full-frame plate.
-const appIconCableFrom = 32
 
 const plateLipDepth = 41
 
@@ -40,8 +38,6 @@ type faderLayout struct {
 var (
 	cabledLayout = faderLayout{left: 148, gap: 120.5, top: 184, bottom: 737, trackW: 31,
 		high: 246, low: 655, mid: 410, strokeHW: 23, capW: 96, capH: 72, capR: 26, gripW: 49, gripH: 12}
-	smallLayout = faderLayout{left: 205, gap: 153.5, top: 164, bottom: 860, trackW: 36,
-		high: 266, low: 737, mid: 451, strokeHW: 28, capW: 123, capH: 82, capR: 31, gripW: 61, gripH: 14}
 )
 
 func AppIcon(px int) *image.NRGBA {
@@ -49,12 +45,7 @@ func AppIcon(px int) *image.NRGBA {
 	if px <= appIconSupersampleBelow {
 		work = px * 4
 	}
-	var img *image.NRGBA
-	if px < appIconCableFrom {
-		img = renderSmallAppIcon(work)
-	} else {
-		img = renderAppIcon(work)
-	}
+	img := renderAppIcon(work)
 	if work != px {
 		img = boxDownsample(img, px)
 	}
@@ -81,14 +72,6 @@ func renderAppIcon(work int) *image.NRGBA {
 
 	paintPlate(canvas, work, s, 41, 82, 696, 737, 164)
 	drawFaders(canvas, work, s, cabledLayout)
-	return canvas
-}
-
-func renderSmallAppIcon(work int) *image.NRGBA {
-	s := float64(work) / 1024
-	canvas := image.NewNRGBA(image.Rect(0, 0, work, work))
-	paintPlate(canvas, work, s, 41, 41, 942, 901, 200)
-	drawFaders(canvas, work, s, smallLayout)
 	return canvas
 }
 
