@@ -1,6 +1,9 @@
 package core
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // Not filepath.Base: this runs on Linux in tests too, where backslash is not a separator, but
 // the paths it must split come from Windows.
@@ -10,6 +13,38 @@ func ExeName(path string) string {
 		normalized = normalized[idx+1:]
 	}
 	return strings.ToLower(normalized)
+}
+
+// TrimExePath is the exe a registry value names, without the quotes around it or the icon index a
+// DisplayIcon adds after a comma.
+func TrimExePath(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.HasPrefix(s, `"`) {
+		if end := strings.Index(s[1:], `"`); end >= 0 {
+			return s[1 : end+1]
+		}
+		return strings.TrimPrefix(s, `"`)
+	}
+	if i := strings.LastIndex(s, ","); i >= 0 {
+		if _, err := strconv.Atoi(strings.TrimSpace(s[i+1:])); err == nil {
+			s = strings.TrimSpace(s[:i])
+		}
+	}
+	return s
+}
+
+// SteamLibraries is the folders Steam keeps games in, the "path" entries of its
+// steamapps\libraryfolders.vdf.
+func SteamLibraries(vdf string) []string {
+	var out []string
+	for _, line := range strings.Split(vdf, "\n") {
+		// `"path"  "D:\\Games"` splits on its quotes into "", key, gap, value, "".
+		parts := strings.Split(strings.TrimSpace(line), `"`)
+		if len(parts) == 5 && strings.EqualFold(parts[1], "path") && parts[3] != "" {
+			out = append(out, strings.ReplaceAll(parts[3], `\\`, `\`))
+		}
+	}
+	return out
 }
 
 type KnownApp struct {

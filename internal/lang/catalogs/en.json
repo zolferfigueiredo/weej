@@ -162,7 +162,7 @@
   "list.buttons": "Buttons",
   "list.faders": "Faders",
   "list.none": "None",
-  "login": "Launch at login",
+  "login": "Launch at startup",
   "made_by": "Made by",
   "mixer.fader": "Fader {n}",
   "mixer.knob": "Knob {n}",

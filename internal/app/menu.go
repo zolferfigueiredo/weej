@@ -154,10 +154,18 @@ func (app *App) statusLine(connected, busy bool, port string) string {
 	return app.tr("not_connected")
 }
 
-func (app *App) toggleLogin() {
-	on := !sys.LoginEnabled(app.self)
-	if err := sys.SetLogin(on, app.self, nil); err != nil {
-		app.log("Could not change Launch at login: " + err.Error())
+func (app *App) toggleLogin() { app.setLogin(!sys.LoginEnabled(app.self)) }
+
+// setLogin turns Launch at startup on or off at once, from the tray or Settings, and shows Settings
+// what it now is. Only the installed copy can, since the Run entry names its exe.
+func (app *App) setLogin(on bool) {
+	if sys.IsInstalledCopy(app.self) {
+		if err := sys.SetLogin(on, app.self, nil); err != nil {
+			app.log("Could not change Launch at startup: " + err.Error())
+		}
+	}
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "login", "on": sys.LoginEnabled(app.self)})
 	}
 }
 

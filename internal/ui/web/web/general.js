@@ -19,6 +19,8 @@ export function renderGeneral() {
     .map((l) => `<option value="${escAttr(l.code)}"${l.code === draft.language ? " selected" : ""}>${esc(l.name)}</option>`)
     .join("");
   const hidden = draft.hideTrayIcon;
+  // Only the installed copy can launch at startup, as in the tray menu.
+  const canLogin = !!S.init.loginAvailable;
 
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel general-list" role="tabpanel">
@@ -37,6 +39,10 @@ export function renderGeneral() {
           <div class="row">
             <div class="row-main"><span class="row-title">${esc(t("language"))}</span></div>
             <div class="row-control"><select class="select" id="language-select">${langOptions}</select></div>
+          </div>
+          <div class="row">
+            <div class="row-main"><span class="row-title${canLogin ? "" : " disabled"}">${esc(t("login"))}</span></div>
+            <div class="row-control"><input class="toggle" id="login" type="checkbox" role="switch"${S.init.login ? " checked" : ""}${canLogin ? "" : " disabled"} /></div>
           </div>
           <div class="row">
             <div class="row-main">
