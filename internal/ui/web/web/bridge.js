@@ -778,7 +778,7 @@ function startSettingsMock(post, enStrings) {
             ? Object.assign(mockSMC(id), { name: msg.name, port: msg.port, lights: "" })
             : { id, name: msg.name, type: msg.deviceType, enabled: true, port: msg.port, baudRate: msg.baudRate, speed: "slow", controls, view: "draw", profiles: [{ name: "Default", jobs: controls.map(() => []), buttons: {} }], profile: 0 };
         saveDevice(d);
-        post({ type: "status", device: id, connected: true, busy: false, port: msg.port || "COM7" });
+        post({ type: "status", device: id, connected: true, busy: false, port: msg.port || (msg.deviceType === "smc" ? "SMC-Mixer" : "COM7") });
         post({ type: "added", device: id });
         break;
       }

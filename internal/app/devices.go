@@ -149,7 +149,7 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 		if key.typ == core.DeviceDIY {
 			serialport.Run(ctx, serialport.Config{
 				Owner:      id,
-				Exclude:    func() []string { return app.portsOfOtherBoards(id) },
+				Exclude:    func() []string { return app.portsOfOtherBoards(id, false) },
 				ForcedPort: key.port,
 				Baud:       key.baud,
 				OnLine:     func(values []int) { app.onRawFrame(r, values) },
@@ -161,10 +161,11 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 		port := midiport.New(midiport.Config{
 			Device:   key.port,
 			ID:       id,
+			Exclude:  func() []string { return app.portsOfOtherBoards(id, true) },
 			OnValues: func(values []int) { app.onRawFrame(r, values) },
 			OnButton: func(button int) { app.onMIDIButton(r, button) },
-			OnStatus: func(connected, busy bool) { status(connected, busy, key.port) },
-			Lights:   key.typ == core.DeviceSMC,
+			OnStatus: status,
+			SMC:      key.typ == core.DeviceSMC,
 			Log:      app.log,
 			Seed:     func(col int) (int, bool) { return app.knobStart(r, col) },
 		})
@@ -202,12 +203,12 @@ func (app *App) knobStart(r *runner, col int) (int, bool) {
 	return 0, false
 }
 
-// portsOfOtherBoards lists the COM ports other DIY boards are set to, which finding a board
-// automatically leaves alone.
-func (app *App) portsOfOtherBoards(id string) []string {
+// portsOfOtherBoards lists what the other boards that are on are set to, which finding a board
+// automatically leaves alone: COM ports, or MIDI inputs.
+func (app *App) portsOfOtherBoards(id string, midi bool) []string {
 	var out []string
 	for _, d := range app.snapshotSettings().Devices {
-		if d.ID != id && d.Type == core.DeviceDIY && d.Enabled && d.Port != "" {
+		if d.ID != id && d.Type.IsMIDI() == midi && d.Enabled && d.Port != "" {
 			out = append(out, d.Port)
 		}
 	}

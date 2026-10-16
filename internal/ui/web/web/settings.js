@@ -302,7 +302,6 @@ function onClick(e) {
     case "add-type":
       S.dialog.type = target.dataset.type;
       S.dialog.port = "";
-      if (S.dialog.type === "smc") S.dialog.port = (S.midiInputs || []).find((n) => n.toLowerCase().includes("smc-mixer")) || "";
       render();
       break;
     case "add-confirm": {
@@ -482,7 +481,7 @@ function onInput(e) {
 function addReady() {
   const a = S.dialog;
   const counted = a.type !== "smc";
-  return a.name.trim() !== "" && (a.type === "diy" || a.port !== "") && (!counted || a.knobs + a.faders + a.buttons > 0);
+  return a.name.trim() !== "" && (a.type !== "midi" || a.port !== "") && (!counted || a.knobs + a.faders + a.buttons > 0);
 }
 
 function onChange(e) {
@@ -727,12 +726,7 @@ function onMessage(msg) {
       S.ports = msg.ports || [];
       S.midiInputs = msg.midi || [];
       if (S.dialog && S.dialog.kind === "gear") refreshGearPorts();
-      if (S.dialog && S.dialog.kind === "add") {
-        if (S.dialog.type === "smc" && !S.dialog.port) {
-          S.dialog.port = S.midiInputs.find((n) => n.toLowerCase().includes("smc-mixer")) || "";
-        }
-        render();
-      }
+      if (S.dialog && S.dialog.kind === "add") render();
       break;
     case "buttonAppPicked": {
       const d = board();
