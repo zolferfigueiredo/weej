@@ -2,16 +2,19 @@ package draw
 
 import (
 	"image"
+	"math"
 
 	"golang.org/x/image/vector"
 )
 
 // Below this size the thin tracks and cap shadows alias badly rendered directly, so AppIcon
-// supersamples at 4x and box-downsamples instead.
+// supersamples at 4x and box-downsamples instead. Every size has the J cable, the tray's and the
+// window's included.
 const appIconSupersampleBelow = 48
 
-// Below this size the J cable crowds the W, so small icons draw the W alone on a full-frame plate.
-const appIconCableFrom = 32
+// The J cable's half-width never drops below this many pixels of the finished icon, so it still reads
+// at 16 to 24 px, where its design width would be a faint pixel. From 32 px up the design width wins.
+const appIconCableMinHW = 1.0
 
 const plateLipDepth = 41
 
@@ -40,8 +43,6 @@ type faderLayout struct {
 var (
 	cabledLayout = faderLayout{left: 148, gap: 120.5, top: 184, bottom: 737, trackW: 31,
 		high: 246, low: 655, mid: 410, strokeHW: 23, capW: 96, capH: 72, capR: 26, gripW: 49, gripH: 12}
-	smallLayout = faderLayout{left: 205, gap: 153.5, top: 164, bottom: 860, trackW: 36,
-		high: 266, low: 737, mid: 451, strokeHW: 28, capW: 123, capH: 82, capR: 31, gripW: 61, gripH: 14}
 )
 
 func AppIcon(px int) *image.NRGBA {
@@ -49,19 +50,14 @@ func AppIcon(px int) *image.NRGBA {
 	if px <= appIconSupersampleBelow {
 		work = px * 4
 	}
-	var img *image.NRGBA
-	if px < appIconCableFrom {
-		img = renderSmallAppIcon(work)
-	} else {
-		img = renderAppIcon(work)
-	}
+	img := renderAppIcon(work, px)
 	if work != px {
 		img = boxDownsample(img, px)
 	}
 	return img
 }
 
-func renderAppIcon(work int) *image.NRGBA {
+func renderAppIcon(work, px int) *image.NRGBA {
 	s := float64(work) / 1024
 	p := func(v float64) float32 { return float32(v * s) }
 	canvas := image.NewNRGBA(image.Rect(0, 0, work, work))
@@ -73,7 +69,8 @@ func renderAppIcon(work int) *image.NRGBA {
 	cable.lineTo(901, 840)
 	cable.quadTo(pt{901, 973}, pt{819, 973})
 	cable.quadTo(pt{748, 973}, pt{748, 901})
-	fillMask(canvas, strokeMask(work, cable.scaled(s), 31*s), ledOrange)
+	hw := math.Max(31*s, appIconCableMinHW*float64(work)/float64(px))
+	fillMask(canvas, strokeMask(work, cable.scaled(s), hw), ledOrange)
 	plug := mask(work, func(z *vector.Rasterizer) {
 		addRoundedRect(z, p(717), p(809), p(61), p(92), p(15))
 	})
@@ -81,14 +78,6 @@ func renderAppIcon(work int) *image.NRGBA {
 
 	paintPlate(canvas, work, s, 41, 82, 696, 737, 164)
 	drawFaders(canvas, work, s, cabledLayout)
-	return canvas
-}
-
-func renderSmallAppIcon(work int) *image.NRGBA {
-	s := float64(work) / 1024
-	canvas := image.NewNRGBA(image.Rect(0, 0, work, work))
-	paintPlate(canvas, work, s, 41, 41, 942, 901, 200)
-	drawFaders(canvas, work, s, smallLayout)
 	return canvas
 }
 
