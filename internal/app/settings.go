@@ -201,7 +201,7 @@ func (app *App) sendSettingsInit() {
 	payload["deej"] = deejURL
 	payload["theej"] = theejURL
 	payload["coffee"] = coffeeURL
-	payload["icon"] = appIconDataURL(64)
+	payload["icon"] = appIconDataURL(192) // About shows it at 96, so it stays sharp at 200% scaling
 	payload["languages"] = languagesPayload()
 	payload["language"] = s.Language
 	payload["settings"] = settingsJSON(s)

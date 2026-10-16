@@ -107,7 +107,7 @@ function renderAbout() {
   const init = S.init;
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel about" role="tabpanel">
-      <img class="about-icon" src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" />
+      <img class="about-icon" src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="96" height="96" />
       <h2 class="about-name">WeeJ</h2>
       <p class="about-line about-by">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">Zolfer Figueiredo</a></p>
       <p class="about-line">${esc(t("version", { version: init.version }))}</p>
@@ -514,8 +514,8 @@ function onChange(e) {
       S.draft.language = el.value;
       send({ type: "setLanguage", code: el.value });
       break;
-    case "hide-icon":
-      S.draft.hideTrayIcon = el.checked;
+    case "show-icon":
+      S.draft.hideTrayIcon = !el.checked;
       render();
       break;
     case "show-profile-list":

@@ -40,23 +40,6 @@ export function renderGeneral() {
           </div>
           <div class="row">
             <div class="row-main">
-              <span class="row-title">${esc(t("hide_icon"))}</span>
-              <span class="row-desc">${esc(t("hide_icon_note"))}</span>
-            </div>
-            <div class="row-control"><input class="toggle" id="hide-icon" type="checkbox" role="switch"${hidden ? " checked" : ""} /></div>
-          </div>
-          <div class="row">
-            <div class="row-main"><span class="row-title${hidden ? " disabled" : ""}">${esc(t("profile_list"))}</span></div>
-            <div class="row-control"><input class="toggle" id="show-profile-list" type="checkbox" role="switch"${draft.showProfileList ? " checked" : ""}${hidden ? " disabled" : ""} /></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="group">
-        <h2 class="group-title">${esc(t("general.updates"))}</h2>
-        <div class="card">
-          <div class="row">
-            <div class="row-main">
               <span class="row-title">${esc(t("general.auto_update"))}</span>
               <span class="row-desc">${esc(t(draft.updateEvery === 86400 ? "general.auto_update_daily" : "general.auto_update_weekly"))}</span>
             </div>
@@ -68,6 +51,23 @@ export function renderGeneral() {
               <span class="row-desc">${esc(t("general.auto_install_note"))}</span>
             </div>
             <div class="row-control"><input class="toggle" id="auto-install" type="checkbox" role="switch"${draft.installUpdates ? " checked" : ""} /></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2 class="group-title">${esc(t("general.tray"))}</h2>
+        <div class="card">
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("show_icon"))}</span>
+              <span class="row-desc">${esc(t("hide_icon_note"))}</span>
+            </div>
+            <div class="row-control"><input class="toggle" id="show-icon" type="checkbox" role="switch"${hidden ? "" : " checked"} /></div>
+          </div>
+          <div class="row">
+            <div class="row-main"><span class="row-title${hidden ? " disabled" : ""}">${esc(t("profile_list"))}</span></div>
+            <div class="row-control"><input class="toggle" id="show-profile-list" type="checkbox" role="switch"${draft.showProfileList ? " checked" : ""}${hidden ? " disabled" : ""} /></div>
           </div>
         </div>
       </div>
