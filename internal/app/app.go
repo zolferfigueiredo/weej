@@ -25,7 +25,8 @@ import (
 
 type NightLight interface {
 	Set(s float64)
-	Toggle()
+	// Toggle reports whether Night light is now on, when it could change it.
+	Toggle() (on, ok bool)
 }
 
 type Zoom interface {
@@ -56,6 +57,8 @@ type App struct {
 	runners  map[string]*runner
 	bindings []core.HotkeyBinding
 	wizard   *wizardRun
+	// calibrationOffered is the boards calibration opened for on its own this launch. Main loop.
+	calibrationOffered map[string]bool
 
 	audio *audio.Audio
 	// spectrum is the sound the button lights' EQ follows, while loopback listens for it.

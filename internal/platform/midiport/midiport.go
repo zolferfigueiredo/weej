@@ -3,9 +3,11 @@
 package midiport
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -94,15 +96,6 @@ func List() []string {
 	return out
 }
 
-func findInput(name string) (uintptr, bool) {
-	for i, n := range List() {
-		if n == name {
-			return uintptr(i), true
-		}
-	}
-	return 0, false
-}
-
 func findOutput(name string) (uintptr, bool) {
 	n, _, _ := procMidiOutGetNumDevs.Call()
 	for i := uintptr(0); i < n; i++ {
@@ -123,15 +116,20 @@ func SetSpectrum(s *core.Spectrum) { spectrum.Store(s) }
 
 type Config struct {
 	// Device is the MIDI input's name, and ID the board's, which its faders' positions are kept
-	// under.
-	Device   string
-	ID       string
+	// under. An SMC-Mixer whose input isn't there, "" included, finds whichever one is.
+	Device string
+	ID     string
+	// Exclude lists the inputs other boards are set to, which finding an SMC-Mixer passes over.
+	Exclude  func() []string
 	OnValues func(values []int)
 	OnButton func(id int)
-	OnStatus func(connected, busy bool)
-	// Lights runs SetLights' pattern and the knob blink, on an SMC-Mixer.
-	Lights bool
-	Log    func(string)
+	// OnStatus has the input the board is on, or set to while it waits.
+	OnStatus func(connected, busy bool, input string)
+	// SMC is an SMC-Mixer, which runs SetLights' pattern and the knob blink.
+	SMC bool
+	Log func(string)
+	// Seed is where a knob not heard from yet starts (core.MixerState.Seed).
+	Seed func(col int) (int, bool)
 }
 
 // Port is one MIDI board: its input and output, the mode it is in, and its lights.
@@ -146,13 +144,14 @@ type Port struct {
 	muteLEDs [256]atomic.Bool
 	pattern  atomic.Value
 	poke     chan struct{}
+	forget   atomic.Bool
 }
 
 func New(cfg Config) *Port {
 	p := &Port{cfg: cfg, key: nextKey.Add(1), poke: make(chan struct{}, 1)}
 	// DAW mode is how an SMC-Mixer is used with WeeJ, and its lights take that mode's messages
 	// until the mixer says otherwise.
-	p.mode.Assume(cfg.Lights)
+	p.mode.Assume(cfg.SMC)
 	inputs.Store(p.key, &p.in)
 	return p
 }
@@ -177,6 +176,13 @@ func (p *Port) SetLights(pattern string) {
 	if p != nil {
 		p.pattern.Store(core.ParseLightPattern(pattern))
 		p.pokeLights()
+	}
+}
+
+// ForgetKnobs has the knobs start again from where their jobs are, as the next profile's.
+func (p *Port) ForgetKnobs() {
+	if p != nil {
+		p.forget.Store(true)
 	}
 }
 
@@ -236,6 +242,24 @@ func (p *Port) send(msg uint32) {
 	}
 }
 
+// opened holds the input each board has open, by board ID, so finding an SMC-Mixer passes over
+// the ones other boards have.
+var opened sync.Map
+
+func (p *Port) taken() []string {
+	var out []string
+	if p.cfg.Exclude != nil {
+		out = p.cfg.Exclude()
+	}
+	opened.Range(func(id, input any) bool {
+		if id != p.cfg.ID {
+			out = append(out, input.(string))
+		}
+		return true
+	})
+	return out
+}
+
 type dropReason int
 
 const (
@@ -244,7 +268,7 @@ const (
 	dropCanceled
 )
 
-// Run is a blocking loop like serialport.Run: it opens the named MIDI input, feeds what the
+// Run is a blocking loop like serialport.Run: it opens the board's MIDI input, feeds what the
 // board sends to its Config, and reopens it whenever it goes away. It returns once ctx is done.
 func (p *Port) Run(ctx context.Context, reconnect <-chan struct{}) {
 	cfg := p.cfg
@@ -252,16 +276,19 @@ func (p *Port) Run(ctx context.Context, reconnect <-chan struct{}) {
 	if logf == nil {
 		logf = func(string) {}
 	}
-	type status struct{ connected, busy bool }
+	type status struct {
+		connected, busy bool
+		input           string
+	}
 	var last *status
-	setStatus := func(connected, busy bool) {
-		s := status{connected, busy}
+	setStatus := func(connected, busy bool, input string) {
+		s := status{connected, busy, input}
 		if last != nil && *last == s {
 			return
 		}
 		last = &s
 		if cfg.OnStatus != nil {
-			cfg.OnStatus(connected, busy)
+			cfg.OnStatus(connected, busy, input)
 		}
 	}
 
@@ -269,12 +296,13 @@ func (p *Port) Run(ctx context.Context, reconnect <-chan struct{}) {
 		if ctx.Err() != nil {
 			return
 		}
-		id, ok := findInput(cfg.Device)
+		names := List()
+		name, ok := core.PickMIDIInput(names, cfg.Device, cfg.SMC, p.taken())
 		if !ok {
 			if last == nil || last.connected {
-				logf("Waiting for MIDI device " + cfg.Device)
+				logf("Waiting for MIDI device " + cmp.Or(cfg.Device, "SMC-Mixer"))
 			}
-			setStatus(false, false)
+			setStatus(false, false, cfg.Device)
 			if sleepDiscard(ctx, 2*time.Second, reconnect) {
 				return
 			}
@@ -282,27 +310,29 @@ func (p *Port) Run(ctx context.Context, reconnect <-chan struct{}) {
 		}
 
 		ch := make(chan uint32, 1024)
-		h, err := p.openInput(id, ch)
+		h, err := p.openInput(uintptr(slices.Index(names, name)), ch)
 		if err != nil {
-			logf(fmt.Sprintf("Could not open %s: %v", cfg.Device, err))
-			setStatus(false, errors.Is(err, errBusy))
+			logf(fmt.Sprintf("Could not open %s: %v", name, err))
+			setStatus(false, errors.Is(err, errBusy), name)
 			if sleepDiscard(ctx, 2*time.Second, reconnect) {
 				return
 			}
 			continue
 		}
-		p.openOutput(cfg.Device)
-		logf("Connected: " + cfg.Device)
-		setStatus(true, false)
+		opened.Store(cfg.ID, name)
+		p.openOutput(name)
+		logf("Connected: " + name)
+		setStatus(true, false, name)
 
-		reason := p.stream(ctx, ch, reconnect)
+		reason := p.stream(ctx, ch, reconnect, name)
 		p.closeOutput()
 		p.closeInput(h)
+		opened.Delete(cfg.ID)
 		if reason == dropCanceled {
 			return
 		}
 		logf("Disconnected")
-		setStatus(false, false)
+		setStatus(false, false, cfg.Device)
 		if sleepDiscard(ctx, time.Second, reconnect) {
 			return
 		}
@@ -311,20 +341,21 @@ func (p *Port) Run(ctx context.Context, reconnect <-chan struct{}) {
 
 // stream hands the values over once per burst, so a fast fader sweep costs one frame, not one
 // per message.
-func (p *Port) stream(ctx context.Context, ch <-chan uint32, reconnect <-chan struct{}) dropReason {
+func (p *Port) stream(ctx context.Context, ch <-chan uint32, reconnect <-chan struct{}, input string) dropReason {
 	cfg := p.cfg
 	state := core.NewMixerState()
+	state.Seed = cfg.Seed
 	key := cfg.ID
 	if key == "" {
 		key = cfg.Device
 	}
-	if cfg.Lights {
+	if cfg.SMC {
 		loadFaders(key, state)
 		defer saveFaders(key, state)
 	}
 	check := time.NewTicker(2 * time.Second)
 	defer check.Stop()
-	lights := newButtonLights(p, cfg.Lights, state)
+	lights := newButtonLights(p, cfg.SMC, state)
 	var guard core.LightGuard
 	lights.update()
 	defer lights.clear()
@@ -336,7 +367,7 @@ func (p *Port) stream(ctx context.Context, ch <-chan uint32, reconnect <-chan st
 		case <-reconnect:
 			return dropReconnect
 		case <-check.C:
-			if _, ok := findInput(cfg.Device); !ok {
+			if !slices.Contains(List(), input) {
 				return dropGone
 			}
 		case <-lights.tick:
@@ -346,13 +377,16 @@ func (p *Port) stream(ctx context.Context, ch <-chan uint32, reconnect <-chan st
 		case <-lights.paced:
 			lights.flush()
 		case msg := <-ch:
+			if p.forget.Swap(false) {
+				state.ForgetKnobs()
+			}
 			changed := false
 			feed := func(m uint32) {
 				daw := p.mode.DAW()
 				if p.mode.Seen(m); daw != p.mode.DAW() {
 					lights.update()
 				}
-				if cfg.Lights && !guard.Pass(m, time.Since(lights.start0).Seconds(), lights.last.Sub(lights.start0).Seconds()) {
+				if cfg.SMC && !guard.Pass(m, time.Since(lights.start0).Seconds(), lights.last.Sub(lights.start0).Seconds()) {
 					return
 				}
 				c, pressed := state.Feed(m)

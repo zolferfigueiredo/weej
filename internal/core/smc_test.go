@@ -160,3 +160,27 @@ func TestButtonWatcherFindsPressesEitherWay(t *testing.T) {
 		t.Errorf("after Reset pressed %v, want the new rest learned", got)
 	}
 }
+
+func TestPickMIDIInputFindsAFreeSMCMixer(t *testing.T) {
+	inputs := []string{"nanoKONTROL2", "SMC-Mixer Private", "SMC-Mixer Master", "MIDIIN2 (SMC-Mixer)", "SMC-Mixer"}
+	cases := []struct {
+		set   string
+		smc   bool
+		taken []string
+		want  string
+	}{
+		{"nanoKONTROL2", false, nil, "nanoKONTROL2"},
+		{"gone", false, nil, ""},
+		{"", true, nil, "SMC-Mixer Master"},
+		{"SMC-Mixer", true, nil, "SMC-Mixer"},
+		{"gone", true, []string{"SMC-Mixer Master"}, "SMC-Mixer"},
+		{"", true, []string{"SMC-Mixer Master", "SMC-Mixer"}, "SMC-Mixer Private"},
+		// Another board has the USB mixer, whose second input is the same device.
+		{"", true, []string{"SMC-Mixer Master", "SMC-Mixer Private", "SMC-Mixer"}, ""},
+	}
+	for _, c := range cases {
+		if got, ok := PickMIDIInput(inputs, c.set, c.smc, c.taken); got != c.want || ok != (c.want != "") {
+			t.Errorf("PickMIDIInput(%q, smc %v, taken %v) = %q, %v, want %q", c.set, c.smc, c.taken, got, ok, c.want)
+		}
+	}
+}

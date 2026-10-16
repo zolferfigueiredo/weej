@@ -3,6 +3,7 @@
 package app
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
+	"github.com/zolferfigueiredo/weej/internal/draw"
 	"github.com/zolferfigueiredo/weej/internal/platform/audio"
 	"github.com/zolferfigueiredo/weej/internal/platform/midiport"
 	"github.com/zolferfigueiredo/weej/internal/platform/serialport"
@@ -149,7 +151,7 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 		if key.typ == core.DeviceDIY {
 			serialport.Run(ctx, serialport.Config{
 				Owner:      id,
-				Exclude:    func() []string { return app.portsOfOtherBoards(id) },
+				Exclude:    func() []string { return app.portsOfOtherBoards(id, false) },
 				ForcedPort: key.port,
 				Baud:       key.baud,
 				OnLine:     func(values []int) { app.onRawFrame(r, values) },
@@ -161,11 +163,13 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 		port := midiport.New(midiport.Config{
 			Device:   key.port,
 			ID:       id,
+			Exclude:  func() []string { return app.portsOfOtherBoards(id, true) },
 			OnValues: func(values []int) { app.onRawFrame(r, values) },
 			OnButton: func(button int) { app.onMIDIButton(r, button) },
-			OnStatus: func(connected, busy bool) { status(connected, busy, key.port) },
-			Lights:   key.typ == core.DeviceSMC,
+			OnStatus: status,
+			SMC:      key.typ == core.DeviceSMC,
 			Log:      app.log,
+			Seed:     func(col int) (int, bool) { return app.knobStart(r, col) },
 		})
 		if d, ok := app.device(id); ok {
 			port.SetLights(d.Lights)
@@ -178,12 +182,35 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 	return r
 }
 
-// portsOfOtherBoards lists the COM ports other DIY boards are set to, which finding a board
-// automatically leaves alone.
-func (app *App) portsOfOtherBoards(id string) []string {
+// knobStart is where an endless knob not heard from yet starts: where its first job is now, else
+// where it last was, so its first turn carries on from there instead of jumping.
+func (app *App) knobStart(r *runner, col int) (int, bool) {
+	d, ok := app.device(r.id)
+	if !ok {
+		return 0, false
+	}
+	for k, c := range d.Controls {
+		if c.Input != col || c.Kind == core.KindButton {
+			continue
+		}
+		u, ok := 0.0, false
+		if jobs := d.ActiveProfile().Jobs; k < len(jobs) && len(jobs[k]) > 0 && app.audio != nil {
+			u, ok = app.audio.Level(jobs[k][0])
+		}
+		if !ok {
+			u, ok = r.engine.Last(k)
+		}
+		return d.RawAt(k, u), ok
+	}
+	return 0, false
+}
+
+// portsOfOtherBoards lists what the other boards that are on are set to, which finding a board
+// automatically leaves alone: COM ports, or MIDI inputs.
+func (app *App) portsOfOtherBoards(id string, midi bool) []string {
 	var out []string
 	for _, d := range app.snapshotSettings().Devices {
-		if d.ID != id && d.Type == core.DeviceDIY && d.Enabled && d.Port != "" {
+		if d.ID != id && d.Type.IsMIDI() == midi && d.Enabled && d.Port != "" {
 			out = append(out, d.Port)
 		}
 	}
@@ -203,6 +230,9 @@ func (app *App) onRunnerStatus(r *runner, id string, connected, busy bool, port 
 	app.loop.Invoke(func() {
 		app.refreshTrayNow()
 		app.pushStatus(id)
+		if connected {
+			app.calibrateIfNeeded(id)
+		}
 	})
 }
 
@@ -340,10 +370,22 @@ func (app *App) runButtonAction(action core.ButtonAction, r *runner, d core.Devi
 		winui.MediaKey(winui.VKVolumeMute)
 	case core.ActionMuteMic:
 		if app.audio != nil {
-			app.audio.ToggleMicMute()
+			go func() {
+				if mic := app.audio.ToggleMicMute(); mic.Muted {
+					app.showGlyphHUD(draw.GlyphMicMuted, 0)
+				} else if mic.OK {
+					app.showGlyphHUD(draw.GlyphMic, mic.Level)
+				}
+			}()
 		}
 	case core.ActionNightLight:
-		app.nightlight.Toggle()
+		go func() {
+			if on, ok := app.nightlight.Toggle(); ok && on {
+				app.showGlyphHUD(draw.GlyphMoon, 1)
+			} else if ok {
+				app.showGlyphHUD(draw.GlyphMoon, 0)
+			}
+		}()
 	case core.ActionScreensOff:
 		winui.ScreensOff()
 	case core.ActionLockPC:
@@ -390,7 +432,7 @@ func (app *App) setProfiles(targets []core.HotkeyTarget) {
 		if next < 0 || next >= len(d.Profiles) {
 			continue
 		}
-		app.unmuteDevice(*d)
+		app.leaveProfile(*d)
 		d.Active = next
 		if hud == nil {
 			hud = d
@@ -409,14 +451,19 @@ func (app *App) setProfiles(targets []core.HotkeyTarget) {
 	app.showProfileHUD(*hud, len(s.Devices) > 1)
 }
 
-// unmuteDevice puts a board's muted controls back before its profile changes: the next profile
-// gives them other jobs, so a muted one could no longer be unmuted from its button.
-func (app *App) unmuteDevice(d core.Device) {
+// leaveProfile readies a board for another profile. Its muted controls come back first: the
+// next profile gives them other jobs, so a muted one could no longer be unmuted from its button.
+// An SMC-Mixer's knobs start again from where their new jobs are.
+func (app *App) leaveProfile(d core.Device) {
 	r := app.runnerFor(d.ID)
-	if r == nil || r.engine.UnmuteAll(d.EngineSetup()) == 0 {
+	if r == nil {
 		return
 	}
 	port := r.midiPort()
+	port.ForgetKnobs()
+	if r.engine.UnmuteAll(d.EngineSetup()) == 0 {
+		return
+	}
 	for key, actions := range d.ActiveButtons() {
 		for _, a := range actions {
 			if _, ok := a.MuteKnob(); ok {
@@ -460,7 +507,7 @@ func (app *App) applyLights(devices []core.Device) {
 }
 
 // changeLights changes the light pattern of the board a button is on, or of every SMC-Mixer when
-// that board has none, and saves it as Settings would.
+// that board has none, saves it as Settings would and names it in the HUD.
 func (app *App) changeLights(id string, change func(string) string) {
 	app.loop.Invoke(func() {
 		s := app.snapshotSettings()
@@ -485,6 +532,18 @@ func (app *App) changeLights(id string, change func(string) string) {
 				win.Send(map[string]any{"type": "lights", "device": s.Devices[i].ID, "pattern": s.Devices[i].Lights})
 			}
 		}
+		first := s.Devices[changed[0]]
+		name := app.tr("lights." + cmp.Or(first.Lights, "off"))
+		mixers := 0
+		for _, d := range s.Devices {
+			if d.Type == core.DeviceSMC {
+				mixers++
+			}
+		}
+		if mixers > 1 && len(changed) == 1 {
+			name = first.Name + " · " + name
+		}
+		app.showLightsHUD(name, first.Lights != "")
 	})
 }
 

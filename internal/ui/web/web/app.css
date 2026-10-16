@@ -325,8 +325,17 @@ p {
 }
 
 .row.lit,
-.row.lit:hover {
+.row.lit:hover,
+.row.drop-target {
   background: var(--selection);
+}
+
+.grip {
+  flex: none;
+  width: 6px;
+  height: 10px;
+  fill: var(--text-secondary);
+  cursor: grab;
 }
 
 .row.clickable:hover {
@@ -1206,6 +1215,13 @@ select.select,
 .inspector-empty {
   padding: 12px;
   color: var(--text-secondary);
+}
+
+.inspector-note {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--divider);
+  font-size: var(--fs-caption);
+  color: var(--danger);
 }
 
 .smc .waiting .face,

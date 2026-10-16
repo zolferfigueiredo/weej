@@ -390,6 +390,7 @@ const MOCK_EN_STRINGS = {
   login: "Launch at login",
   made_by: "Made by",
   name: "Name",
+  needs_calibration: "Needs calibration",
   never: "Never",
   newest: "WeeJ {version} is currently the newest version available.",
   next_profile: "Next profile",
@@ -778,7 +779,7 @@ function startSettingsMock(post, enStrings) {
             ? Object.assign(mockSMC(id), { name: msg.name, port: msg.port, lights: "" })
             : { id, name: msg.name, type: msg.deviceType, enabled: true, port: msg.port, baudRate: msg.baudRate, speed: "slow", controls, view: "draw", profiles: [{ name: "Default", jobs: controls.map(() => []), buttons: {} }], profile: 0 };
         saveDevice(d);
-        post({ type: "status", device: id, connected: true, busy: false, port: msg.port || "COM7" });
+        post({ type: "status", device: id, connected: true, busy: false, port: msg.port || (msg.deviceType === "smc" ? "SMC-Mixer" : "COM7") });
         post({ type: "added", device: id });
         break;
       }

@@ -2,6 +2,7 @@ import { connect, send, t } from "./bridge.js";
 import {
   fitLists,
   moveControl,
+  onDrag,
   picked,
   pressed,
   renderBoards,
@@ -13,6 +14,7 @@ import { openAdd, openGear, refreshGearPorts, renderDialog } from "./dialogs.js"
 import { renderGeneral } from "./general.js";
 import {
   BUTTON_MENU_BASE,
+  actionLabel,
   jobKey,
   onPick,
   openButtonMenu,
@@ -27,6 +29,8 @@ import {
   buttonKey,
   clampIndex,
   clone,
+  controlName,
+  controlOfKey,
   currentBoard,
   deviceById,
   esc,
@@ -299,7 +303,6 @@ function onClick(e) {
     case "add-type":
       S.dialog.type = target.dataset.type;
       S.dialog.port = "";
-      if (S.dialog.type === "smc") S.dialog.port = (S.midiInputs || []).find((n) => n.toLowerCase().includes("smc-mixer")) || "";
       render();
       break;
     case "add-confirm": {
@@ -479,7 +482,7 @@ function onInput(e) {
 function addReady() {
   const a = S.dialog;
   const counted = a.type !== "smc";
-  return a.name.trim() !== "" && (a.type === "diy" || a.port !== "") && (!counted || a.knobs + a.faders + a.buttons > 0);
+  return a.name.trim() !== "" && (a.type !== "midi" || a.port !== "") && (!counted || a.knobs + a.faders + a.buttons > 0);
 }
 
 function onChange(e) {
@@ -655,7 +658,13 @@ function onMessage(msg) {
         d.profile = d.profiles.length - 1;
         S.board = d.id;
       }
-      S.importNote = msg.skipped && msg.skipped.length ? t("import_skipped", { items: msg.skipped.join(", ") }) : "";
+      // A file from another system leaves its apps and keys out, named "Button C: Open an app".
+      const dropped = Object.entries(msg.dropped || {}).flatMap(([key, actions]) => {
+        const k = d ? controlOfKey(d, Number(key)) : -1;
+        return actions.map((a) => `${k >= 0 ? controlName(d, k) : key}: ${actionLabel(d, a)}`);
+      });
+      const skipped = [...(msg.skipped || []), ...dropped];
+      S.importNote = skipped.length ? t("import_skipped", { items: skipped.join(", ") }) : "";
       render();
       break;
     }
@@ -718,12 +727,7 @@ function onMessage(msg) {
       S.ports = msg.ports || [];
       S.midiInputs = msg.midi || [];
       if (S.dialog && S.dialog.kind === "gear") refreshGearPorts();
-      if (S.dialog && S.dialog.kind === "add") {
-        if (S.dialog.type === "smc" && !S.dialog.port) {
-          S.dialog.port = S.midiInputs.find((n) => n.toLowerCase().includes("smc-mixer")) || "";
-        }
-        render();
-      }
+      if (S.dialog && S.dialog.kind === "add") render();
       break;
     case "buttonAppPicked": {
       const d = board();
@@ -783,6 +787,7 @@ document.getElementById("root").addEventListener("click", onClick);
 document.getElementById("root").addEventListener("input", onInput);
 document.getElementById("root").addEventListener("change", onChange);
 document.getElementById("root").addEventListener("keydown", onControlKeydown);
+for (const type of ["dragstart", "dragover", "drop", "dragend"]) document.getElementById("root").addEventListener(type, onDrag);
 document.getElementById("btn-close").addEventListener("click", () => send({ type: "close" }));
 document.getElementById("btn-save").addEventListener("click", doSave);
 

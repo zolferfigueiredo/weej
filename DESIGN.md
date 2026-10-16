@@ -109,7 +109,7 @@ Restrained by the brief, not by default: a single accent carries every call to a
 - **Card Surface** (`#fbfbfb` light / `#2c2c2c` dark): every SettingsCard, the job-picker flyout, and confirm dialogs.
 - **Control Surface** (`#ffffff` light / `#2c2c2c` dark): text inputs, selects, and secondary buttons, one step brighter than the card they usually sit inside.
 - **Primary Text** (`#1a1a1a` light / `#ffffff` dark) and **Secondary Text** (`#5d5d5d` light / `#c5c5c5` dark): row titles versus row descriptions/hints; both verified at or above 4.5:1 against their surface.
-- **Danger** (`#c42b1c` light / `#ff99a4` dark): Remove board and the remove dialogs' destructive action, and a port another app holds.
+- **Danger** (`#c42b1c` light / `#ff99a4` dark): Remove board and the remove dialogs' destructive action, a port another app holds, and Needs calibration on a control not found yet.
 - **Warning** (`#9d5d00` light / `#ffb956` dark): the calibration dialog's warning line (a control already found, a press on another button, nothing moved between 0% and 100%).
 - **Success** (`#0f7b0f` light / `#6ccb5f` dark): a board's Connected status, the one place a state is shown in color as well as words.
 
@@ -190,7 +190,7 @@ Two radii carry most of the system: **8px** for cards (`.card`, the flyout, dial
 - An SMC-Mixer is drawn as the device itself; a DIY or MIDI board as rows of knobs, faders and buttons in the places the user put them. A drawn knob turns with the level it sets, clockwise from 0% to 100%. The control picked is outlined in the accent, and one being moved or pressed takes the selection tint for a moment. Beside the drawing, the inspector is one card, headed by the control picked and Clear, its list scrolling below; its top is level with the drawing's. On a DIY or MIDI board a gear between Draw and List turns on four arrows laid out as a keyboard's (up above left, down and right) that move the control picked.
 
 ### List (Boards tab, List)
-- Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions, ten rows at most before the card scrolls; a row takes the selection tint while its control moves or is pressed.
+- Three cards side by side, Knobs, Faders and Buttons, one row per control with its jobs or actions, ten rows at most before the card scrolls; a row takes the selection tint while its control moves or is pressed. A knob's or fader's row starts with a six-dot grip in secondary text: dragged onto another row of its card, it moves its jobs there, and the row it would land on takes the selection tint meanwhile.
 
 ### Calibration dialog
 - First the 0% and the 100% readings, each an instruction in subtitle type with Next as the primary button. Then one control at a time: the step count, the instruction, a press counter for a button, and the warning line. Start again and Skip on the left, Cancel on the right, and Finish beside it once every control is found.

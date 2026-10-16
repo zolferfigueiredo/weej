@@ -70,11 +70,12 @@ func TestEngineImmediateJobsApplyAtOnce(t *testing.T) {
 	}
 	e.Handle([]int{1023}, setup, false)
 	e.Handle([]int{0}, setup, false)
+	e.Handle([]int{1023}, setup, false)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if len(a.applied) != 2 || a.applied[0].Kind != JobMaster {
-		t.Errorf("applied = %v, want master twice (the connect sync, then the move)", a.applied)
+		t.Errorf("applied = %v, want master twice (each move, not the first reading)", a.applied)
 	}
 	if len(a.huds) != 2 {
 		t.Errorf("huds = %v, want one HUD per change", a.huds)
@@ -94,6 +95,7 @@ func TestEngineOneHUDPerDisplayPerKnobChange(t *testing.T) {
 	}
 	e.Handle([]int{1023}, setup, false)
 	e.Handle([]int{0}, setup, false)
+	e.Handle([]int{1023}, setup, false)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -102,7 +104,7 @@ func TestEngineOneHUDPerDisplayPerKnobChange(t *testing.T) {
 	}
 }
 
-func TestEngineAppliesEveryKnobAgainAfterAReconnect(t *testing.T) {
+func TestEngineTakesAConnectsFirstReadingAsABaseline(t *testing.T) {
 	a := &fakeApplier{}
 	e := NewEngine(a)
 	setup := Setup{
@@ -111,14 +113,14 @@ func TestEngineAppliesEveryKnobAgainAfterAReconnect(t *testing.T) {
 		Speed:    SpeedSuperFast,
 	}
 	e.Handle([]int{512}, setup, false)
-	e.Handle([]int{512}, setup, false)
+	e.Handle([]int{600}, setup, false)
 	e.Reset()
-	e.Handle([]int{512}, setup, false)
+	e.Handle([]int{900}, setup, false)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if len(a.applied) != 2 {
-		t.Errorf("applied count = %d, want 2 (first sight, then again after the reset)", len(a.applied))
+	if len(a.applied) != 1 || len(a.huds) != 1 {
+		t.Errorf("applied %v with HUDs %v, want only the move, not either first reading", a.applied, a.huds)
 	}
 }
 

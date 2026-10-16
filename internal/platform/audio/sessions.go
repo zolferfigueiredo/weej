@@ -190,17 +190,31 @@ func (a *Audio) setSessionVolume(vol *wca.ISimpleAudioVolume, level float64) {
 	}
 }
 
-func (a *Audio) applyMaster(level float64) {
-	dev, err := a.defaultEndpoint(wca.ERender)
+// endpointVolume is the default output's (wca.ERender) or input's (wca.ECapture) volume, nil
+// when there is none.
+func (a *Audio) endpointVolume(flow uint32) *wca.IAudioEndpointVolume {
+	name, endpoint, role := "output", "render", "master"
+	if flow == wca.ECapture {
+		name, endpoint, role = "input", "capture", "mic"
+	}
+	dev, err := a.defaultEndpoint(flow)
 	if err != nil {
-		a.logOnce("default-render-endpoint", "Could not find the default output device: "+err.Error())
-		return
+		a.logOnce("default-"+endpoint+"-endpoint", "Could not find the default "+name+" device: "+err.Error())
+		return nil
 	}
 	defer dev.Release()
 
 	var vol *wca.IAudioEndpointVolume
 	if err := dev.Activate(wca.IID_IAudioEndpointVolume, wca.CLSCTX_ALL, nil, &vol); err != nil {
-		a.logOnce("activate-master-volume", "Could not activate the output volume control: "+err.Error())
+		a.logOnce("activate-"+role+"-volume", "Could not activate the "+name+" volume control: "+err.Error())
+		return nil
+	}
+	return vol
+}
+
+func (a *Audio) applyMaster(level float64) {
+	vol := a.endpointVolume(wca.ERender)
+	if vol == nil {
 		return
 	}
 	defer vol.Release()
@@ -211,16 +225,8 @@ func (a *Audio) applyMaster(level float64) {
 }
 
 func (a *Audio) applyMic(level float64) {
-	dev, err := a.defaultEndpoint(wca.ECapture)
-	if err != nil {
-		a.logOnce("default-capture-endpoint", "Could not find the default input device: "+err.Error())
-		return
-	}
-	defer dev.Release()
-
-	var vol *wca.IAudioEndpointVolume
-	if err := dev.Activate(wca.IID_IAudioEndpointVolume, wca.CLSCTX_ALL, nil, &vol); err != nil {
-		a.logOnce("activate-mic-volume", "Could not activate the input volume control: "+err.Error())
+	vol := a.endpointVolume(wca.ECapture)
+	if vol == nil {
 		return
 	}
 	defer vol.Release()
@@ -230,29 +236,56 @@ func (a *Audio) applyMic(level float64) {
 	}
 }
 
-func (a *Audio) toggleMicMute() {
-	dev, err := a.defaultEndpoint(wca.ECapture)
-	if err != nil {
-		a.logOnce("default-capture-endpoint", "Could not find the default input device: "+err.Error())
-		return
+// readLevel is where the output's, the input's or an app's volume is now, or -1.
+func (a *Audio) readLevel(job core.Job) float64 {
+	var level float32 = -1
+	switch job.Kind {
+	case core.JobMaster, core.JobMicrophone:
+		flow := uint32(wca.ERender)
+		if job.Kind == core.JobMicrophone {
+			flow = wca.ECapture
+		}
+		vol := a.endpointVolume(flow)
+		if vol == nil {
+			return -1
+		}
+		defer vol.Release()
+		if vol.GetMasterVolumeLevelScalar(&level) != nil {
+			return -1
+		}
+	case core.JobApp:
+		a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
+			a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
+				defer vol.Release()
+				var v float32
+				if level < 0 && !info.isSystemSounds && info.exe == job.Exe && vol.GetMasterVolume(&v) == nil {
+					level = v
+				}
+			})
+		})
 	}
-	defer dev.Release()
+	return float64(level)
+}
 
-	var vol *wca.IAudioEndpointVolume
-	if err := dev.Activate(wca.IID_IAudioEndpointVolume, wca.CLSCTX_ALL, nil, &vol); err != nil {
-		a.logOnce("activate-mic-volume", "Could not activate the input volume control: "+err.Error())
-		return
+func (a *Audio) toggleMicMute() MicState {
+	vol := a.endpointVolume(wca.ECapture)
+	if vol == nil {
+		return MicState{}
 	}
 	defer vol.Release()
 
 	var muted bool
 	if err := vol.GetMute(&muted); err != nil {
 		a.logOnce("get-mic-mute", "Could not read the microphone mute: "+err.Error())
-		return
+		return MicState{}
 	}
 	if err := vol.SetMute(!muted, eventCtx); err != nil {
 		a.logOnce("set-mic-mute", "Could not mute the microphone: "+err.Error())
+		return MicState{}
 	}
+	var level float32
+	_ = vol.GetMasterVolumeLevelScalar(&level)
+	return MicState{Muted: !muted, OK: true, Level: float64(level)}
 }
 
 func (a *Audio) applySystemSounds(level float64) {

@@ -45,8 +45,8 @@ function usedBy(port, exceptId) {
   return other ? other.name : "";
 }
 
-// A board's port: Automatic or a COM port for a DIY board, a MIDI input for any other. One that
-// another board uses says so.
+// A board's port: Automatic or a COM port for a DIY board, Automatic or a MIDI input for an
+// SMC-Mixer, and a MIDI input for any other. One that another board uses says so.
 function portSelect(id, type, value, exceptId) {
   const option = (v, label) => `<option value="${escAttr(v)}"${value === v ? " selected" : ""}>${esc(label)}</option>`;
   const named = (v, label) => {
@@ -60,7 +60,8 @@ function portSelect(id, type, value, exceptId) {
     if (value && !list.some((p) => p.name === value)) options += option(value, value);
   } else {
     const list = S.midiInputs || [];
-    options = (value ? "" : option("", t("device.pick_input"))) + list.map((name) => named(name, name)).join("");
+    const first = type === "smc" ? option("", t("port_auto")) : value ? "" : option("", t("device.pick_input"));
+    options = first + list.map((name) => named(name, name)).join("");
     if (value && !list.includes(value)) options += option(value, value);
   }
   return `<button class="btn btn-icon btn-subtle" type="button" data-action="refresh-ports" title="${escAttr(t("refresh"))}" aria-label="${escAttr(t("refresh"))}">&#x21bb;</button><select class="select" id="${id}">${options}</select>`;
@@ -110,7 +111,7 @@ function gearDialog(dlg) {
           ${field(t("name"), `<input class="input input-name" id="dlg-name" type="text" value="${escAttr(d.name)}" />`)}
           ${field(t("device.type"), `<span class="row-desc">${esc(t("device.type." + d.type))}</span>`)}
           ${field(t("status"), `<span class="row-desc${st.connected ? " status-ok" : ""}">${esc(status)}</span><button class="btn" type="button" data-action="reconnect" data-board="${escAttr(d.id)}">${esc(t("reconnect"))}</button>`)}
-          ${field(t("port"), forced ? `<span class="row-desc">${esc(S.init.forcedPort)}</span>` : portSelect("dlg-port", d.type, d.port, d.id), forced ? t("port_forced", { port: S.init.forcedPort }) : t(d.type === "diy" ? "port_note" : "mixer_port_note"))}
+          ${field(t("port"), forced ? `<span class="row-desc">${esc(S.init.forcedPort)}</span>` : portSelect("dlg-port", d.type, d.port, d.id), forced ? t("port_forced", { port: S.init.forcedPort }) : t(d.type === "midi" ? "mixer_port_note" : "port_note"))}
           ${d.type === "diy" ? field(t("baud_rate"), baudSelect("dlg-baud", d.baudRate), t("baud_note")) : ""}
           ${d.type === "diy" ? field(t("speed"), `<select class="select" id="dlg-speed">${speedOptions}</select>`, t("speed_note")) : ""}
           ${d.type === "smc" ? field(t("lights"), `<select class="select" id="dlg-lights">${lightOptions}</select>`, t("lights_note")) : ""}
@@ -134,14 +135,14 @@ function addDialog(dlg) {
   const count = (id, label, value) =>
     field(label, `<input class="input input-count" id="${id}" type="number" min="0" max="64" value="${value}" />`);
   const counted = dlg.type !== "smc";
-  const ready = dlg.name.trim() !== "" && (dlg.type === "diy" || dlg.port !== "") && (!counted || dlg.knobs + dlg.faders + dlg.buttons > 0);
+  const ready = dlg.name.trim() !== "" && (dlg.type !== "midi" || dlg.port !== "") && (!counted || dlg.knobs + dlg.faders + dlg.buttons > 0);
   return `
       <div class="dialog dialog-wide" role="dialog" aria-modal="true">
         <div class="dialog-title">${esc(S.setup ? t("setup.board", { n: String(S.setup.done + 1), of: String(S.setup.total) }) : t("add.title"))}</div>
         <div class="dialog-body form">
           ${field(t("name"), `<input class="input input-name" id="add-name" type="text" value="${escAttr(dlg.name)}" placeholder="${escAttr(t("add.name_hint"))}" />`)}
           ${field(t("device.type"), `<span class="segmented">${types}</span>`, t("add.type_note." + dlg.type))}
-          ${field(t("port"), portSelect("add-port", dlg.type, dlg.port, ""), t(dlg.type === "diy" ? "port_note" : "mixer_port_note"))}
+          ${field(t("port"), portSelect("add-port", dlg.type, dlg.port, ""), t(dlg.type === "midi" ? "mixer_port_note" : "port_note"))}
           ${dlg.type === "diy" ? field(t("baud_rate"), baudSelect("add-baud", dlg.baud), t("baud_note")) : ""}
           ${counted ? count("add-knobs", t("knobs"), dlg.knobs) + count("add-faders", t("list.faders"), dlg.faders) + count("add-buttons", t("list.buttons"), dlg.buttons) : ""}
         </div>

@@ -24,22 +24,35 @@ type parsedFont = opentype.Font
 const hudGlyphSourcePx = 32
 
 func (app *App) showHUD(job core.Job, s float64) {
+	app.loop.Invoke(func() { app.drawLevelHUD(app.monitorFor(job), app.glyphFor(job, s), s) })
+}
+
+// showGlyphHUD shows a level by one of the glyphs, as a button's action does, on the screen a
+// profile's name shows on.
+func (app *App) showGlyphHUD(glyph draw.GlyphKind, s float64) {
 	app.loop.Invoke(func() {
-		mon := app.monitorFor(job)
-		scale := float64(mon.DPI) / 96
-		if scale <= 0 {
-			scale = 1
-		}
-		bmp := draw.HUD(draw.HUDParams{
-			Scale:   scale,
-			Dark:    !sys.AppsLight(),
-			Glyph:   app.glyphFor(job, s),
-			Percent: core.Percent(s),
-			Face:    app.faceAt(scale),
-			Accent:  sys.AccentFill(!sys.AppsLight()),
-		})
-		app.hud.Show(monitorKey(mon), mon.Work, scale, bmp)
+		app.drawLevelHUD(app.monitorFor(core.Job{}), draw.Glyph(glyph, hudGlyphSourcePx, app.glyphInk()), s)
 	})
+}
+
+func hudScale(mon display.Monitor) float64 {
+	if scale := float64(mon.DPI) / 96; scale > 0 {
+		return scale
+	}
+	return 1
+}
+
+func (app *App) drawLevelHUD(mon display.Monitor, glyph *image.NRGBA, s float64) {
+	scale := hudScale(mon)
+	bmp := draw.HUD(draw.HUDParams{
+		Scale:   scale,
+		Dark:    !sys.AppsLight(),
+		Glyph:   glyph,
+		Percent: core.Percent(s),
+		Face:    app.faceAt(scale),
+		Accent:  sys.AccentFill(!sys.AppsLight()),
+	})
+	app.hud.Show(monitorKey(mon), mon.Work, scale, bmp)
 }
 
 // showProfileHUD names the profile a board has just made active, and the board too when there
@@ -53,19 +66,33 @@ func (app *App) showProfileHUD(d core.Device, named bool) {
 	if named {
 		name = d.Name + " · " + name
 	}
+	app.showNameHUD(name, d.Active, len(d.Profiles), func(scale float64) *image.NRGBA {
+		return draw.AppIcon(int(math.Round(20 * scale)))
+	})
+}
+
+// showLightsHUD names the light pattern an SMC-Mixer has just taken, as a profile is named.
+func (app *App) showLightsHUD(name string, on bool) {
+	glyph := draw.GlyphBulbOff
+	if on {
+		glyph = draw.GlyphBulbOn
+	}
+	app.showNameHUD(name, 0, 0, func(float64) *image.NRGBA { return draw.Glyph(glyph, hudGlyphSourcePx, app.glyphInk()) })
+}
+
+// showNameHUD shows a name by an icon, with dots for where index sits among count when there are
+// a few.
+func (app *App) showNameHUD(name string, index, count int, icon func(scale float64) *image.NRGBA) {
 	app.loop.Invoke(func() {
 		mon := app.monitorFor(core.Job{})
-		scale := float64(mon.DPI) / 96
-		if scale <= 0 {
-			scale = 1
-		}
+		scale := hudScale(mon)
 		bmp := draw.ProfileHUD(draw.ProfileHUDParams{
 			Scale:  scale,
 			Dark:   !sys.AppsLight(),
-			Icon:   draw.AppIcon(int(math.Round(20 * scale))),
+			Icon:   icon(scale),
 			Name:   name,
-			Index:  d.Active,
-			Count:  len(d.Profiles),
+			Index:  index,
+			Count:  count,
 			Face:   app.faceAt(scale),
 			Accent: sys.AccentFill(!sys.AppsLight()),
 		})
