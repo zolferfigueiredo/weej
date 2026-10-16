@@ -2,6 +2,7 @@ import { connect, send, t } from "./bridge.js";
 import {
   fitLists,
   moveControl,
+  onDrag,
   picked,
   pressed,
   renderBoards,
@@ -786,6 +787,7 @@ document.getElementById("root").addEventListener("click", onClick);
 document.getElementById("root").addEventListener("input", onInput);
 document.getElementById("root").addEventListener("change", onChange);
 document.getElementById("root").addEventListener("keydown", onControlKeydown);
+for (const type of ["dragstart", "dragover", "drop", "dragend"]) document.getElementById("root").addEventListener(type, onDrag);
 document.getElementById("btn-close").addEventListener("click", () => send({ type: "close" }));
 document.getElementById("btn-save").addEventListener("click", doSave);
 

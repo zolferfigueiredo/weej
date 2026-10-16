@@ -325,8 +325,17 @@ p {
 }
 
 .row.lit,
-.row.lit:hover {
+.row.lit:hover,
+.row.drop-target {
   background: var(--selection);
+}
+
+.grip {
+  flex: none;
+  width: 6px;
+  height: 10px;
+  fill: var(--text-secondary);
+  cursor: grab;
 }
 
 .row.clickable:hover {
