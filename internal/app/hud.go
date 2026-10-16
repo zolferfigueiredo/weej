@@ -36,7 +36,7 @@ func (app *App) showHUD(job core.Job, s float64) {
 			Glyph:   app.glyphFor(job, s),
 			Percent: core.Percent(s),
 			Face:    app.faceAt(scale),
-			Accent:  sys.Accent(),
+			Accent:  sys.AccentFill(!sys.AppsLight()),
 		})
 		app.hud.Show(monitorKey(mon), mon.Work, scale, bmp)
 	})
@@ -67,7 +67,7 @@ func (app *App) showProfileHUD(d core.Device, named bool) {
 			Index:  d.Active,
 			Count:  len(d.Profiles),
 			Face:   app.faceAt(scale),
-			Accent: sys.Accent(),
+			Accent: sys.AccentFill(!sys.AppsLight()),
 		})
 		app.hud.Show(monitorKey(mon), mon.Work, scale, bmp)
 	})

@@ -13,7 +13,8 @@ import (
 func hexColor(c color.RGBA) string { return fmt.Sprintf("#%02X%02X%02X", c.R, c.G, c.B) }
 
 func themePayload() map[string]any {
-	return map[string]any{"dark": !sys.AppsLight(), "accent": hexColor(sys.Accent())}
+	dark := !sys.AppsLight()
+	return map[string]any{"dark": dark, "accent": hexColor(sys.AccentFill(dark))}
 }
 
 func (app *App) baseInitFields() map[string]any {
