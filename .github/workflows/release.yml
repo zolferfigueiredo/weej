@@ -1,39 +1,74 @@
 name: Release
+# A push to main whose AppVersion isn't released yet publishes it, and so does a v* tag. A pull request that
+# touches the release only builds it.
 on:
   push:
+    branches: [main]
     tags:
       - 'v*'
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - installer/**
 permissions:
   contents: write
 defaults:
   run:
     shell: bash
 jobs:
-  build:
-    name: Build and publish
-    runs-on: windows-latest
+  check:
+    name: Check the version
+    runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish: ${{ steps.version.outputs.publish }}
+      skip: ${{ steps.version.outputs.skip }}
     steps:
       - uses: actions/checkout@v7
         with:
-          fetch-depth: 0 # the check below needs main's history
+          fetch-depth: 0 # the tag check needs main's history
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(sed -n 's/^const AppVersion = "\(.*\)"$/\1/p' internal/core/version.go)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          publish=false
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag=$GITHUB_REF_NAME
+            if [ "$tag" != "v$v" ]; then
+              echo "::error::Tag $tag does not match AppVersion $v in internal/core/version.go." >&2
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+              echo "::error::Tag $tag is not on main. Merge to main first." >&2
+              exit 1
+            fi
+            publish=true
+          elif [ "$GITHUB_EVENT_NAME" = push ]; then
+            if gh release view "v$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "v$v is already released."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              publish=true
+            fi
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and publish
+    needs: check
+    if: needs.check.outputs.skip != 'true'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    env:
+      V: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-
-      - name: Check the tag
-        run: |
-          v=$(sed -n 's/^const AppVersion = "\(.*\)"$/\1/p' internal/core/version.go)
-          tag=${GITHUB_REF#refs/tags/}
-          if [ "$tag" != "v$v" ]; then
-            echo "::error::Tag $tag does not match AppVersion $v in internal/core/version.go." >&2
-            exit 1
-          fi
-          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-            echo "::error::Tag $tag is not on main. Merge to main first, then run release.bat there." >&2
-            exit 1
-          fi
-          echo "V=$v" >> "$GITHUB_ENV"
 
       # 32-bit binaries run on this 64-bit runner, so the 386 tests run for real.
       - name: Test
@@ -72,7 +107,9 @@ jobs:
           printf '{"version":"%s","sha256":{"x64":"%s","x86":"%s"}}\n' "$V" "$x64" "$x86" > dist/latest.json
           (cd dist && sha256sum "WeeJ-$V-x64.zip" "WeeJ-$V-x64-setup.exe" "WeeJ-$V-x86.zip" "WeeJ-$V-x86-setup.exe" > SHA256SUMS)
 
+      # On a push to main this also makes the v tag, on the commit that was built.
       - name: Publish the release
+        if: needs.check.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -83,4 +120,16 @@ jobs:
             "dist/WeeJ-$V-x86.zip" \
             "dist/latest.json" \
             "dist/SHA256SUMS" \
-            --title "WeeJ $V" --generate-notes
+            --target "$GITHUB_SHA" --title "WeeJ $V" --generate-notes
+
+      - name: Upload the build
+        if: needs.check.outputs.publish != 'true'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: WeeJ-${{ env.V }}-build
+          retention-days: 14
+          path: |
+            dist/WeeJ-${{ env.V }}-x64-setup.exe
+            dist/WeeJ-${{ env.V }}-x64.zip
+            dist/WeeJ-${{ env.V }}-x86-setup.exe
+            dist/WeeJ-${{ env.V }}-x86.zip
