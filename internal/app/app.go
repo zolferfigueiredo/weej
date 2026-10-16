@@ -4,6 +4,7 @@ package app
 
 import (
 	"fmt"
+	"image"
 	"os"
 	"regexp"
 	"strconv"
@@ -81,6 +82,7 @@ type App struct {
 	appName    map[string]string
 	appPath    map[string]string
 	appIcon    map[string]string
+	exeIcons   map[exeIconKey]*image.NRGBA
 
 	settingsWin        *web.Window
 	settingsPendingTab string
@@ -154,6 +156,7 @@ func Main(args []string) int {
 		appName:           map[string]string{},
 		appPath:           map[string]string{},
 		appIcon:           map[string]string{},
+		exeIcons:          map[exeIconKey]*image.NRGBA{},
 	}
 
 	return winui.Run(app.setup)

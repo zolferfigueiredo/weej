@@ -60,9 +60,6 @@ type Audio struct {
 	stopped       chan struct{}
 	closeOnce     sync.Once
 
-	focusMu    sync.Mutex
-	focusedExe string
-
 	selfExe string
 
 	enumerator    *wca.IMMDeviceEnumerator
@@ -215,20 +212,6 @@ func (a *Audio) Level(job core.Job) (float64, bool) {
 	case <-a.stopped:
 		return 0, false
 	}
-}
-
-// FocusedExe returns the last exe SetFocused resolved the foreground window to, so the HUD can
-// show its icon without forcing a round trip through the worker.
-func (a *Audio) FocusedExe() string {
-	a.focusMu.Lock()
-	defer a.focusMu.Unlock()
-	return a.focusedExe
-}
-
-func (a *Audio) setFocusedExe(exe string) {
-	a.focusMu.Lock()
-	a.focusedExe = exe
-	a.focusMu.Unlock()
 }
 
 func (a *Audio) run() {
