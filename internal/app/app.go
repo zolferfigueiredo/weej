@@ -4,6 +4,7 @@ package app
 
 import (
 	"fmt"
+	"image"
 	"os"
 	"regexp"
 	"strconv"
@@ -25,7 +26,8 @@ import (
 
 type NightLight interface {
 	Set(s float64)
-	Toggle()
+	// Toggle reports whether Night light is now on, when it could change it.
+	Toggle() (on, ok bool)
 }
 
 type Zoom interface {
@@ -56,6 +58,8 @@ type App struct {
 	runners  map[string]*runner
 	bindings []core.HotkeyBinding
 	wizard   *wizardRun
+	// calibrationOffered is the boards calibration opened for on its own this launch. Main loop.
+	calibrationOffered map[string]bool
 
 	audio *audio.Audio
 	// spectrum is the sound the button lights' EQ follows, while loopback listens for it.
@@ -78,6 +82,13 @@ type App struct {
 	appName    map[string]string
 	appPath    map[string]string
 	appIcon    map[string]string
+	exeIcons   map[exeIconKey]*image.NRGBA
+	// appMissAt is when each exe was last looked for and not found.
+	appMissAt map[string]time.Time
+	// installed is installedExes as of installedAt; installedBusy while it is being looked through.
+	installed     map[string]string
+	installedAt   time.Time
+	installedBusy bool
 
 	settingsWin        *web.Window
 	settingsPendingTab string
@@ -151,6 +162,8 @@ func Main(args []string) int {
 		appName:           map[string]string{},
 		appPath:           map[string]string{},
 		appIcon:           map[string]string{},
+		exeIcons:          map[exeIconKey]*image.NRGBA{},
+		appMissAt:         map[string]time.Time{},
 	}
 
 	return winui.Run(app.setup)

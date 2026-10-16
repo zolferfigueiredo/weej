@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
+	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 )
 
 // wizardRun is a board being calibrated: its frames and presses go to the wizard instead of its
@@ -28,10 +29,14 @@ func (app *App) wizardFor(id string) *wizardRun {
 }
 
 // startWizard calibrates the given controls of a board, every one when none are given; another
-// board being calibrated stops first.
+// board being calibrated stops first, and one already being calibrated carries on.
 func (app *App) startWizard(id string, controls []int) {
 	d, ok := app.device(id)
 	if !ok || d.Type == core.DeviceSMC {
+		return
+	}
+	if app.wizardFor(id) != nil {
+		app.pushWizard()
 		return
 	}
 	if len(controls) == 0 {
@@ -60,16 +65,48 @@ func (app *App) startWizard(id string, controls []int) {
 	app.pushWizard()
 }
 
-func (w *wizardRun) feed(raw []int) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.cal.Feed(raw)
+// calibrateIfNeeded calibrates a board that connects with a control not found yet, as one just
+// added or one that never was, once per launch. Main loop.
+func (app *App) calibrateIfNeeded(id string) {
+	d, ok := app.device(id)
+	if !ok || d.Type == core.DeviceSMC || d.Calibrated() || app.calibrationOffered[id] {
+		return
+	}
+	if app.calibrationOffered == nil {
+		app.calibrationOffered = map[string]bool{}
+	}
+	app.calibrationOffered[id] = true
+	app.mu.Lock()
+	busy := app.wizard != nil
+	app.mu.Unlock()
+	if busy {
+		return
+	}
+	var controls []int
+	for k, c := range d.Controls {
+		if c.Input < 0 {
+			controls = append(controls, k)
+		}
+	}
+	app.openSettings("")
+	app.startWizard(id, controls)
 }
 
-func (w *wizardRun) press(id int) {
+func (w *wizardRun) feed(raw []int) { w.step(func() { w.cal.Feed(raw) }) }
+
+func (w *wizardRun) press(id int) { w.step(func() { w.cal.Press(id) }) }
+
+// step plays a sound as a control is found or a press counts: the user is watching the board,
+// not the screen.
+func (w *wizardRun) step(do func()) {
 	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.cal.Press(id)
+	before := w.cal.State()
+	do()
+	after := w.cal.State()
+	w.mu.Unlock()
+	if after.Index != before.Index || after.Count != before.Count {
+		winui.Beep()
+	}
 }
 
 // wizardPayload is the step Settings shows, or nil when no board is being calibrated.

@@ -1,6 +1,7 @@
 @echo off
 rem Set AppVersion in internal\core\version.go first. Tags the current commit and pushes it;
 rem .github\workflows\release.yml builds the exe, zip and installer and publishes the GitHub release.
+rem Merging a new AppVersion to main already releases it, so this is for releasing by hand.
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 

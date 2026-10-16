@@ -2,6 +2,7 @@ import { connect, send, t } from "./bridge.js";
 import {
   fitLists,
   moveControl,
+  onDrag,
   picked,
   pressed,
   renderBoards,
@@ -13,6 +14,7 @@ import { openAdd, openGear, refreshGearPorts, renderDialog } from "./dialogs.js"
 import { renderGeneral } from "./general.js";
 import {
   BUTTON_MENU_BASE,
+  actionLabel,
   jobKey,
   onPick,
   openButtonMenu,
@@ -27,6 +29,8 @@ import {
   buttonKey,
   clampIndex,
   clone,
+  controlName,
+  controlOfKey,
   currentBoard,
   deviceById,
   esc,
@@ -103,26 +107,22 @@ function updateSaveButton() {
   document.getElementById("btn-save").disabled = !hasChanges();
 }
 
-function hostnameOf(url) {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return url;
-  }
-}
-
 function renderAbout() {
   const init = S.init;
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel about" role="tabpanel">
-      <img class="about-icon" src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="64" height="64" />
+      <img class="about-icon" src="${escAttr(init.icon || TRANSPARENT_PIXEL)}" alt="" width="96" height="96" />
       <h2 class="about-name">WeeJ</h2>
-      <p class="row-desc">${esc(t("version", { version: init.version }))}</p>
-      <button class="btn about-check" type="button" data-action="check-updates">${esc(t("check"))}</button>
+      <p class="about-line about-by">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">Zolfer Figueiredo</a></p>
+      <p class="about-line">${esc(t("version", { version: init.version }))}</p>
+      <button class="btn about-btn" type="button" data-action="check-updates">${esc(t("check"))}</button>
+      <hr class="about-sep" />
       <p class="about-line"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
-      <p class="row-desc about-line">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">${esc(hostnameOf(init.madeBy))}</a></p>
-      <p class="row-desc about-line">${esc(t("on_macos"))} <a href="#" data-action="open-url" data-url="${escAttr(init.theej)}">TheeJ</a></p>
-      <p class="row-desc about-line">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
+      <p class="about-line">${esc(t("liked"))}</p>
+      <button class="btn about-btn" type="button" data-action="open-url" data-url="${escAttr(init.coffee)}">${esc(t("coffee"))}</button>
+      <hr class="about-sep" />
+      <p class="about-line">${esc(t("on_macos"))} <a href="#" data-action="open-url" data-url="${escAttr(init.theej)}">TheeJ</a></p>
+      <p class="about-line">${esc(t("inspired_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.deej)}">deej</a></p>
     </div>`;
 }
 
@@ -303,7 +303,6 @@ function onClick(e) {
     case "add-type":
       S.dialog.type = target.dataset.type;
       S.dialog.port = "";
-      if (S.dialog.type === "smc") S.dialog.port = (S.midiInputs || []).find((n) => n.toLowerCase().includes("smc-mixer")) || "";
       render();
       break;
     case "add-confirm": {
@@ -483,7 +482,7 @@ function onInput(e) {
 function addReady() {
   const a = S.dialog;
   const counted = a.type !== "smc";
-  return a.name.trim() !== "" && (a.type === "diy" || a.port !== "") && (!counted || a.knobs + a.faders + a.buttons > 0);
+  return a.name.trim() !== "" && (a.type !== "midi" || a.port !== "") && (!counted || a.knobs + a.faders + a.buttons > 0);
 }
 
 function onChange(e) {
@@ -518,8 +517,12 @@ function onChange(e) {
       S.draft.language = el.value;
       send({ type: "setLanguage", code: el.value });
       break;
-    case "hide-icon":
-      S.draft.hideTrayIcon = el.checked;
+    // Not part of Apply: it takes effect at once, as Language does.
+    case "login":
+      send({ type: "setLogin", on: el.checked });
+      break;
+    case "show-icon":
+      S.draft.hideTrayIcon = !el.checked;
       render();
       break;
     case "show-profile-list":
@@ -618,6 +621,11 @@ function onMessage(msg) {
     case "strings":
       render();
       break;
+    // Go-initiated: Launch at startup as it now is, after Settings or the tray menu changed it.
+    case "login":
+      S.init.login = !!msg.on;
+      if (S.tab === "general" && !S.dialog) render();
+      break;
     case "saved":
       S.draft = clone(msg.settings);
       S.draft.devices = S.draft.devices || [];
@@ -659,7 +667,13 @@ function onMessage(msg) {
         d.profile = d.profiles.length - 1;
         S.board = d.id;
       }
-      S.importNote = msg.skipped && msg.skipped.length ? t("import_skipped", { items: msg.skipped.join(", ") }) : "";
+      // A file from another system leaves its apps and keys out, named "Button C: Open an app".
+      const dropped = Object.entries(msg.dropped || {}).flatMap(([key, actions]) => {
+        const k = d ? controlOfKey(d, Number(key)) : -1;
+        return actions.map((a) => `${k >= 0 ? controlName(d, k) : key}: ${actionLabel(d, a)}`);
+      });
+      const skipped = [...(msg.skipped || []), ...dropped];
+      S.importNote = skipped.length ? t("import_skipped", { items: skipped.join(", ") }) : "";
       render();
       break;
     }
@@ -722,12 +736,7 @@ function onMessage(msg) {
       S.ports = msg.ports || [];
       S.midiInputs = msg.midi || [];
       if (S.dialog && S.dialog.kind === "gear") refreshGearPorts();
-      if (S.dialog && S.dialog.kind === "add") {
-        if (S.dialog.type === "smc" && !S.dialog.port) {
-          S.dialog.port = S.midiInputs.find((n) => n.toLowerCase().includes("smc-mixer")) || "";
-        }
-        render();
-      }
+      if (S.dialog && S.dialog.kind === "add") render();
       break;
     case "buttonAppPicked": {
       const d = board();
@@ -787,6 +796,7 @@ document.getElementById("root").addEventListener("click", onClick);
 document.getElementById("root").addEventListener("input", onInput);
 document.getElementById("root").addEventListener("change", onChange);
 document.getElementById("root").addEventListener("keydown", onControlKeydown);
+for (const type of ["dragstart", "dragover", "drop", "dragend"]) document.getElementById("root").addEventListener(type, onDrag);
 document.getElementById("btn-close").addEventListener("click", () => send({ type: "close" }));
 document.getElementById("btn-save").addEventListener("click", doSave);
 

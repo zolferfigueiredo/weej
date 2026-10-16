@@ -27,7 +27,7 @@ WeeJ is a Windows tray companion app (ported from the user's own macOS app, Thee
 
 ## Operating Context
 
-- Runs from the Windows system tray; these windows are opened from the tray menu or on first run, never the main interaction surface of the OS session.
+- Runs from the Windows system tray; these windows are opened from the tray menu, on first run, or when a board that still needs calibrating connects, never the main interaction surface of the OS session.
 - A DIY board connects over a serial (COM) port and a mixer as a MIDI input; calibrating a board in Settings depends on its connection being live.
 - Settings is opened far more often than the other two windows; Language and Update are seen rarely (first run, and whenever an update is offered).
 - The app and its windows must look native on Windows 11 in both the light and dark OS themes, and follow the OS accent color, since that is what signals "this app belongs here" to the user.

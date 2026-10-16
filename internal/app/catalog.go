@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/draw"
@@ -185,6 +186,14 @@ func (app *App) discoverApps(devices []core.Device) []string {
 	return out
 }
 
+const (
+	// appMissRetry is how long an exe that could not be found is left before looking again, so the
+	// HUD, which asks at every step of a turn, does not search each time.
+	appMissRetry = 30 * time.Second
+	// installedMaxAge is how old the installed exes can get before a miss looks through them again.
+	installedMaxAge = 5 * time.Minute
+)
+
 func (app *App) resolveAppPath(exe string) string {
 	exe = strings.ToLower(exe)
 	app.appCacheMu.Lock()
@@ -192,23 +201,57 @@ func (app *App) resolveAppPath(exe string) string {
 		app.appCacheMu.Unlock()
 		return p
 	}
+	if at, ok := app.appMissAt[exe]; ok && time.Since(at) < appMissRetry {
+		app.appCacheMu.Unlock()
+		return ""
+	}
+	installed := app.installed[exe]
+	stale := time.Since(app.installedAt) > installedMaxAge
 	app.appCacheMu.Unlock()
 
 	path := appPathsRegistryPath(exe)
 	if path == "" {
 		path = runningProcessPath(exe)
 	}
+	if path == "" {
+		path = aliasTarget(exe)
+	}
+	if path == "" {
+		path = installed
+	}
 
 	app.appCacheMu.Lock()
-	app.appPath[exe] = path
+	if path != "" {
+		app.appPath[exe] = path
+		delete(app.appMissAt, exe)
+	} else {
+		app.appMissAt[exe] = time.Now()
+	}
 	app.appCacheMu.Unlock()
+	if path == "" && stale {
+		app.refreshInstalled()
+	}
 	return path
 }
 
-func (app *App) lookupAppPath(exe string) string {
+// refreshInstalled looks through what is installed again, in the background, then lets the exes
+// not found so far be looked for again.
+func (app *App) refreshInstalled() {
 	app.appCacheMu.Lock()
-	defer app.appCacheMu.Unlock()
-	return app.appPath[strings.ToLower(exe)]
+	if app.installedBusy {
+		app.appCacheMu.Unlock()
+		return
+	}
+	app.installedBusy = true
+	app.appCacheMu.Unlock()
+
+	go func() {
+		found := installedExes()
+		app.appCacheMu.Lock()
+		app.installed, app.installedAt, app.installedBusy = found, time.Now(), false
+		clear(app.appMissAt)
+		app.appCacheMu.Unlock()
+	}()
 }
 
 func (app *App) resolveApp(exe string) string {
@@ -221,7 +264,8 @@ func (app *App) resolveApp(exe string) string {
 	app.appCacheMu.Unlock()
 
 	name := ""
-	if path := app.resolveAppPath(exe); path != "" {
+	path := app.resolveAppPath(exe)
+	if path != "" {
 		name = fileDescription(path)
 	}
 	if name == "" {
@@ -236,9 +280,12 @@ func (app *App) resolveApp(exe string) string {
 		name = exe
 	}
 
-	app.appCacheMu.Lock()
-	app.appName[exe] = name
-	app.appCacheMu.Unlock()
+	// Kept only once the exe is found, so its own name replaces the stand-in when it is.
+	if path != "" {
+		app.appCacheMu.Lock()
+		app.appName[exe] = name
+		app.appCacheMu.Unlock()
+	}
 	return name
 }
 
@@ -251,19 +298,17 @@ func (app *App) appIconDataURLFor(exe string) string {
 	}
 	app.appCacheMu.Unlock()
 
-	var img *image.NRGBA
-	if path := app.resolveAppPath(exe); path != "" {
-		img = winui.ExeIcon(path, 32)
+	path := app.resolveAppPath(exe)
+	if path != "" {
+		if img := winui.ExeIcon(path, 32); img != nil {
+			url := pngDataURL(img)
+			app.appCacheMu.Lock()
+			app.appIcon[exe] = url
+			app.appCacheMu.Unlock()
+			return url
+		}
 	}
-	if img == nil {
-		img = draw.Glyph(draw.GlyphApp, 32, app.glyphInk())
-	}
-	url := pngDataURL(img)
-
-	app.appCacheMu.Lock()
-	app.appIcon[exe] = url
-	app.appCacheMu.Unlock()
-	return url
+	return pngDataURL(draw.Glyph(draw.GlyphApp, 32, app.glyphInk()))
 }
 
 func (app *App) forgetApp(exe string) {
@@ -272,6 +317,7 @@ func (app *App) forgetApp(exe string) {
 	delete(app.appPath, exe)
 	delete(app.appName, exe)
 	delete(app.appIcon, exe)
+	delete(app.appMissAt, exe)
 	app.appCacheMu.Unlock()
 }
 

@@ -119,10 +119,11 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 			e.lastApplied[index] = u
 			continue
 		}
-		// After a connect nothing is known yet, so every mapped knob applies its position once, as in TheeJ.
+		// The first reading after a connect is only a baseline, so nothing changes until a turn.
 		previous, ok := e.lastApplied[index]
 		if !ok {
-			previous = -1
+			e.lastApplied[index] = u
+			continue
 		}
 		extreme := u <= 0 || u >= 1
 		if u == previous {
@@ -221,6 +222,14 @@ func (e *Engine) ToggleMute(col int, setup Setup) bool {
 		}
 	}
 	return muted
+}
+
+// Last is a column's level as the engine last took it, 0 to 1, once it has been heard from.
+func (e *Engine) Last(col int) (float64, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	u, ok := e.lastApplied[col]
+	return u, ok
 }
 
 func (e *Engine) Lines() []Line {

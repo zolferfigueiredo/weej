@@ -110,6 +110,7 @@ func TestEngineSkipsUnknownMixerValues(t *testing.T) {
 		Speed:    SpeedSuperFast,
 	}
 	e.Handle([]int{-1, 512}, setup, false)
+	e.Handle([]int{-1, 600}, setup, false)
 
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -139,6 +140,7 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 		Speed:    SpeedSuperFast,
 	}
 
+	e.Handle([]int{512}, setup, false)
 	e.Handle([]int{1023}, setup, false)
 	if !e.ToggleMute(0, setup) {
 		t.Fatal("first toggle did not mute")
@@ -151,7 +153,7 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if !reflect.DeepEqual(a.values, []float64{1, 0, 0}) {
-		t.Errorf("applied values = %v, want [1 0 0]: the sync, the mute, then the fader's new spot on unmute", a.values)
+		t.Errorf("applied values = %v, want [1 0 0]: the move, the mute, then the fader's new spot on unmute", a.values)
 	}
 }
 
@@ -290,5 +292,42 @@ func TestButtonActionsWithASetting(t *testing.T) {
 	}
 	if _, ok := MuteAction(1).Profile(); ok {
 		t.Error("a mute action read as a profile")
+	}
+}
+
+func TestMixerKnobStartsFromItsSeed(t *testing.T) {
+	m := NewMixerState()
+	m.Seed = func(col int) (int, bool) { return 800, col == knobFirstCC }
+	m.Feed(cc(16, 1))
+	m.Feed(cc(17, 1))
+	if v := m.Values(); v[30] != 800+vpotStep || v[31] != 512+vpotStep {
+		t.Errorf("knobs 1 and 2 = %d, %d, want a step on from the seed, and from the middle with none", v[30], v[31])
+	}
+	m.ForgetKnobs()
+	if v := m.Values()[30]; v != -1 {
+		t.Errorf("knob 1 = %d once forgotten, want -1", v)
+	}
+	m.Feed(cc(16, 65))
+	if v := m.Values()[30]; v != 800-vpotStep {
+		t.Errorf("knob 1 = %d, want a step back from the seed again", v)
+	}
+}
+
+// An endless knob's first turn after a connect carries on from where its job is, never jumping.
+func TestMixerKnobNeverJumpsItsJob(t *testing.T) {
+	d := NewDevice("d1", "SMC", DeviceSMC, 0, 0, 0, "Default")
+	d.Profiles[0].Jobs[8] = []Job{{Kind: JobMaster}}
+	m := NewMixerState()
+	m.Seed = func(col int) (int, bool) { return d.RawAt(8, 0.3), true }
+	a := &recordingApplier{}
+	e := NewEngine(a)
+	for range 10 {
+		m.Feed(cc(16, 1))
+		e.Handle(d.Normalize(m.Values()), d.EngineSetup(), false)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.values) == 0 || a.values[0] < 0.3 || a.values[len(a.values)-1] > 0.35 {
+		t.Errorf("master = %v, want small steps up from 0.3", a.values)
 	}
 }

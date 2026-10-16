@@ -6,6 +6,7 @@ import { actionPicks, buttonLines, buttonParams, controlLabel, jobLines, jobPick
 import {
   S,
   actionsOf,
+  activeProfile,
   buttonKey,
   clampIndex,
   clip,
@@ -212,6 +213,9 @@ function boardInspector(d, k) {
   const button = kind === "button";
   const key = buttonKey(d, k);
   const empty = button ? !actionsOf(d, key).length : !jobsOf(d, k).length;
+  const found = d.controls[k].input >= 0;
+  // A MIDI button is keyed by the id it sends, so it can do nothing until calibration finds it.
+  const picks = button ? (key >= 0 ? actionPicks(d, key) : "") : jobPicks(d, k);
   const moves = [
     ["up", "&#x2191;"],
     ["left", "&#x2190;"],
@@ -228,7 +232,8 @@ function boardInspector(d, k) {
             <button class="btn" type="button" data-action="clear-control"${empty ? " disabled" : ""}>${esc(t("clear"))}</button>
           </div>
           ${S.arrange[d.id] ? `<div class="board-edit"><div class="arrow-keys">${moves}</div></div>` : ""}
-          <div class="inspector-list" data-keep-scroll="board-${d.id}-${k}">${button ? actionPicks(d, key) : jobPicks(d, k)}</div>
+          ${found ? "" : `<p class="inspector-note">${esc(t("needs_calibration"))}</p>`}
+          <div class="inspector-list" data-keep-scroll="board-${d.id}-${k}">${picks}</div>
         </div>`;
 }
 
@@ -243,8 +248,9 @@ function listView(d) {
       ? list
           .map(
             (k) => `
-            <div class="row clickable" id="row-${k}" role="button" tabindex="0" data-action="open-job-menu" data-control="${k}">
-              <div class="row-main"><span class="row-title">${esc(controlName(d, k))}</span></div>
+            <div class="row clickable" id="row-${k}" role="button" tabindex="0" data-action="open-job-menu" data-control="${k}" draggable="true" data-drag="${k}">
+              ${GRIP}
+              <div class="row-main"><span class="row-title">${esc(controlName(d, k))}</span>${needsCalibration(d, k)}</div>
               <div class="row-control"><div class="job-list">${jobLines(jobsOf(d, k))}</div><span class="chev" aria-hidden="true">&#x2304;</span></div>
             </div>`
           )
@@ -256,7 +262,7 @@ function listView(d) {
         .map(
           (key) => `
             <div class="row clickable" id="brow-${key}" role="button" tabindex="0" data-action="open-button-menu" data-key="${key}">
-              <div class="row-main"><span class="row-title">${esc(controlName(d, controlOfKey(d, key)))}</span>${buttonParams(d, key)}</div>
+              <div class="row-main"><span class="row-title">${esc(controlName(d, controlOfKey(d, key)))}</span>${needsCalibration(d, controlOfKey(d, key))}${buttonParams(d, key)}</div>
               <div class="row-control"><div class="job-list">${buttonLines(d, key)}</div><span class="chev" aria-hidden="true">&#x2304;</span></div>
             </div>`
         )
@@ -273,6 +279,65 @@ function listView(d) {
         ${card(t("list.faders"), potRows(faders), "faders")}
         ${card(t("list.buttons"), buttonRows, "buttons")}
       </div>`;
+}
+
+function needsCalibration(d, k) {
+  return isSMC(d) || d.controls[k].input >= 0 ? "" : `<span class="row-desc warning">${esc(t("needs_calibration"))}</span>`;
+}
+
+// Six dots before a knob's or fader's name: the row drags its jobs onto another of its kind.
+const GRIP = `<svg class="grip" viewBox="0 0 6 10" aria-hidden="true"><circle cx="1" cy="1" r="1"/><circle cx="5" cy="1" r="1"/><circle cx="1" cy="5" r="1"/><circle cx="5" cy="5" r="1"/><circle cx="1" cy="9" r="1"/><circle cx="5" cy="9" r="1"/></svg>`;
+
+let dragged = null;
+
+// A row dropped on another of its kind moves its control's jobs there, as TheeJ's List does.
+export function onDrag(e) {
+  const d = currentBoard();
+  const row = e.target.closest && e.target.closest("[data-drag]");
+  const kindOfRow = (r) => r && d && kindOf(d, Number(r.dataset.drag));
+  const mark = (r) => document.querySelectorAll(".row.drop-target").forEach((el) => el !== r && el.classList.remove("drop-target"));
+  switch (e.type) {
+    case "dragstart":
+      if (!row) return;
+      dragged = Number(row.dataset.drag);
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", row.dataset.drag);
+      break;
+    case "dragover":
+      if (dragged === null) return;
+      if (!row || kindOfRow(row) !== kindOf(d, dragged)) {
+        mark(null);
+        return;
+      }
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      mark(row);
+      row.classList.add("drop-target");
+      break;
+    case "drop":
+      if (dragged === null || !row || kindOfRow(row) !== kindOf(d, dragged)) return;
+      e.preventDefault();
+      moveJobs(d, dragged, Number(row.dataset.drag));
+      dragged = null;
+      S.render();
+      break;
+    case "dragend":
+      dragged = null;
+      mark(null);
+      break;
+  }
+}
+
+// A control's jobs onto another of its kind, in the profile shown, with the ones between shifting
+// along. The controls stay where they are.
+function moveJobs(d, from, to) {
+  const controls = d.controls.map((_, k) => k).filter((k) => kindOf(d, k) === kindOf(d, from));
+  const start = controls.indexOf(from);
+  const end = controls.indexOf(to);
+  if (from === to || start < 0 || end < 0) return;
+  const jobs = controls.map((k) => jobsOf(d, k));
+  jobs.splice(end, 0, ...jobs.splice(start, 1));
+  controls.forEach((k, i) => (activeProfile(d).jobs[k] = jobs[i]));
 }
 
 // --- Live --------------------------------------------------------------------

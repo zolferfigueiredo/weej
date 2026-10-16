@@ -27,6 +27,45 @@ func IsSMCName(device string) bool {
 	return strings.Contains(strings.ToLower(device), "smc-mixer")
 }
 
+// midiDevice is the device a MIDI input belongs to: Windows names a device's second input
+// "MIDIIN2 (name)".
+func midiDevice(input string) string {
+	if _, name, ok := strings.Cut(input, " ("); ok && strings.HasPrefix(input, "MIDIIN") && strings.HasSuffix(name, ")") {
+		return strings.TrimSuffix(name, ")")
+	}
+	return input
+}
+
+// PickMIDIInput is the input a board opens among those there are: the one it is set to, or on an
+// SMC-Mixer, when that one isn't there, whichever SMC-Mixer is, Master before Private as TheeJ
+// finds it, and a device's first input before its second. That passes over a device another
+// board is set to or has open, taken: each of a device's inputs sends every press, so two boards
+// on one would both act on it.
+func PickMIDIInput(inputs []string, set string, smc bool, taken []string) (string, bool) {
+	if set != "" && slices.Contains(inputs, set) {
+		return set, true
+	}
+	if !smc {
+		return "", false
+	}
+	var mixers []string
+	for _, in := range inputs {
+		if IsSMCName(in) && !slices.ContainsFunc(taken, func(t string) bool { return midiDevice(t) == midiDevice(in) }) {
+			mixers = append(mixers, in)
+		}
+	}
+	for _, better := range []func(string) bool{
+		func(in string) bool { return strings.HasSuffix(strings.ToLower(in), "master") },
+		func(in string) bool { return !strings.Contains(strings.ToLower(in), "private") && midiDevice(in) == in },
+		func(string) bool { return true },
+	} {
+		if i := slices.IndexFunc(mixers, better); i >= 0 {
+			return mixers[i], true
+		}
+	}
+	return "", false
+}
+
 // SMCButtonID is the id of the button that sends cc in CC mode.
 func SMCButtonID(cc int) (int, bool) {
 	switch {

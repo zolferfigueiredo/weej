@@ -325,8 +325,17 @@ p {
 }
 
 .row.lit,
-.row.lit:hover {
+.row.lit:hover,
+.row.drop-target {
   background: var(--selection);
+}
+
+.grip {
+  flex: none;
+  width: 6px;
+  height: 10px;
+  fill: var(--text-secondary);
+  cursor: grab;
 }
 
 .row.clickable:hover {
@@ -917,9 +926,22 @@ button.popover-item {
   line-height: 1;
 }
 
+/* Its background runs to the window's edges, so rows scrolling under it stay hidden, but its line
+   is only as long as the tabs' line. */
 .footer {
   margin: auto -20px 0;
   padding: 10px 20px;
+  border-top: none;
+}
+
+.footer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 1px;
+  background: var(--divider);
 }
 
 select.select.select-inline,
@@ -1208,6 +1230,13 @@ select.select,
   color: var(--text-secondary);
 }
 
+.inspector-note {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--divider);
+  font-size: var(--fs-caption);
+  color: var(--danger);
+}
+
 .smc .waiting .face,
 .smc .waiting .well {
   stroke: var(--accent);
@@ -1409,10 +1438,11 @@ select.select,
   justify-content: center;
   text-align: center;
   gap: 0;
+  padding: 24px 0;
 }
 
 .about-icon {
-  border-radius: 14px;
+  border-radius: 21px;
 }
 
 .about-name {
@@ -1420,12 +1450,24 @@ select.select,
   margin: 12px 0 0;
 }
 
-.about-check {
+.about-btn {
   margin-top: 14px;
 }
 
 .about-line {
   margin-top: 6px;
+}
+
+.about-by {
+  font-size: var(--fs-caption);
+  margin: 10px 0 4px;
+}
+
+.about-sep {
+  align-self: stretch;
+  margin: 14px 0 8px;
+  border: 0;
+  border-top: 1px solid var(--divider);
 }
 
 .dialog-wide {

@@ -348,6 +348,7 @@ const MOCK_EN_STRINGS = {
   clear: "Clear",
   click_to_update: "You have {version}. Click to update.",
   close: "Close",
+  coffee: "Buy me a coffee",
   connected: "Connected: {port}",
   continue: "Continue",
   daily: "Daily",
@@ -357,7 +358,6 @@ const MOCK_EN_STRINGS = {
   downloading: "Downloading version {version}...",
   experimental: "Experimental",
   finish: "Finish",
-  hide_icon: "Hide tray icon",
   hide_icon_note: "Open WeeJ again to get back here.",
   import_done: "Your deej setup is now the profile â{name}â.",
   import_failed: "Couldn't read that deej config.",
@@ -386,22 +386,24 @@ const MOCK_EN_STRINGS = {
   language: "Language",
   language_note: "You can change it later in Settings or in the menu.",
   later: "Later",
-  login: "Launch at login",
+  liked: "Did you like this project?",
+  login: "Launch at startup",
   made_by: "Made by",
   name: "Name",
+  needs_calibration: "Needs calibration",
   never: "Never",
   newest: "WeeJ {version} is currently the newest version available.",
   next_profile: "Next profile",
   not_connected: "Not connected",
   now_using: "You're now using WeeJ {version}, the newest version available.",
   ok: "OK",
-  on_macos: "On macOS:",
+  on_macos: "On macOS? Get",
   other: "Other...",
   port_busy: "{port} is in use by another app",
   press_shortcut: "Press Shortcut",
   previous_profile: "Previous profile",
   profile: "Profile",
-  profile_list: "Profile list in tray menu",
+  profile_list: "Profile list",
   profile_n: "Profile {n}",
   profiles: "Profiles",
   quit: "Quit WeeJ",
@@ -430,6 +432,7 @@ const MOCK_EN_STRINGS = {
   "short.warmth": "Warmth",
   shortcut: "Shortcut",
   shortcut_tip: "Use Ctrl or Alt with a key. Delete clears it, Escape cancels.",
+  show_icon: "Show icon",
   skip: "Skip",
   space: "Space",
   speed: "Speed",
@@ -673,12 +676,15 @@ function mockSettingsInit(enStrings) {
     madeBy: "https://zolfer.com",
     theej: "https://theej.zolfer.com",
     deej: "https://github.com/omriharel/deej",
+    coffee: "https://buymeacoffee.com/zolfer",
     languages: [
       { code: "en", name: "English" },
       { code: "de", name: "Deutsch" },
       { code: "it", name: "Italiano" },
     ],
     language: "en",
+    login: false,
+    loginAvailable: true,
     settings: { version: 2, devices, added: devices.length, hideTrayIcon: false, showProfileList: true, language: "en", updateEvery: 604800, installUpdates: true },
     catalog,
     actionIcons: Object.fromEntries(Object.entries(MOCK_ACTION_GLYPHS).map(([action, glyph]) => [action, mockGlyph(glyph)])),
@@ -775,7 +781,7 @@ function startSettingsMock(post, enStrings) {
             ? Object.assign(mockSMC(id), { name: msg.name, port: msg.port, lights: "" })
             : { id, name: msg.name, type: msg.deviceType, enabled: true, port: msg.port, baudRate: msg.baudRate, speed: "slow", controls, view: "draw", profiles: [{ name: "Default", jobs: controls.map(() => []), buttons: {} }], profile: 0 };
         saveDevice(d);
-        post({ type: "status", device: id, connected: true, busy: false, port: msg.port || "COM7" });
+        post({ type: "status", device: id, connected: true, busy: false, port: msg.port || (msg.deviceType === "smc" ? "SMC-Mixer" : "COM7") });
         post({ type: "added", device: id });
         break;
       }
@@ -834,6 +840,9 @@ function startSettingsMock(post, enStrings) {
       }
       case "setLanguage":
         post({ type: "strings", lang: msg.code, strings: mockMergedStrings(msg.code, enStrings) });
+        break;
+      case "setLogin":
+        post({ type: "login", on: msg.on });
         break;
       case "key": {
         const hasMod = msg.ctrl || msg.alt;

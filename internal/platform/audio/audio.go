@@ -51,16 +51,14 @@ type Audio struct {
 	wake    chan struct{}
 
 	queries   chan chan []string
-	micToggle chan struct{}
+	levels    chan levelQuery
+	micToggle chan chan MicState
 
 	deviceChanged chan struct{}
 	startErr      chan error
 	stop          chan struct{}
 	stopped       chan struct{}
 	closeOnce     sync.Once
-
-	focusMu    sync.Mutex
-	focusedExe string
 
 	selfExe string
 
@@ -92,7 +90,8 @@ func Start(log func(string)) (*Audio, error) {
 		pending:       map[targetKind]pendingValue{},
 		wake:          make(chan struct{}, 1),
 		queries:       make(chan chan []string),
-		micToggle:     make(chan struct{}, 4),
+		levels:        make(chan levelQuery),
+		micToggle:     make(chan chan MicState),
 		deviceChanged: make(chan struct{}, 1),
 		startErr:      make(chan error, 1),
 		stop:          make(chan struct{}),
@@ -153,11 +152,25 @@ func (a *Audio) SetOtherApps(mapped []string, s float64) {
 
 func (a *Audio) SetFocused(s float64) { a.enqueue(targetFocused, pendingValue{level: s}) }
 
+// MicState is the default microphone after a mute: OK is false when there is none.
+type MicState struct {
+	Muted, OK bool
+	Level     float64
+}
+
 // ToggleMicMute mutes the default microphone, or unmutes it if it is muted.
-func (a *Audio) ToggleMicMute() {
+func (a *Audio) ToggleMicMute() MicState {
+	resp := make(chan MicState, 1)
 	select {
-	case a.micToggle <- struct{}{}:
-	default:
+	case a.micToggle <- resp:
+	case <-a.stopped:
+		return MicState{}
+	}
+	select {
+	case s := <-resp:
+		return s
+	case <-a.stopped:
+		return MicState{}
 	}
 }
 
@@ -179,18 +192,26 @@ func (a *Audio) Playing() []string {
 	}
 }
 
-// FocusedExe returns the last exe SetFocused resolved the foreground window to, so the HUD can
-// show its icon without forcing a round trip through the worker.
-func (a *Audio) FocusedExe() string {
-	a.focusMu.Lock()
-	defer a.focusMu.Unlock()
-	return a.focusedExe
+type levelQuery struct {
+	job  core.Job
+	resp chan float64
 }
 
-func (a *Audio) setFocusedExe(exe string) {
-	a.focusMu.Lock()
-	a.focusedExe = exe
-	a.focusMu.Unlock()
+// Level is where a job's volume is now, 0 to 1: the output's, the input's or an app's. It can't
+// tell any other job's, nor an app's with no sound open.
+func (a *Audio) Level(job core.Job) (float64, bool) {
+	q := levelQuery{job: job, resp: make(chan float64, 1)}
+	select {
+	case a.levels <- q:
+	case <-a.stopped:
+		return 0, false
+	}
+	select {
+	case level := <-q.resp:
+		return level, level >= 0
+	case <-a.stopped:
+		return 0, false
+	}
 }
 
 func (a *Audio) run() {
@@ -236,8 +257,10 @@ func (a *Audio) run() {
 			a.pollNewSessions()
 		case respCh := <-a.queries:
 			respCh <- a.computePlaying()
-		case <-a.micToggle:
-			a.toggleMicMute()
+		case q := <-a.levels:
+			q.resp <- a.readLevel(q.job)
+		case resp := <-a.micToggle:
+			resp <- a.toggleMicMute()
 		}
 	}
 }

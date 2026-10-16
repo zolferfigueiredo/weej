@@ -19,6 +19,8 @@ export function renderGeneral() {
     .map((l) => `<option value="${escAttr(l.code)}"${l.code === draft.language ? " selected" : ""}>${esc(l.name)}</option>`)
     .join("");
   const hidden = draft.hideTrayIcon;
+  // Only the installed copy can launch at startup, as in the tray menu.
+  const canLogin = !!S.init.loginAvailable;
 
   document.getElementById("panel").innerHTML = `
     <div class="tabpanel general-list" role="tabpanel">
@@ -39,22 +41,9 @@ export function renderGeneral() {
             <div class="row-control"><select class="select" id="language-select">${langOptions}</select></div>
           </div>
           <div class="row">
-            <div class="row-main">
-              <span class="row-title">${esc(t("hide_icon"))}</span>
-              <span class="row-desc">${esc(t("hide_icon_note"))}</span>
-            </div>
-            <div class="row-control"><input class="toggle" id="hide-icon" type="checkbox" role="switch"${hidden ? " checked" : ""} /></div>
+            <div class="row-main"><span class="row-title${canLogin ? "" : " disabled"}">${esc(t("login"))}</span></div>
+            <div class="row-control"><input class="toggle" id="login" type="checkbox" role="switch"${S.init.login ? " checked" : ""}${canLogin ? "" : " disabled"} /></div>
           </div>
-          <div class="row">
-            <div class="row-main"><span class="row-title${hidden ? " disabled" : ""}">${esc(t("profile_list"))}</span></div>
-            <div class="row-control"><input class="toggle" id="show-profile-list" type="checkbox" role="switch"${draft.showProfileList ? " checked" : ""}${hidden ? " disabled" : ""} /></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="group">
-        <h2 class="group-title">${esc(t("general.updates"))}</h2>
-        <div class="card">
           <div class="row">
             <div class="row-main">
               <span class="row-title">${esc(t("general.auto_update"))}</span>
@@ -68,6 +57,23 @@ export function renderGeneral() {
               <span class="row-desc">${esc(t("general.auto_install_note"))}</span>
             </div>
             <div class="row-control"><input class="toggle" id="auto-install" type="checkbox" role="switch"${draft.installUpdates ? " checked" : ""} /></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2 class="group-title">${esc(t("general.tray"))}</h2>
+        <div class="card">
+          <div class="row">
+            <div class="row-main">
+              <span class="row-title">${esc(t("show_icon"))}</span>
+              <span class="row-desc">${esc(t("hide_icon_note"))}</span>
+            </div>
+            <div class="row-control"><input class="toggle" id="show-icon" type="checkbox" role="switch"${hidden ? "" : " checked"} /></div>
+          </div>
+          <div class="row">
+            <div class="row-main"><span class="row-title${hidden ? " disabled" : ""}">${esc(t("profile_list"))}</span></div>
+            <div class="row-control"><input class="toggle" id="show-profile-list" type="checkbox" role="switch"${draft.showProfileList ? " checked" : ""}${hidden ? " disabled" : ""} /></div>
           </div>
         </div>
       </div>
