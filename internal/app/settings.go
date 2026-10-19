@@ -54,6 +54,8 @@ func (app *App) openSettings(tab string) {
 			app.mu.Unlock()
 			// Closing mid-recording would otherwise leave the saved hotkeys switched off.
 			app.registerHotkeys(app.snapshotSettings())
+			// A calibration only shows in Settings; its ticker would run on with nothing to show.
+			app.endWizard(false)
 			if restart {
 				app.loop.Invoke(app.restartIntoUpdate)
 			}

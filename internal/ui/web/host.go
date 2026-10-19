@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"syscall"
+	"unsafe"
 
 	"github.com/wailsapp/go-webview2/pkg/edge"
 	"github.com/wailsapp/go-webview2/webviewloader"
@@ -515,6 +517,8 @@ func (w *Window) runModalLoop() {
 func (w *Window) handleDestroyed() {
 	atomic.StoreInt32(&w.closed, 1)
 	if w.chromium != nil {
+		w.chromium.ShuttingDown()
+		closeController(w.chromium.GetController())
 		retiredMu.Lock()
 		retired = append(retired, w.chromium)
 		retiredMu.Unlock()
@@ -526,6 +530,17 @@ func (w *Window) handleDestroyed() {
 	if w.opts.OnClose != nil {
 		w.opts.OnClose()
 	}
+}
+
+// closeController calls ICoreWebView2Controller::Close, which go-webview2 does not wrap: slot 24 of
+// its vtable (IUnknown's three, then the controller's methods in IDL order). go-webview2 holds a
+// reference it never releases, so without this the msedgewebview2 processes outlive the window.
+func closeController(c *edge.ICoreWebView2Controller) {
+	if c == nil {
+		return
+	}
+	vtbl := *(**[25]uintptr)(unsafe.Pointer(c))
+	syscall.SyscallN(vtbl[24], uintptr(unsafe.Pointer(c)))
 }
 
 // Send hands v to the page's weej.receive(). Until the page has said it is ready,
