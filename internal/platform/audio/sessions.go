@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"unsafe"
 
 	wca "github.com/moutend/go-wca/pkg/wca"
@@ -424,18 +425,28 @@ func (a *Audio) computePlaying() []string {
 	return out
 }
 
-func visiblePIDs() map[uint32]struct{} {
-	result := map[uint32]struct{}{}
-	cb := windows.NewCallback(func(hwnd windows.HWND, _ uintptr) uintptr {
+// One callback serves every search, as findChildProcess's does.
+var (
+	visibleMu     sync.Mutex
+	visibleFound  map[uint32]struct{}
+	visibleSearch = windows.NewCallback(func(hwnd windows.HWND, _ uintptr) uintptr {
 		if !windows.IsWindowVisible(hwnd) {
 			return 1
 		}
 		var pid uint32
 		if _, err := windows.GetWindowThreadProcessId(hwnd, &pid); err == nil && pid != 0 {
-			result[pid] = struct{}{}
+			visibleFound[pid] = struct{}{}
 		}
 		return 1
 	})
-	_ = windows.EnumWindows(cb, nil)
+)
+
+func visiblePIDs() map[uint32]struct{} {
+	visibleMu.Lock()
+	defer visibleMu.Unlock()
+	visibleFound = map[uint32]struct{}{}
+	_ = windows.EnumWindows(visibleSearch, nil)
+	result := visibleFound
+	visibleFound = nil
 	return result
 }
