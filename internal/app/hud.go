@@ -235,6 +235,14 @@ func (app *App) faceAt(scale float64) font.Face {
 	return f
 }
 
+// dropFaces lets the HUD's font go once the HUD has faded, as a parsed font holds the whole file;
+// the next HUD reads it again, in well under a millisecond.
+func (app *App) dropFaces() {
+	app.faceMu.Lock()
+	app.faceFont, app.faceCache = nil, nil
+	app.faceMu.Unlock()
+}
+
 func loadHUDFont() *parsedFont {
 	for _, path := range []string{`C:\Windows\Fonts\SegUIVar.ttf`, `C:\Windows\Fonts\segoeui.ttf`} {
 		data, err := os.ReadFile(path)

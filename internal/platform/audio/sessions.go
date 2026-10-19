@@ -52,18 +52,19 @@ func (a *Audio) defaultEndpoint(flow uint32) (*wca.IMMDevice, error) {
 	return dev, nil
 }
 
-func (a *Audio) rangeActiveRenderEndpoints(fn func(endpoint *wca.IMMDevice)) {
+// rangeActiveRenderEndpoints is false when the outputs could not be listed.
+func (a *Audio) rangeActiveRenderEndpoints(fn func(endpoint *wca.IMMDevice)) bool {
 	var collection *wca.IMMDeviceCollection
 	if err := a.enumerator.EnumAudioEndpoints(wca.ERender, wca.DEVICE_STATE_ACTIVE, &collection); err != nil {
 		a.logOnce("enum-endpoints", "Could not list audio output devices: "+err.Error())
-		return
+		return false
 	}
 	defer collection.Release()
 
 	var count uint32
 	if err := collection.GetCount(&count); err != nil {
 		a.logOnce("enum-endpoints-count", "Could not count audio output devices: "+err.Error())
-		return
+		return false
 	}
 
 	for i := uint32(0); i < count; i++ {
@@ -74,27 +75,29 @@ func (a *Audio) rangeActiveRenderEndpoints(fn func(endpoint *wca.IMMDevice)) {
 		fn(dev)
 		dev.Release()
 	}
+	return true
 }
 
-func (a *Audio) eachRenderSession(endpoint *wca.IMMDevice, fn func(info sessionInfo, vol *wca.ISimpleAudioVolume)) {
+// eachRenderSession is false when the endpoint's sessions could not be listed.
+func (a *Audio) eachRenderSession(endpoint *wca.IMMDevice, fn func(info sessionInfo, vol *wca.ISimpleAudioVolume)) bool {
 	var manager *wca.IAudioSessionManager2
 	if err := endpoint.Activate(wca.IID_IAudioSessionManager2, wca.CLSCTX_ALL, nil, &manager); err != nil {
 		a.logOnce("activate-session-manager", "Could not activate an audio session manager: "+err.Error())
-		return
+		return false
 	}
 	defer manager.Release()
 
 	var enumerator *wca.IAudioSessionEnumerator
 	if err := manager.GetSessionEnumerator(&enumerator); err != nil {
 		a.logOnce("session-enumerator", "Could not get an audio session enumerator: "+err.Error())
-		return
+		return false
 	}
 	defer enumerator.Release()
 
 	var count int
 	if err := enumerator.GetCount(&count); err != nil {
 		a.logOnce("session-count", "Could not count audio sessions: "+err.Error())
-		return
+		return false
 	}
 
 	for i := 0; i < count; i++ {
@@ -127,6 +130,7 @@ func (a *Audio) eachRenderSession(endpoint *wca.IMMDevice, fn func(info sessionI
 
 		ctrl2.Release()
 	}
+	return true
 }
 
 func (a *Audio) describeSession(ctrl2 *wca.IAudioSessionControl2) (sessionInfo, bool) {
@@ -362,10 +366,16 @@ func (a *Audio) applyOtherApps(level float64, mapped []string) {
 // pollNewSessions runs every second and on default-device change: any session not seen before
 // that matches a stored target gets that level applied right away. Sessions we've already
 // handled are left alone so manual adjustments in the Windows volume mixer stick between polls.
+// The known sessions and exe names are only those this poll sees, so they don't grow with every
+// session and process there has been, and a pid Windows gives a new process is looked up again.
 func (a *Audio) pollNewSessions() {
-	a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
-		a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
+	clear(a.exeCache)
+	seen := make(map[string]struct{}, len(a.knownSessions))
+	complete := true
+	listed := a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
+		complete = a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
 			defer vol.Release()
+			seen[info.key] = struct{}{}
 
 			if _, known := a.knownSessions[info.key]; known {
 				return
@@ -392,8 +402,13 @@ func (a *Audio) pollNewSessions() {
 					a.setSessionVolume(vol, a.otherAppsLevel)
 				}
 			}
-		})
+		}) && complete
 	})
+	// A list cut short by an error would forget sessions still there, and set them back to their
+	// target next time.
+	if listed && complete {
+		a.knownSessions = seen
+	}
 }
 
 func (a *Audio) computePlaying() []string {

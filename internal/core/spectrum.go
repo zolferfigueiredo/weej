@@ -48,10 +48,10 @@ func (s *Spectrum) AddStereo(left, right []float32) {
 	}
 }
 
-// power is the sound's power by FFT bin for a side, oldest sample first through a Hann window.
-func (s *Spectrum) power(side int) ([]float64, float64) {
+// power fills out with the sound's power by FFT bin for a side, oldest sample first through a
+// Hann window, using x as scratch, and is the sample rate.
+func (s *Spectrum) power(side int, x []complex128, out []float64) float64 {
 	s.mu.Lock()
-	x := make([]complex128, fftSize)
 	for i := range x {
 		j := (s.pos + i) % fftSize
 		v := s.ring[0][j]
@@ -67,11 +67,10 @@ func (s *Spectrum) power(side int) ([]float64, float64) {
 	rate := s.rate
 	s.mu.Unlock()
 	fft(x)
-	out := make([]float64, fftSize/2)
 	for k := range out {
 		out[k] = math.Pow(cmplx.Abs(x[k]), 2)
 	}
-	return out, rate
+	return rate
 }
 
 // Analyzer is one side of the sound in bands, each shown against its own recent level, so a
@@ -85,6 +84,9 @@ type Analyzer struct {
 	seen   []bool
 	level  []float64
 	last   float64
+	// fft and power are power's 80 KB, kept since the lights read it every 40 ms.
+	fft   []complex128
+	power []float64
 }
 
 const (
@@ -99,7 +101,8 @@ const (
 func NewAnalyzer(edges []float64, side int) *Analyzer {
 	n := len(edges) - 1
 	return &Analyzer{edges: edges, side: side, avg: make([]float64, n), spread: make([]float64, n),
-		seen: make([]bool, n), level: make([]float64, n)}
+		seen: make([]bool, n), level: make([]float64, n),
+		fft: make([]complex128, fftSize), power: make([]float64, fftSize/2)}
 }
 
 // Bands is each band from 0 to 1 at now, in seconds.
@@ -107,13 +110,13 @@ func (a *Analyzer) Bands(s *Spectrum, now float64) []float64 {
 	dt := min(max(now-a.last, 0), 0.5)
 	a.last = now
 	follow := min(dt/spectrumSlow, 1)
-	power, rate := s.power(a.side)
+	rate := s.power(a.side, a.fft, a.power)
 	out := make([]float64, len(a.level))
 	for b := range a.level {
 		energy := 0.0
-		for k := 1; k < len(power); k++ {
+		for k := 1; k < len(a.power); k++ {
 			if f := float64(k) * rate / fftSize; f >= a.edges[b] && f < a.edges[b+1] {
-				energy += power[k]
+				energy += a.power[k]
 			}
 		}
 		db := 10 * math.Log10(energy/(fftSize*fftSize)+1e-12)

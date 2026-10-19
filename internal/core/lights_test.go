@@ -151,6 +151,13 @@ func TestSpectrumJumpsTheBandThatGetsLouder(t *testing.T) {
 	}
 }
 
+func TestAnalyzerReusesItsFFTBuffers(t *testing.T) {
+	s, a := NewSpectrum(), NewAnalyzer(eqEdges["eq"], SideBoth)
+	if allocs := testing.AllocsPerRun(10, func() { a.Bands(s, 1) }); allocs > 1 {
+		t.Errorf("Bands allocates %v times a call, want only its result", allocs)
+	}
+}
+
 func TestPreviousLightPattern(t *testing.T) {
 	if PreviousLightPattern("") != "clock" || PreviousLightPattern("on") != "" || PreviousLightPattern("random") != "on" {
 		t.Error("Previous doesn't step back through the patterns")

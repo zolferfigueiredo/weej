@@ -66,14 +66,16 @@ type hudWindow struct {
 }
 
 type HUD struct {
-	loop *Loop
+	loop   *Loop
+	hidden func()
 
 	mu   sync.Mutex
 	wins map[string]*hudWindow
 }
 
-func (l *Loop) NewHUD() *HUD {
-	return &HUD{loop: l, wins: make(map[string]*hudWindow)}
+// NewHUD calls hidden, on the UI thread, each time a HUD has faded out.
+func (l *Loop) NewHUD(hidden func()) *HUD {
+	return &HUD{loop: l, hidden: hidden, wins: make(map[string]*hudWindow)}
 }
 
 // Show paints the caller's pre-rendered bitmap at the bottom-centre of work, then restarts the
@@ -122,6 +124,7 @@ func (h *HUD) fadeStep(hw *hudWindow, gen uint64, step int) {
 
 	if step >= hudFadeSteps {
 		showWindow(hw.hwnd, swHide)
+		h.hidden()
 		return
 	}
 

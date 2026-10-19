@@ -523,6 +523,7 @@ func (w *Window) handleDestroyed() {
 		deleteObject(w.brush)
 		w.brush = 0
 	}
+	w.pending = nil // what a page that never got ready was sent
 	if w.opts.OnClose != nil {
 		w.opts.OnClose()
 	}
