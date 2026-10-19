@@ -57,7 +57,7 @@ jobs:
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build and publish
+    name: Build
     needs: check
     if: needs.check.outputs.skip != 'true'
     runs-on: windows-latest
@@ -107,23 +107,7 @@ jobs:
           printf '{"version":"%s","sha256":{"x64":"%s","x86":"%s"}}\n' "$V" "$x64" "$x86" > dist/latest.json
           (cd dist && sha256sum "WeeJ-$V-x64.zip" "WeeJ-$V-x64-setup.exe" "WeeJ-$V-x86.zip" "WeeJ-$V-x86-setup.exe" > SHA256SUMS)
 
-      # On a push to main this also makes the v tag, on the commit that was built.
-      - name: Publish the release
-        if: needs.check.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "v$V" \
-            "dist/WeeJ-$V-x64-setup.exe" \
-            "dist/WeeJ-$V-x64.zip" \
-            "dist/WeeJ-$V-x86-setup.exe" \
-            "dist/WeeJ-$V-x86.zip" \
-            "dist/latest.json" \
-            "dist/SHA256SUMS" \
-            --target "$GITHUB_SHA" --title "WeeJ $V" --generate-notes
-
       - name: Upload the build
-        if: needs.check.outputs.publish != 'true'
         uses: actions/upload-artifact@v7.0.1
         with:
           name: WeeJ-${{ env.V }}-build
@@ -133,3 +117,32 @@ jobs:
             dist/WeeJ-${{ env.V }}-x64.zip
             dist/WeeJ-${{ env.V }}-x86-setup.exe
             dist/WeeJ-${{ env.V }}-x86.zip
+            dist/latest.json
+            dist/SHA256SUMS
+
+  publish:
+    name: Publish the release
+    needs: [check, build]
+    if: needs.check.outputs.publish == 'true'
+    # z's Mac, where gh is logged in as zolferfigueiredo: the release is zolferfigueiredo's, not github-actions[bot]'s.
+    runs-on: [self-hosted, macOS, release]
+    timeout-minutes: 5
+    env:
+      V: ${{ needs.check.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: WeeJ-${{ env.V }}-build
+          path: dist
+      # On a push to main this also makes the v tag, on the commit that was built.
+      - name: Publish the release
+        run: |
+          gh release create "v$V" \
+            "dist/WeeJ-$V-x64-setup.exe" \
+            "dist/WeeJ-$V-x64.zip" \
+            "dist/WeeJ-$V-x86-setup.exe" \
+            "dist/WeeJ-$V-x86.zip" \
+            "dist/latest.json" \
+            "dist/SHA256SUMS" \
+            -R "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "WeeJ $V" --generate-notes
+          rm -rf dist
