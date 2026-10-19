@@ -540,7 +540,9 @@ func closeController(c *edge.ICoreWebView2Controller) {
 		return
 	}
 	vtbl := *(**[25]uintptr)(unsafe.Pointer(c))
-	syscall.SyscallN(vtbl[24], uintptr(unsafe.Pointer(c)))
+	if hr, _, _ := syscall.SyscallN(vtbl[24], uintptr(unsafe.Pointer(c))); hr != 0 {
+		logf("web: closing the WebView2 controller failed: %#x", hr)
+	}
 }
 
 // Send hands v to the page's weej.receive(). Until the page has said it is ready,
