@@ -11,6 +11,10 @@ import (
 type Applier interface {
 	Apply(job Job, s float64)
 	HUD(job Job, s float64)
+	// Display names the monitor job's HUD shows on, or "" when it shows none.
+	Display(job Job) string
+	// Level is where job is now, 0 to 1, when that can be read.
+	Level(job Job) (float64, bool)
 }
 
 type Debouncer struct {
@@ -71,19 +75,11 @@ func jobKey(job Job) string {
 	return string(job.Kind) + ":" + strconv.Itoa(job.Screen) + ":" + job.Exe
 }
 
-// Display identity for "one HUD per display per knob change": brightness and contrast on the
-// same screen share a display (so only the first of the two claims it there), but every screen
-// index is its own display.
-func displayKey(job Job) string {
-	switch job.Kind {
-	case JobBuiltinBrightness:
-		return "builtin"
-	case JobBrightness, JobContrast:
-		return "screen:" + strconv.Itoa(job.Screen)
-	case JobZoom:
-		return "pointer"
-	default:
-		return "primary"
+// hud shows one HUD per monitor per change, the first job's there.
+func (e *Engine) hud(shown map[string]bool, job Job, u float64) {
+	if d := e.applier.Display(job); d != "" && !shown[d] {
+		shown[d] = true
+		e.applier.HUD(job, u)
 	}
 }
 
@@ -95,13 +91,6 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 	settle := setup.Speed.Settle()
 
 	shown := map[string]bool{}
-	once := func(display string, show func()) {
-		if !shown[display] {
-			shown[display] = true
-			show()
-		}
-	}
-
 	for index, raw := range values {
 		if raw < 0 {
 			continue
@@ -139,7 +128,7 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 
 		for _, job := range jobs {
 			e.apply(job, u, settle)
-			once(displayKey(job), func() { e.applier.HUD(job, u) })
+			e.hud(shown, job, u)
 		}
 	}
 
@@ -191,9 +180,16 @@ func (e *Engine) ToggleMute(col int, setup Setup) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	jobs := setup.Mapping()[col]
 	muted := !e.muted[col]
 	if muted {
 		e.muted[col] = true
+		// A control not heard from yet unmutes to where its first job was.
+		if _, ok := e.lastApplied[col]; !ok && len(jobs) > 0 {
+			if level, ok := e.applier.Level(jobs[0]); ok {
+				e.lastApplied[col] = level
+			}
+		}
 	} else {
 		delete(e.muted, col)
 	}
@@ -206,15 +202,11 @@ func (e *Engine) ToggleMute(col int, setup Setup) bool {
 		u = last
 	}
 
-	jobs := setup.Mapping()[col]
 	settle := setup.Speed.Settle()
 	shown := map[string]bool{}
 	for _, job := range jobs {
 		e.apply(job, u, settle)
-		if d := displayKey(job); !shown[d] {
-			shown[d] = true
-			e.applier.HUD(job, u)
-		}
+		e.hud(shown, job, u)
 	}
 	for i, ln := range e.lines {
 		if slices.Contains(jobs, ln.Job) {

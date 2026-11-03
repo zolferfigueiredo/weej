@@ -7,6 +7,22 @@ import (
 	"testing"
 )
 
+func TestWithFieldsTakesOnlyTheFieldsNamed(t *testing.T) {
+	saved := NewDevice("d1", "Desk", DeviceDIY, 2, 0, 0, "Default")
+	draft := saved
+	draft.View, draft.Name, draft.Active = ViewList, "Renamed", 1
+	draft.Profiles = append(slices.Clone(saved.Profiles), DeviceProfile{Name: "Unapplied"})
+	draft.Layout = [][]int{{1, 0}}
+
+	got := saved.WithFields(draft, []string{"view"})
+	if got.View != ViewList {
+		t.Errorf("view = %q, want list", got.View)
+	}
+	if got.Name != "Desk" || got.Active != 0 || len(got.Profiles) != 1 || !reflect.DeepEqual(got.Layout, saved.Layout) {
+		t.Errorf("WithFields(view) took more than the view: %+v", got)
+	}
+}
+
 func TestNewDeviceLaysOutItsControls(t *testing.T) {
 	d := NewDevice("d1", "Desk", DeviceDIY, 2, 1, 2, "Default")
 	kinds := []ControlKind{KindKnob, KindKnob, KindFader, KindButton, KindButton}
@@ -61,8 +77,10 @@ type recordedApply struct {
 
 type recordApplier struct{ calls []recordedApply }
 
-func (r *recordApplier) Apply(job Job, u float64) { r.calls = append(r.calls, recordedApply{job, u}) }
-func (r *recordApplier) HUD(Job, float64)         {}
+func (r *recordApplier) Apply(job Job, u float64)  { r.calls = append(r.calls, recordedApply{job, u}) }
+func (r *recordApplier) HUD(Job, float64)          {}
+func (r *recordApplier) Display(Job) string        { return "" }
+func (r *recordApplier) Level(Job) (float64, bool) { return 0, false }
 
 func TestEngineSetupFeedsTheEngineByControl(t *testing.T) {
 	master := Job{Kind: JobMaster}

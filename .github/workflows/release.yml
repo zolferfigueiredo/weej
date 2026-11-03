@@ -1,9 +1,11 @@
 name: Release
-# A push to main whose AppVersion isn't released yet publishes it, and so does a v* tag. A pull request that
-# touches the release only builds it.
+# A push to main whose AppVersion isn't released yet publishes it, and so does a v* tag. A version with a
+# "-", 2.7.0-beta.1, is a beta: only a push to dev publishes it, as a pre-release, which GitHub never calls
+# latest, so only betas update to it; dev publishes nothing else. A pull request that touches the release
+# only builds it.
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     tags:
       - 'v*'
   pull_request:
@@ -12,6 +14,8 @@ on:
       - installer/**
 permissions:
   contents: write
+concurrency:
+  group: release-${{ github.ref }}
 defaults:
   run:
     shell: bash
@@ -22,6 +26,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
       publish: ${{ steps.version.outputs.publish }}
       skip: ${{ steps.version.outputs.skip }}
     steps:
@@ -34,8 +39,27 @@ jobs:
         run: |
           v=$(sed -n 's/^const AppVersion = "\(.*\)"$/\1/p' internal/core/version.go)
           echo "version=$v" >> "$GITHUB_OUTPUT"
+          beta=false
+          case $v in *-*) beta=true ;; esac
+          echo "prerelease=$beta" >> "$GITHUB_OUTPUT"
           publish=false
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            :
+          elif gh release view "v$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # Also the tag gh release create makes, which starts this workflow again.
+            echo "v$v is already released."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_REF_TYPE" = branch ] && [ "$GITHUB_REF_NAME" = dev ]; then
+            if [ "$beta" = true ]; then
+              publish=true
+            else
+              echo "dev publishes betas only, and $v isn't one."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "$beta" = true ]; then
+            echo "::notice::$v is a beta, which only dev publishes."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_REF_TYPE" = tag ]; then
             tag=$GITHUB_REF_NAME
             if [ "$tag" != "v$v" ]; then
               echo "::error::Tag $tag does not match AppVersion $v in internal/core/version.go." >&2
@@ -46,13 +70,8 @@ jobs:
               exit 1
             fi
             publish=true
-          elif [ "$GITHUB_EVENT_NAME" = push ]; then
-            if gh release view "v$v" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-              echo "v$v is already released."
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-            else
-              publish=true
-            fi
+          else
+            publish=true
           fi
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
 
@@ -129,15 +148,18 @@ jobs:
     timeout-minutes: 5
     env:
       V: ${{ needs.check.outputs.version }}
+      PRERELEASE: ${{ needs.check.outputs.prerelease }}
     steps:
       - uses: actions/download-artifact@v8
         with:
           name: WeeJ-${{ env.V }}-build
           path: dist
-      # On a push to main this also makes the v tag, on the commit that was built.
+      # On a push to main or dev this also makes the v tag, on the commit that was built.
       - name: Publish the release
         run: |
-          gh release create "v$V" \
+          pre=()
+          if [ "$PRERELEASE" = true ]; then pre=(--prerelease); fi
+          gh release create "v$V" "${pre[@]}" \
             "dist/WeeJ-$V-x64-setup.exe" \
             "dist/WeeJ-$V-x64.zip" \
             "dist/WeeJ-$V-x86-setup.exe" \

@@ -194,8 +194,8 @@ func (app *App) knobStart(r *runner, col int) (int, bool) {
 			continue
 		}
 		u, ok := 0.0, false
-		if jobs := d.ActiveProfile().Jobs; k < len(jobs) && len(jobs[k]) > 0 && app.audio != nil {
-			u, ok = app.audio.Level(jobs[k][0])
+		if jobs := d.ActiveProfile().Jobs; k < len(jobs) && len(jobs[k]) > 0 {
+			u, ok = app.jobLevel(jobs[k][0])
 		}
 		if !ok {
 			u, ok = r.engine.Last(k)

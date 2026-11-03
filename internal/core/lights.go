@@ -372,9 +372,9 @@ func noise(a, b int) int {
 }
 
 // LightGuard drops the small fader and pot moves an SMC-Mixer reports while its button lights
-// change: lighting many at once lifts its readings by up to 4 steps of 127 within milliseconds,
-// and they creep back over the next half second. A bigger move is a hand, followed closely until
-// it rests.
+// change: lighting many at once moves its readings by up to 4 steps of 127 within milliseconds,
+// and they keep drifting for up to about 4.3 seconds. A bigger move is a hand, followed closely
+// until it rests.
 type LightGuard struct {
 	reported [faderFirstCC + 8]int
 	known    [faderFirstCC + 8]bool
@@ -382,7 +382,7 @@ type LightGuard struct {
 }
 
 const (
-	guardWindow    = 0.6  // seconds after a light change
+	guardWindow    = 5.0  // seconds after a light change
 	guardSteps     = 5    // of 127
 	guardJump      = 0.05 // seconds after a light change, when the jumps come
 	guardJumpSteps = 10   // of 127, then

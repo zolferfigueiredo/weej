@@ -106,7 +106,9 @@ jobs:
             echo "First version: $new"
             exit 0
           fi
-          if [ "$new" = "$old" ] || [ "$(printf '%s\n%s\n' "$old" "$new" | sort -V | tail -n 1)" != "$new" ]; then
+          # A beta's "-" sorts as "~", which sort -V puts before the release: 2.7.0-beta.2 < 2.7.0.
+          top=$(printf '%s\n%s\n' "$old" "$new" | sed 's/-/~/' | sort -V | tail -n 1 | sed 's/~/-/')
+          if [ "$new" = "$old" ] || [ "$top" != "$new" ]; then
             echo "::error file=internal/core/version.go::The app changed, so AppVersion has to go above $old (it is $new)."
             exit 1
           fi

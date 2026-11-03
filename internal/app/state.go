@@ -30,5 +30,6 @@ func (app *App) persistSettings(s core.Settings) error {
 		return err
 	}
 	app.replaceSettings(s)
+	app.keepAppVolumes(s)
 	return nil
 }

@@ -88,4 +88,27 @@ func TestDeejProfileFollowsEachSlidersInput(t *testing.T) {
 	if !reflect.DeepEqual(skipped, []string{"foo", "slider 7"}) {
 		t.Errorf("skipped = %v", skipped)
 	}
+
+	imp = Import{Name: "deej", Columns: []int{7, 7}, Jobs: [][]Job{{}, {}}, Skipped: []string{"Foo.app", "foo.app"}}
+	if _, skipped := DeejProfile(imp, d); !reflect.DeepEqual(skipped, []string{"Foo.app", "slider 7"}) {
+		t.Errorf("skipped = %v, want each one once, in its first spelling", skipped)
+	}
+}
+
+func TestProfileFileJobsNeverLandOnAButton(t *testing.T) {
+	from := NewDevice("d1", "Desk", DeviceDIY, 2, 0, 0, "Default")
+	p := from.NewProfile("Games")
+	p.Jobs[1] = []Job{{Kind: JobMicrophone}}
+	data, err := EncodeProfileFile(from.Type, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	to := NewDevice("d2", "Pad", DeviceDIY, 1, 0, 1, "Default")
+	got, skipped, _, ok := DecodeProfileFile(data, to, testTr)
+	if !ok || len(got.Jobs[1]) != 0 {
+		t.Errorf("jobs = %+v, want none on the button", got.Jobs)
+	}
+	if !reflect.DeepEqual(skipped, []string{"job.microphone"}) {
+		t.Errorf("skipped = %v, want the microphone named", skipped)
+	}
 }

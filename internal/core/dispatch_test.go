@@ -2,6 +2,7 @@ package core
 
 import (
 	"reflect"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -46,6 +47,26 @@ type fakeApplier struct {
 	mu      sync.Mutex
 	applied []Job
 	huds    []Job
+	// displays overrides where a kind of job shows its HUD.
+	displays map[JobKind]string
+	levels   map[JobKind]float64
+}
+
+func (f *fakeApplier) Level(job Job) (float64, bool) {
+	s, ok := f.levels[job.Kind]
+	return s, ok
+}
+
+func (f *fakeApplier) Display(job Job) string {
+	if d, ok := f.displays[job.Kind]; ok {
+		return d
+	}
+	switch job.Kind {
+	case JobBrightness, JobContrast:
+		return "screen:" + strconv.Itoa(job.Screen)
+	default:
+		return "primary"
+	}
 }
 
 func (f *fakeApplier) Apply(job Job, s float64) {
@@ -101,6 +122,45 @@ func TestEngineOneHUDPerDisplayPerKnobChange(t *testing.T) {
 	defer a.mu.Unlock()
 	if len(a.huds) != 2 || a.huds[0].Kind != JobBrightness || a.huds[1].Kind != JobBrightness {
 		t.Errorf("huds = %v, want one per change, brightness claiming screen 0 first", a.huds)
+	}
+}
+
+func TestEngineJobsOnOneMonitorShareItsHUD(t *testing.T) {
+	a := &fakeApplier{displays: map[JobKind]string{JobBrightness: "primary"}}
+	e := NewEngine(a)
+	setup := Setup{
+		Columns:  []int{0},
+		Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}, {Kind: JobBrightness, Screen: 0}}}}},
+		Speed:    SpeedSuperFast,
+	}
+	e.Handle([]int{1023}, setup, false)
+	e.Handle([]int{0}, setup, false)
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.huds) != 1 || a.huds[0].Kind != JobMaster {
+		t.Errorf("huds = %v, want master's alone, its screen being the primary", a.huds)
+	}
+}
+
+func TestEngineJobWithNoDisplayLeavesItToTheNext(t *testing.T) {
+	a := &fakeApplier{displays: map[JobKind]string{JobFocusedApp: ""}}
+	e := NewEngine(a)
+	setup := Setup{
+		Columns:  []int{0},
+		Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobFocusedApp}, {Kind: JobMaster}}}}},
+		Speed:    SpeedSuperFast,
+	}
+	e.Handle([]int{1023}, setup, false)
+	e.Handle([]int{0}, setup, false)
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.applied) != 2 {
+		t.Errorf("applied = %v, want both jobs", a.applied)
+	}
+	if len(a.huds) != 1 || a.huds[0].Kind != JobMaster {
+		t.Errorf("huds = %v, want master's alone", a.huds)
 	}
 }
 

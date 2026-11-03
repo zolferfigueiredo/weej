@@ -68,17 +68,17 @@ You need:
 - **Button lights on the SMC-Mixer.** 29 patterns, from Fire and Rain to a binary clock, and three EQs that move with whatever your PC plays. A button lights up while you hold it, and a strip's LED blinks while you turn its knob.
 - **Any number of knobs.** As many as your sketch sends, named A to Z, then A2, B2 and on. Pots wired the other way round need nothing: calibration sees which way each one turns.
 - **Same firmware.** Speaks the deej serial protocol, unchanged, at 9600 baud or whatever your sketch uses.
-- **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in the menu and in Settings changes it at once, open windows included.
+- **Speaks 12 languages.** Deutsch, English, Español, Français, Italiano, Polski, Português, Русский, Українська, 中文, 日本語 and 한국어. **Language** in Settings changes it at once, open windows included.
 - **Lives in the tray.** A left click opens Settings and a right click opens the menu. It reconnects on its own, can launch at login, and installs updates by itself.
 
 ## What a knob can do
 
-- **Master volume**: the default output device, through Windows Core Audio.
+- **Master volume**: the default output device, through Windows Core Audio. Turning it unmutes the speaker, as the volume keys do.
 - **Microphone volume**: the default input device, the same level as in Sound settings.
 - **System sounds**: Windows' own notification and alert sounds.
 - **An app's volume**: an app picked under Apps, through its own Windows audio session, the slider the Volume mixer shows. Apps lists the apps that make sound: the ones playing right now, well-known players, browsers and call apps you have installed, open or not, and any app already on a knob. **Other…** at its end picks any program. An app that starts playing gets the knob's level within a second.
-- **Focused app**: whichever app owns the window in front, as deej's `deej.current` does.
-- **Other apps**: every app that has no knob of its own in the active profile, as deej's `deej.unmapped` does.
+- **Focused app**: whichever app owns the window in front, as deej's `deej.current` does. An app keeps its level when another comes to the front, and with WeeJ's own Settings in front the knob does nothing.
+- **Other apps**: every app with no volume of its own, as deej's `deej.unmapped` does: none from a knob in the active profiles, nor from Focused app.
 - **Built-in display brightness**: a laptop's panel, through WMI. Desktops have none.
 - **Screen brightness** and **Screen contrast**: each external screen over DDC/CI, one entry per screen Windows reports. Screens count left to right by their position in Display settings.
 - **Night light warmth** (Experimental): off at the bottom of the knob, then from least to most warm. It is Windows' own Night light, so a schedule still switches it on and off at its set times.
@@ -107,7 +107,7 @@ Upstream deej already runs on Windows; WeeJ is a different take on the same idea
 - **Night light** is stored by Windows in an undocumented setting, so a future Windows update could break it. That's why it's marked Experimental.
 - **Screen zoom** uses the Magnification API, and a **VIA keyboard's backlight** goes over USB HID.
 - The tray icon, its menu and the indicator are native Win32. The Settings, Language and Update windows are pages in WebView2, laid out like Windows 11's own Settings and following its light or dark theme and accent color.
-- **Check for updates…** asks GitHub for the newest release and sends nothing about you. An update downloads that release's zip, checks it against the release's SHA-256, and installs only into the installed copy (`%LOCALAPPDATA%\Programs\WeeJ`). Then WeeJ closes for a moment and opens again as the new version, which says so in a notification. With **Install updates automatically** on in Settings, as it is by default, this happens as soon as a check finds a new version, after Settings is closed if it is open; with it off, the notification or **Install version … now** in the menu does it in one click.
+- **Check for updates…** asks GitHub for the newest release and sends nothing about you. A beta, such as 2.7.0-beta.1, looks among the betas too, so it moves on to the next beta or to the release. An update downloads that release's zip, checks it against the release's SHA-256, and installs only into the installed copy (`%LOCALAPPDATA%\Programs\WeeJ`). Then WeeJ closes for a moment and opens again as the new version, which says so in a notification. With **Install updates automatically** on in Settings, as it is by default, this happens as soon as a check finds a new version, after Settings is closed if it is open; with it off, clicking the notification checks again and asks, and **Install version … now** in the menu does it in one click.
 - Only one copy runs at a time. Opening WeeJ again while it runs brings up Settings, which is the way back with the tray icon hidden.
 
 <details>
@@ -115,7 +115,7 @@ Upstream deej already runs on Windows; WeeJ is a different take on the same idea
 
 The icon is WeeJ's app icon, drawn in code in [internal/draw](internal/draw). Pointing at it names each connected board with its profile.
 
-A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut. Then Settings and Language, then Launch at startup, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
+A left click, or Enter on the focused icon, opens Settings. A right click opens the menu: Settings first, then each board that is on, with its name and port or status, its profiles with a check by the active one and each one's shortcut, or a line saying there is none. Then Launch at startup, About WeeJ, which opens the About tab of Settings, Check for updates… with Check automatically (daily, weekly by default, or never), and Quit WeeJ. Settings can leave the profiles out of the menu, or hide the icon altogether.
 
 </details>
 
@@ -151,7 +151,7 @@ A sound plays as each control is found and each press counts, so you can keep yo
 <details>
 <summary><b>On-screen feedback</b></summary>
 
-Turning a knob shows a flyout like the one Windows shows for its own volume keys, on the display that knob controls: a speaker, microphone, sun, half-filled circle, moon, keyboard or magnifying glass, or the app's own icon, with the level. It follows the light or dark theme. Switching profiles shows the profile's name the same way. A button that mutes the microphone shows it muted, or its level once unmuted, one that turns Night light on or off shows a moon, full or empty, and one that changes an SMC-Mixer's button lights names the new pattern.
+Turning a knob shows a flyout like the one Windows shows for its own volume keys, on the display that knob controls: a speaker, microphone, sun, half-filled circle, moon, keyboard or magnifying glass, or the app's own icon, with the level. It follows the light or dark theme. A knob with several jobs shows one per screen, its first job's there. Switching profiles shows the profile's name the same way, on the screen with the pointer. A button that mutes the microphone shows it muted, or its level once unmuted, one that turns Night light on or off shows a moon, full or empty, and one that changes an SMC-Mixer's button lights names the new pattern.
 
 The indicator tracks the knob live. Everything but the volumes only changes once the knob has been still for a moment (the Speed setting), so a turn lands as one clean change when you let go instead of flickering a screen through every position on the way. The volumes follow the knob immediately.
 
@@ -186,7 +186,7 @@ installer.bat                 # build dist\WeeJ-<version>-x64-setup.exe on this 
 
 **Run at login.** The installed copy turns this on with **Launch at startup** in the menu or in Settings. For a build run from this folder, `install.bat` starts it at login and restarts it if it crashes, logging to `%TEMP%\weej.log`; `install.bat --uninstall` removes it. Quit from the menu really does quit.
 
-**Release.** Raise `AppVersion` in [version.go](internal/core/version.go) and merge to `main` (pull requests go to `dev`, and `dev` merges to `main`). The [release workflow](.github/workflows/release.yml) sees a version with no release yet, builds the installers and zips for 64-bit and 32-bit Windows, `latest.json` and checksums, and publishes them as a GitHub release, tagging the merged commit `v<version>`. A pull request that changes the workflow or the installer builds everything without publishing. `release.bat` on `main` still tags a release by hand and prints the installer's download link; the workflow refuses a tag that isn't on `main`, so a release is always merged code. It runs on a Windows runner, so it also runs the tests of the Windows-only packages.
+**Release.** Raise `AppVersion` in [version.go](internal/core/version.go) and merge to `main` (pull requests go to `dev`, and `dev` merges to `main`). A version with a dash, such as `2.7.0-beta.1`, is a beta: merged to `dev`, it is published as a pre-release, which GitHub never calls the latest, so only betas update to it. `main` never publishes a beta, and `dev` publishes nothing else. The [release workflow](.github/workflows/release.yml) sees a version with no release yet, builds the installers and zips for 64-bit and 32-bit Windows, `latest.json` and checksums, and publishes them as a GitHub release, tagging the merged commit `v<version>`. A pull request that changes the workflow or the installer builds everything without publishing. `release.bat` on `main` still tags a release by hand and prints the installer's download link; the workflow refuses a tag that isn't on `main`, so a release is always merged code. It runs on a Windows runner, so it also runs the tests of the Windows-only packages.
 
 **CI** runs on Linux for every pull request: the tests, and golangci-lint and a build for 64-bit and 32-bit Windows. It also checks the git hook with shellcheck, keeps em and en dashes out of the translations, and fails a pull request that changes the app without raising `AppVersion`.
 

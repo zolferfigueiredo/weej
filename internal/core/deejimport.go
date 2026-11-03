@@ -37,8 +37,10 @@ func deejJob(entry string) (Job, bool) {
 		return Job{Kind: JobFocusedApp}, true
 	}
 	if m := monitorBrightnessPattern.FindStringSubmatch(lower); m != nil {
-		n, _ := strconv.Atoi(m[1])
-		return Job{Kind: JobBrightness, Screen: n - 1}, true
+		if n, err := strconv.Atoi(m[1]); err == nil && n >= 1 && n <= 16 {
+			return Job{Kind: JobBrightness, Screen: n - 1}, true
+		}
+		return Job{}, false
 	}
 	if strings.HasSuffix(lower, ".exe") {
 		return Job{Kind: JobApp, Exe: lower}, true
@@ -86,6 +88,9 @@ func ImportDeej(yamlBytes []byte) (Import, error) {
 		seenApps := map[string]bool{}
 		jobs := []Job{}
 		for _, entry := range entries {
+			if strings.TrimSpace(entry) == "" {
+				continue
+			}
 			job, ok := deejJob(entry)
 			if !ok {
 				imp.Skipped = append(imp.Skipped, entry)

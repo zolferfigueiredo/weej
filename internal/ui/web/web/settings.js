@@ -33,6 +33,7 @@ import {
   controlOfKey,
   currentBoard,
   deviceById,
+  devices,
   esc,
   escAttr,
   isButton,
@@ -115,7 +116,7 @@ function renderAbout() {
       <h2 class="about-name">WeeJ</h2>
       <p class="about-line about-by">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">Zolfer Figueiredo</a></p>
       <p class="about-line">${esc(t("version", { version: init.version }))}</p>
-      <button class="btn about-btn" type="button" data-action="check-updates">${esc(t("check"))}</button>
+      <button class="btn about-btn" type="button" data-action="check-updates"${init.updateBusy ? " disabled" : ""}>${esc(t("check"))}</button>
       <hr class="about-sep" />
       <p class="about-line"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
       <p class="about-line">${esc(t("liked"))}</p>
@@ -133,17 +134,32 @@ function doSave() {
   send({ type: "save", settings: S.draft });
 }
 
-// saveBoard saves one board at once, with whatever the page has of it.
-function saveBoard(d) {
-  send({ type: "setDevice", device: d });
+const GEAR_FIELDS = ["name", "port", "baudRate", "speed", "lights", "nextProfile", "previousProfile"];
+
+// saveBoard saves these fields of a board at once, leaving its other edits for Apply.
+function saveBoard(d, fields) {
+  send({ type: "setDevice", device: d, fields });
 }
 
-// Calibrating works on the board as saved, so the page's edits to it are saved first.
+// Calibrating works on the board as saved, so the gear's edits to it are saved first.
 function calibrate(d, controls) {
-  saveBoard(d);
+  if (S.dialog && S.dialog.kind === "gear" && S.dialog.dev === d) saveBoard(d, GEAR_FIELDS);
   S.dialog = { kind: "wizard", id: d.id };
   send({ type: "calibrate", device: d.id, controls });
   render();
+}
+
+// Puts a board Go saved into the saved copy, and only the fields it saved into the page's edits.
+function takeSavedFields(dev, fields) {
+  const i = devices(S.saved).findIndex((d) => d.id === dev.id);
+  if (i < 0) return upsertDevice(dev);
+  S.saved.devices[i] = clone(dev);
+  const d = deviceById(dev.id);
+  if (!d) return;
+  for (const f of fields) {
+    if (dev[f] === undefined) delete d[f];
+    else d[f] = clone(dev[f]);
+  }
 }
 
 // Puts a board Go saved into both copies, leaving the page's other edits as they are.
@@ -324,7 +340,7 @@ function onClick(e) {
     case "save-board": {
       const dev = S.dialog.dev;
       S.dialog = null;
-      saveBoard(dev);
+      saveBoard(dev, GEAR_FIELDS);
       render();
       break;
     }
@@ -351,16 +367,19 @@ function onClick(e) {
         d.view = target.dataset.view;
         const saved = deviceById(d.id, S.saved);
         if (saved) saved.view = d.view;
-        saveBoard(d);
+        saveBoard(d, ["view"]);
         render();
       }
       break;
     case "add-profile":
       if (d) {
-        const p = { name: "", jobs: d.controls.map(() => []), buttons: {}, shortcut: null };
-        d.profiles.push(p);
+        const name = t("profile_n", { n: String(d.profiles.length + 1) });
+        d.profiles.push({ name, jobs: d.controls.map(() => []), buttons: {}, shortcut: null });
         d.profile = d.profiles.length - 1;
+        S.dialog = { kind: "profile", id: d.id };
         render();
+        const input = document.getElementById("profile-name");
+        if (input) input.select();
       }
       break;
     case "remove-profile":
@@ -499,7 +518,9 @@ function onChange(e) {
     const dev = deviceById(el.dataset.enable);
     if (dev) {
       dev.enabled = el.checked;
-      saveBoard(dev);
+      const saved = deviceById(dev.id, S.saved);
+      if (saved) saved.enabled = dev.enabled;
+      saveBoard(dev, ["enabled"]);
     }
     return;
   }
@@ -626,6 +647,11 @@ function onMessage(msg) {
       S.init.login = !!msg.on;
       if (S.tab === "general" && !S.dialog) render();
       break;
+    // Go-initiated: an update is being checked for or installed, or no longer is.
+    case "updateBusy":
+      S.init.updateBusy = !!msg.busy;
+      if (S.tab === "about" && !S.dialog) render();
+      break;
     case "saved":
       S.draft = clone(msg.settings);
       S.draft.devices = S.draft.devices || [];
@@ -639,7 +665,8 @@ function onMessage(msg) {
       render();
       break;
     case "deviceSaved":
-      upsertDevice(msg.device);
+      if (msg.fields) takeSavedFields(msg.device, msg.fields);
+      else upsertDevice(msg.device);
       render();
       break;
     case "added": {
@@ -719,7 +746,11 @@ function onMessage(msg) {
       if (msg.end) {
         S.wizard = null;
         if (S.dialog && S.dialog.kind === "wizard") S.dialog = null;
-        nextInSetup();
+        if (S.setup) nextInSetup();
+        else if (msg.finished && msg.device) {
+          S.board = msg.device;
+          S.tab = "boards";
+        }
         render();
         break;
       }
