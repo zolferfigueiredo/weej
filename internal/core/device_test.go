@@ -7,6 +7,22 @@ import (
 	"testing"
 )
 
+func TestWithFieldsTakesOnlyTheFieldsNamed(t *testing.T) {
+	saved := NewDevice("d1", "Desk", DeviceDIY, 2, 0, 0, "Default")
+	draft := saved
+	draft.View, draft.Name, draft.Active = ViewList, "Renamed", 1
+	draft.Profiles = append(slices.Clone(saved.Profiles), DeviceProfile{Name: "Unapplied"})
+	draft.Layout = [][]int{{1, 0}}
+
+	got := saved.WithFields(draft, []string{"view"})
+	if got.View != ViewList {
+		t.Errorf("view = %q, want list", got.View)
+	}
+	if got.Name != "Desk" || got.Active != 0 || len(got.Profiles) != 1 || !reflect.DeepEqual(got.Layout, saved.Layout) {
+		t.Errorf("WithFields(view) took more than the view: %+v", got)
+	}
+}
+
 func TestNewDeviceLaysOutItsControls(t *testing.T) {
 	d := NewDevice("d1", "Desk", DeviceDIY, 2, 1, 2, "Default")
 	kinds := []ControlKind{KindKnob, KindKnob, KindFader, KindButton, KindButton}

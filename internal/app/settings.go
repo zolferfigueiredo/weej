@@ -280,11 +280,12 @@ func (app *App) handleSettingsSave(data []byte) {
 	}
 }
 
-// handleSetDevice saves one board at once, as the gear's dialog, the on and off switch, the
-// Draw or List choice and calibrating do, leaving the rest of the page's edits for Apply.
+// handleSetDevice saves a few fields of one board at once, as the gear's dialog, the on and off
+// switch and the Draw or List choice do, leaving the rest of the page's edits for Apply.
 func (app *App) handleSetDevice(data []byte) {
 	var msg struct {
 		Device json.RawMessage `json:"device"`
+		Fields []string        `json:"fields"`
 	}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return
@@ -298,14 +299,16 @@ func (app *App) handleSetDevice(data []byte) {
 	if i < 0 {
 		return
 	}
-	next.Devices[i] = d
+	next.Devices[i] = next.Devices[i].WithFields(d, msg.Fields)
 	app.applySettings(next)
-	app.sendDevice(app.snapshotSettings().Devices[i])
+	app.sendDevice(app.snapshotSettings().Devices[i], msg.Fields)
 }
 
-func (app *App) sendDevice(d core.Device) {
+// sendDevice tells Settings a board as saved. With fields, the page takes only those into its
+// edits; without, the whole board, as a new one.
+func (app *App) sendDevice(d core.Device, fields []string) {
 	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "deviceSaved", "device": deviceJSON(d)})
+		win.Send(map[string]any{"type": "deviceSaved", "device": deviceJSON(d), "fields": fields})
 	}
 }
 
@@ -335,7 +338,7 @@ func (app *App) handleAddDevice(data []byte) {
 	app.applySettings(next)
 	saved := app.snapshotSettings()
 	if i := deviceIndex(saved, d.ID); i >= 0 {
-		app.sendDevice(saved.Devices[i])
+		app.sendDevice(saved.Devices[i], nil)
 	}
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "added", "device": d.ID})
