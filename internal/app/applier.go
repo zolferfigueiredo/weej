@@ -12,6 +12,13 @@ type applier struct{ app *App }
 func (ap *applier) Apply(job core.Job, s float64) { ap.app.applyJob(job, s) }
 func (ap *applier) HUD(job core.Job, s float64)   { ap.app.showHUD(job, s) }
 
+func (ap *applier) Display(job core.Job) string {
+	if m, ok := ap.app.monitorFor(job); ok {
+		return monitorKey(m)
+	}
+	return ""
+}
+
 func (app *App) applyJob(job core.Job, s float64) {
 	switch job.Kind {
 	case core.JobMaster:
