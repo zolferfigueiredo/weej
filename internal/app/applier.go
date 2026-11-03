@@ -13,6 +13,15 @@ type applier struct{ app *App }
 func (ap *applier) Apply(job core.Job, s float64) { ap.app.applyJob(job, s) }
 func (ap *applier) HUD(job core.Job, s float64)   { ap.app.showHUD(job, s) }
 
+func (ap *applier) Level(job core.Job) (float64, bool) { return ap.app.jobLevel(job) }
+
+func (app *App) jobLevel(job core.Job) (float64, bool) {
+	if app.audio == nil {
+		return 0, false
+	}
+	return app.audio.Level(job)
+}
+
 // Display is none for Focused app with no app in front to turn, WeeJ's own Settings included.
 func (ap *applier) Display(job core.Job) string {
 	if job.Kind == core.JobFocusedApp {

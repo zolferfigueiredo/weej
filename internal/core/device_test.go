@@ -61,9 +61,10 @@ type recordedApply struct {
 
 type recordApplier struct{ calls []recordedApply }
 
-func (r *recordApplier) Apply(job Job, u float64) { r.calls = append(r.calls, recordedApply{job, u}) }
-func (r *recordApplier) HUD(Job, float64)         {}
-func (r *recordApplier) Display(Job) string       { return "" }
+func (r *recordApplier) Apply(job Job, u float64)  { r.calls = append(r.calls, recordedApply{job, u}) }
+func (r *recordApplier) HUD(Job, float64)          {}
+func (r *recordApplier) Display(Job) string        { return "" }
+func (r *recordApplier) Level(Job) (float64, bool) { return 0, false }
 
 func TestEngineSetupFeedsTheEngineByControl(t *testing.T) {
 	master := Job{Kind: JobMaster}

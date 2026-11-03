@@ -49,6 +49,12 @@ type fakeApplier struct {
 	huds    []Job
 	// displays overrides where a kind of job shows its HUD.
 	displays map[JobKind]string
+	levels   map[JobKind]float64
+}
+
+func (f *fakeApplier) Level(job Job) (float64, bool) {
+	s, ok := f.levels[job.Kind]
+	return s, ok
 }
 
 func (f *fakeApplier) Display(job Job) string {

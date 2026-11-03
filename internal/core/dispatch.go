@@ -13,6 +13,8 @@ type Applier interface {
 	HUD(job Job, s float64)
 	// Display names the monitor job's HUD shows on, or "" when it shows none.
 	Display(job Job) string
+	// Level is where job is now, 0 to 1, when that can be read.
+	Level(job Job) (float64, bool)
 }
 
 type Debouncer struct {
@@ -178,9 +180,16 @@ func (e *Engine) ToggleMute(col int, setup Setup) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
+	jobs := setup.Mapping()[col]
 	muted := !e.muted[col]
 	if muted {
 		e.muted[col] = true
+		// A control not heard from yet unmutes to where its first job was.
+		if _, ok := e.lastApplied[col]; !ok && len(jobs) > 0 {
+			if level, ok := e.applier.Level(jobs[0]); ok {
+				e.lastApplied[col] = level
+			}
+		}
 	} else {
 		delete(e.muted, col)
 	}
@@ -193,7 +202,6 @@ func (e *Engine) ToggleMute(col int, setup Setup) bool {
 		u = last
 	}
 
-	jobs := setup.Mapping()[col]
 	settle := setup.Speed.Settle()
 	shown := map[string]bool{}
 	for _, job := range jobs {
