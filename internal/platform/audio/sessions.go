@@ -220,6 +220,7 @@ func (a *Audio) endpointVolume(flow uint32) *wca.IAudioEndpointVolume {
 	return vol
 }
 
+// applyMaster unmutes the output too, as the volume keys do.
 func (a *Audio) applyMaster(level float64) {
 	vol := a.endpointVolume(wca.ERender)
 	if vol == nil {
@@ -227,6 +228,12 @@ func (a *Audio) applyMaster(level float64) {
 	}
 	defer vol.Release()
 
+	var muted bool
+	if vol.GetMute(&muted) == nil && muted {
+		if err := vol.SetMute(false, eventCtx); err != nil {
+			a.logOnce("set-master-mute", "Could not unmute the output: "+err.Error())
+		}
+	}
 	if err := vol.SetMasterVolumeLevelScalar(float32(level), eventCtx); err != nil {
 		a.logOnce("set-master-volume", "Could not set the output volume: "+err.Error())
 	}
