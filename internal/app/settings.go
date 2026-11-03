@@ -204,6 +204,7 @@ func (app *App) sendSettingsInit() {
 	payload := app.baseInitFields()
 	payload["tab"] = tab
 	payload["version"] = core.AppVersion
+	payload["updateBusy"] = app.updateBusy()
 	payload["website"] = websiteURL
 	payload["madeBy"] = madeByURL
 	payload["deej"] = deejURL

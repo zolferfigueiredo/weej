@@ -773,6 +773,10 @@ function startSettingsMock(post, enStrings) {
       case "setDevice":
         saveDevice(msg.device, msg.fields || []);
         break;
+      case "checkUpdates":
+        post({ type: "updateBusy", busy: true });
+        setTimeout(() => post({ type: "updateBusy", busy: false }), 1500);
+        break;
       case "addDevice": {
         const id = `d${++init.settings.added}`;
         const controls = [];

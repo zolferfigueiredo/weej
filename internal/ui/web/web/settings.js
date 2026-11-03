@@ -116,7 +116,7 @@ function renderAbout() {
       <h2 class="about-name">WeeJ</h2>
       <p class="about-line about-by">${esc(t("made_by"))} <a href="#" data-action="open-url" data-url="${escAttr(init.madeBy)}">Zolfer Figueiredo</a></p>
       <p class="about-line">${esc(t("version", { version: init.version }))}</p>
-      <button class="btn about-btn" type="button" data-action="check-updates">${esc(t("check"))}</button>
+      <button class="btn about-btn" type="button" data-action="check-updates"${init.updateBusy ? " disabled" : ""}>${esc(t("check"))}</button>
       <hr class="about-sep" />
       <p class="about-line"><a href="#" data-action="open-url" data-url="${escAttr(init.website)}">${esc(t("website"))}</a></p>
       <p class="about-line">${esc(t("liked"))}</p>
@@ -646,6 +646,11 @@ function onMessage(msg) {
     case "login":
       S.init.login = !!msg.on;
       if (S.tab === "general" && !S.dialog) render();
+      break;
+    // Go-initiated: an update is being checked for or installed, or no longer is.
+    case "updateBusy":
+      S.init.updateBusy = !!msg.busy;
+      if (S.tab === "about" && !S.dialog) render();
       break;
     case "saved":
       S.draft = clone(msg.settings);
