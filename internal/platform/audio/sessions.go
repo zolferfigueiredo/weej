@@ -251,9 +251,9 @@ func (a *Audio) applyMic(level float64) {
 	}
 }
 
-// readLevel is where the output's, the input's or an app's volume is now, or -1.
+// readLevel is where a job's volume is now, or -1: the output's, the input's, or that of an app,
+// the one in front or Other apps, from a session of theirs or else where a knob last set it.
 func (a *Audio) readLevel(job core.Job) float64 {
-	var level float32 = -1
 	switch job.Kind {
 	case core.JobMaster, core.JobMicrophone:
 		flow := uint32(wca.ERender)
@@ -265,20 +265,47 @@ func (a *Audio) readLevel(job core.Job) float64 {
 			return -1
 		}
 		defer vol.Release()
+		var level float32
 		if vol.GetMasterVolumeLevelScalar(&level) != nil {
 			return -1
 		}
+		return float64(level)
 	case core.JobApp:
-		a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
-			a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
-				defer vol.Release()
-				var v float32
-				if level < 0 && !info.isSystemSounds && info.exe == job.Exe && vol.GetMasterVolume(&v) == nil {
-					level = v
-				}
-			})
-		})
+		return a.sessionLevel(func(exe string) bool { return exe == job.Exe })
+	case core.JobFocusedApp:
+		focused := a.exeForPID(focusedPID())
+		if focused == "" {
+			return -1
+		}
+		if level := a.sessionLevel(func(exe string) bool { return exe == focused }); level >= 0 {
+			return level
+		}
+		if level, ok := a.volumes.Level(focused, a.selfExe); ok {
+			return level
+		}
+	case core.JobOtherApps:
+		if level := a.sessionLevel(func(exe string) bool { return a.volumes.IsOther(exe, a.selfExe) }); level >= 0 {
+			return level
+		}
+		if level, ok := a.volumes.Others(); ok {
+			return level
+		}
 	}
+	return -1
+}
+
+// sessionLevel is the volume of the first app session whose exe matches, or -1.
+func (a *Audio) sessionLevel(match func(exe string) bool) float64 {
+	var level float32 = -1
+	a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
+		a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
+			defer vol.Release()
+			var v float32
+			if level < 0 && !info.isSystemSounds && info.exe != "" && match(info.exe) && vol.GetMasterVolume(&v) == nil {
+				level = v
+			}
+		})
+	})
 	return float64(level)
 }
 
@@ -320,7 +347,7 @@ func (a *Audio) applySystemSounds(level float64) {
 	})
 }
 
-func (a *Audio) applyApps(level float64, exes map[string]struct{}) {
+func (a *Audio) applyApps(levels map[string]float64) {
 	a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
 		a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
 			defer vol.Release()
@@ -328,43 +355,23 @@ func (a *Audio) applyApps(level float64, exes map[string]struct{}) {
 			if info.isSystemSounds || info.exe == "" {
 				return
 			}
-			if _, ok := exes[info.exe]; ok {
+			if level, ok := levels[info.exe]; ok {
 				a.setSessionVolume(vol, level)
 			}
 		})
 	})
 }
 
-type heldSession struct {
-	exe string
-	vol *wca.ISimpleAudioVolume
-}
-
-func (a *Audio) applyOtherApps(level float64, mapped []string) {
-	var held []heldSession
+func (a *Audio) applyOtherApps(level float64) {
 	a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
 		a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
+			defer vol.Release()
 			a.knownSessions[info.key] = struct{}{}
-			if info.isSystemSounds || info.exe == "" {
-				vol.Release()
-				return
+			if !info.isSystemSounds && info.exe != "" && a.volumes.IsOther(info.exe, a.selfExe) {
+				a.setSessionVolume(vol, level)
 			}
-			held = append(held, heldSession{exe: info.exe, vol: vol})
 		})
 	})
-
-	exes := make([]string, len(held))
-	for i, h := range held {
-		exes[i] = h.exe
-	}
-	others := toSet(core.OtherApps(exes, mapped, a.selfExe))
-
-	for _, h := range held {
-		if _, ok := others[h.exe]; ok {
-			a.setSessionVolume(h.vol, level)
-		}
-		h.vol.Release()
-	}
 }
 
 // pollNewSessions runs every second and on default-device change: any session not seen before
@@ -389,16 +396,8 @@ func (a *Audio) pollNewSessions() {
 			if info.exe == "" {
 				return
 			}
-			if a.haveAppsTarget {
-				if _, ok := a.appsExes[info.exe]; ok {
-					a.setSessionVolume(vol, a.appsLevel)
-					return
-				}
-			}
-			if a.haveOtherAppsTarget {
-				if others := core.OtherApps([]string{info.exe}, a.otherAppsMapped, a.selfExe); len(others) > 0 {
-					a.setSessionVolume(vol, a.otherAppsLevel)
-				}
+			if level, ok := a.volumes.Level(info.exe, a.selfExe); ok {
+				a.setSessionVolume(vol, level)
 			}
 		})
 	})

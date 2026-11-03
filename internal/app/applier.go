@@ -4,6 +4,7 @@ package app
 
 import (
 	"github.com/zolferfigueiredo/weej/internal/core"
+	"github.com/zolferfigueiredo/weej/internal/platform/audio"
 	"github.com/zolferfigueiredo/weej/internal/platform/display"
 )
 
@@ -12,7 +13,13 @@ type applier struct{ app *App }
 func (ap *applier) Apply(job core.Job, s float64) { ap.app.applyJob(job, s) }
 func (ap *applier) HUD(job core.Job, s float64)   { ap.app.showHUD(job, s) }
 
+// Display is none for Focused app with no app in front to turn, WeeJ's own Settings included.
 func (ap *applier) Display(job core.Job) string {
+	if job.Kind == core.JobFocusedApp {
+		if exe, _ := audio.ForegroundApp(); exe == "" {
+			return ""
+		}
+	}
 	if m, ok := ap.app.monitorFor(job); ok {
 		return monitorKey(m)
 	}
@@ -35,11 +42,12 @@ func (app *App) applyJob(job core.Job, s float64) {
 		}
 	case core.JobApp:
 		if app.audio != nil {
-			app.audio.SetApps([]string{job.Exe}, s)
+			app.audio.SetApp(job.Exe, s)
 		}
 	case core.JobOtherApps:
 		if app.audio != nil {
-			app.audio.SetOtherApps(app.activeProfileAppExes(), s)
+			apps, _, _ := core.ActiveAudioJobs(app.snapshotSettings().Devices)
+			app.audio.SetOtherApps(apps, s)
 		}
 	case core.JobFocusedApp:
 		if app.audio != nil {
@@ -70,25 +78,10 @@ func (app *App) applyJob(job core.Job, s float64) {
 	}
 }
 
-// activeProfileAppExes lists the apps every board's active profile turns up and down, which
-// "Other apps" leaves alone.
-func (app *App) activeProfileAppExes() []string {
-	set := map[string]struct{}{}
-	for _, d := range app.snapshotSettings().Devices {
-		if !d.Enabled {
-			continue
-		}
-		for _, row := range d.ActiveProfile().Jobs {
-			for _, j := range row {
-				if j.Kind == core.JobApp {
-					set[j.Exe] = struct{}{}
-				}
-			}
-		}
+// keepAppVolumes tells the audio thread which apps the profiles in use turn, so Other apps and new
+// sessions follow a profile switch or Apply.
+func (app *App) keepAppVolumes(s core.Settings) {
+	if app.audio != nil {
+		app.audio.Keep(core.ActiveAudioJobs(s.Devices))
 	}
-	out := make([]string, 0, len(set))
-	for e := range set {
-		out = append(out, e)
-	}
-	return out
 }

@@ -35,9 +35,20 @@ const (
 	targetFocused
 )
 
+// pendingKey holds a level per app, so two app knobs turned at once both land.
+type pendingKey struct {
+	kind targetKind
+	exe  string
+}
+
 type pendingValue struct {
 	level float64
-	exes  []string // apps: the exe allowlist; otherApps: the mapped list to exclude
+	exes  []string // otherApps: the apps a knob names, which it leaves alone
+}
+
+type keepRequest struct {
+	apps            []string
+	focused, others bool
 }
 
 // Audio owns every COM object behind a single worker goroutine: WASAPI's audio session API
@@ -47,7 +58,8 @@ type Audio struct {
 	log func(string)
 
 	mu      sync.Mutex
-	pending map[targetKind]pendingValue
+	pending map[pendingKey]pendingValue
+	keep    *keepRequest
 	wake    chan struct{}
 
 	queries   chan chan []string
@@ -71,13 +83,7 @@ type Audio struct {
 	haveSystemSoundsTarget bool
 	systemSoundsLevel      float64
 
-	haveAppsTarget bool
-	appsLevel      float64
-	appsExes       map[string]struct{}
-
-	haveOtherAppsTarget bool
-	otherAppsLevel      float64
-	otherAppsMapped     []string
+	volumes core.AppVolumes
 }
 
 func Start(log func(string)) (*Audio, error) {
@@ -87,7 +93,7 @@ func Start(log func(string)) (*Audio, error) {
 
 	a := &Audio{
 		log:           log,
-		pending:       map[targetKind]pendingValue{},
+		pending:       map[pendingKey]pendingValue{},
 		wake:          make(chan struct{}, 1),
 		queries:       make(chan chan []string),
 		levels:        make(chan levelQuery),
@@ -125,32 +131,49 @@ func resolveSelfExe() string {
 	return core.ExeName(exePath)
 }
 
-func (a *Audio) enqueue(kind targetKind, v pendingValue) {
+func (a *Audio) enqueue(key pendingKey, v pendingValue) {
 	a.mu.Lock()
-	a.pending[kind] = v
+	a.pending[key] = v
 	a.mu.Unlock()
+	a.poke()
+}
 
+func (a *Audio) poke() {
 	select {
 	case a.wake <- struct{}{}:
 	default:
 	}
 }
 
-func (a *Audio) SetMaster(s float64) { a.enqueue(targetMaster, pendingValue{level: s}) }
+func (a *Audio) SetMaster(s float64) {
+	a.enqueue(pendingKey{kind: targetMaster}, pendingValue{level: s})
+}
 
-func (a *Audio) SetMic(s float64) { a.enqueue(targetMic, pendingValue{level: s}) }
+func (a *Audio) SetMic(s float64) { a.enqueue(pendingKey{kind: targetMic}, pendingValue{level: s}) }
 
-func (a *Audio) SetSystemSounds(s float64) { a.enqueue(targetSystemSounds, pendingValue{level: s}) }
+func (a *Audio) SetSystemSounds(s float64) {
+	a.enqueue(pendingKey{kind: targetSystemSounds}, pendingValue{level: s})
+}
 
-func (a *Audio) SetApps(exes []string, s float64) {
-	a.enqueue(targetApps, pendingValue{level: s, exes: lowerAll(exes)})
+func (a *Audio) SetApp(exe string, s float64) {
+	a.enqueue(pendingKey{kind: targetApps, exe: strings.ToLower(exe)}, pendingValue{level: s})
 }
 
 func (a *Audio) SetOtherApps(mapped []string, s float64) {
-	a.enqueue(targetOtherApps, pendingValue{level: s, exes: lowerAll(mapped)})
+	a.enqueue(pendingKey{kind: targetOtherApps}, pendingValue{level: s, exes: lowerAll(mapped)})
 }
 
-func (a *Audio) SetFocused(s float64) { a.enqueue(targetFocused, pendingValue{level: s}) }
+func (a *Audio) SetFocused(s float64) {
+	a.enqueue(pendingKey{kind: targetFocused}, pendingValue{level: s})
+}
+
+// Keep tells which apps the profiles in use turn, as core.AppVolumes.Keep takes them.
+func (a *Audio) Keep(apps []string, focused, others bool) {
+	a.mu.Lock()
+	a.keep = &keepRequest{apps: lowerAll(apps), focused: focused, others: others}
+	a.mu.Unlock()
+	a.poke()
+}
 
 // MicState is the default microphone after a mute: OK is false when there is none.
 type MicState struct {
@@ -197,8 +220,8 @@ type levelQuery struct {
 	resp chan float64
 }
 
-// Level is where a job's volume is now, 0 to 1: the output's, the input's or an app's. It can't
-// tell any other job's, nor an app's with no sound open.
+// Level is where a job's volume is now, 0 to 1, as readLevel finds it. It can't tell any other
+// job's, nor an app's with no sound open that no knob has set.
 func (a *Audio) Level(job core.Job) (float64, bool) {
 	q := levelQuery{job: job, resp: make(chan float64, 1)}
 	select {
@@ -265,35 +288,44 @@ func (a *Audio) run() {
 	}
 }
 
+// drainPending applies apps before Other apps and Focused app last, so an app Focused app turns
+// is no longer one of Other apps by the next turn.
 func (a *Audio) drainPending() {
 	a.mu.Lock()
-	snapshot := a.pending
-	a.pending = map[targetKind]pendingValue{}
+	snapshot, keep := a.pending, a.keep
+	a.pending, a.keep = map[pendingKey]pendingValue{}, nil
 	a.mu.Unlock()
 
-	for kind, v := range snapshot {
-		switch kind {
-		case targetMaster:
-			a.applyMaster(v.level)
-		case targetMic:
-			a.applyMic(v.level)
-		case targetSystemSounds:
-			a.haveSystemSoundsTarget = true
-			a.systemSoundsLevel = v.level
-			a.applySystemSounds(v.level)
-		case targetApps:
-			a.haveAppsTarget = true
-			a.appsLevel = v.level
-			a.appsExes = toSet(v.exes)
-			a.applyApps(v.level, a.appsExes)
-		case targetOtherApps:
-			a.haveOtherAppsTarget = true
-			a.otherAppsLevel = v.level
-			a.otherAppsMapped = v.exes
-			a.applyOtherApps(v.level, v.exes)
-		case targetFocused:
-			a.applyFocused(v.level)
+	if keep != nil {
+		a.volumes.Keep(keep.apps, keep.focused, keep.others)
+	}
+	if v, ok := snapshot[pendingKey{kind: targetMaster}]; ok {
+		a.applyMaster(v.level)
+	}
+	if v, ok := snapshot[pendingKey{kind: targetMic}]; ok {
+		a.applyMic(v.level)
+	}
+	if v, ok := snapshot[pendingKey{kind: targetSystemSounds}]; ok {
+		a.haveSystemSoundsTarget = true
+		a.systemSoundsLevel = v.level
+		a.applySystemSounds(v.level)
+	}
+	apps := map[string]float64{}
+	for k, v := range snapshot {
+		if k.kind == targetApps {
+			apps[k.exe] = v.level
+			a.volumes.Set(k.exe, v.level)
 		}
+	}
+	if len(apps) > 0 {
+		a.applyApps(apps)
+	}
+	if v, ok := snapshot[pendingKey{kind: targetOtherApps}]; ok {
+		a.volumes.SetOthers(v.exes, v.level)
+		a.applyOtherApps(v.level)
+	}
+	if v, ok := snapshot[pendingKey{kind: targetFocused}]; ok {
+		a.applyFocused(v.level)
 	}
 }
 

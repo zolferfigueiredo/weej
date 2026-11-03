@@ -64,6 +64,7 @@ func (app *App) setup(l *winui.Loop) {
 	l.Hotkeys().OnHotkey(app.onHotkey)
 	app.registerHotkeys(settings)
 	app.syncRunners(settings.Devices)
+	app.keepAppVolumes(settings)
 	app.applyLights(settings.Devices)
 	// A first start has no boards yet, so Settings opens on setting them up.
 	if len(settings.Devices) == 0 && webOK {

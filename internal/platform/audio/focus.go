@@ -3,6 +3,7 @@
 package audio
 
 import (
+	"os"
 	"sync"
 
 	wca "github.com/moutend/go-wca/pkg/wca"
@@ -15,11 +16,13 @@ import (
 // session, so the real app has to be found among its child windows.
 const applicationFrameHost = "applicationframehost.exe"
 
+// applyFocused turns the app in front, which then keeps its level once another comes to front.
 func (a *Audio) applyFocused(level float64) {
-	exe := a.exeForPID(foregroundPID())
+	exe := a.exeForPID(focusedPID())
 	if exe == "" {
 		return
 	}
+	a.volumes.Set(exe, level)
 
 	a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
 		a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
@@ -35,11 +38,19 @@ func (a *Audio) applyFocused(level float64) {
 // ForegroundApp is the app in front, its exe name and full path, worked out when asked rather than
 // at the audio thread's last turn, so the HUD shows the app that is in front now.
 func ForegroundApp() (exe, path string) {
-	path = processImagePath(foregroundPID())
+	path = processImagePath(focusedPID())
 	if path == "" {
 		return "", ""
 	}
 	return core.ExeName(path), path
+}
+
+// focusedPID is the app Focused app turns, none while WeeJ itself is in front.
+func focusedPID() uint32 {
+	if pid := foregroundPID(); pid != uint32(os.Getpid()) {
+		return pid
+	}
+	return 0
 }
 
 func foregroundPID() uint32 {

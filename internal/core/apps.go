@@ -72,20 +72,96 @@ var KnownApps = []KnownApp{
 	{Exe: "steam.exe", Name: "Steam", Aliases: []string{"steamwebhelper.exe"}},
 }
 
-func OtherApps(sessionExes, mapped []string, self string) []string {
-	mappedSet := map[string]bool{}
-	for _, m := range mapped {
-		mappedSet[strings.ToLower(m)] = true
-	}
-	selfLower := strings.ToLower(self)
+// AppVolumes is where the knobs last set each app's volume and Other apps', so a session that
+// opens later gets its level. Exes are lowercase.
+type AppVolumes struct {
+	apps       map[string]float64
+	others     float64
+	haveOthers bool
+	// mapped is the apps a knob of the profiles in use names, which Other apps leaves alone even
+	// before their knob turns.
+	mapped map[string]bool
+}
 
-	var out []string
-	for _, exe := range sessionExes {
-		lower := strings.ToLower(exe)
-		if lower == selfLower || mappedSet[lower] {
+func (v *AppVolumes) Set(exe string, s float64) {
+	if v.apps == nil {
+		v.apps = map[string]float64{}
+	}
+	v.apps[strings.ToLower(exe)] = s
+}
+
+func (v *AppVolumes) SetOthers(mapped []string, s float64) {
+	v.others, v.haveOthers = s, true
+	v.mapped = map[string]bool{}
+	for _, exe := range mapped {
+		v.mapped[strings.ToLower(exe)] = true
+	}
+}
+
+// Keep forgets the apps no profile in use names any more, but for the ones Focused app turned while
+// a profile has it, and Other apps' level once none has it.
+func (v *AppVolumes) Keep(apps []string, focused, others bool) {
+	named := map[string]bool{}
+	for _, exe := range apps {
+		named[strings.ToLower(exe)] = true
+	}
+	v.mapped = named
+	if !focused {
+		for exe := range v.apps {
+			if !named[exe] {
+				delete(v.apps, exe)
+			}
+		}
+	}
+	if !others {
+		v.haveOthers = false
+	}
+}
+
+// IsOther tells whether Other apps turns exe: an app with no volume of its own, neither a knob's
+// nor one Focused app gave it, and never WeeJ.
+func (v *AppVolumes) IsOther(exe, self string) bool {
+	exe = strings.ToLower(exe)
+	_, own := v.apps[exe]
+	return exe != strings.ToLower(self) && !own && !v.mapped[exe]
+}
+
+// Level is the volume a session of exe should have: its own, or Other apps' when it is one of them.
+func (v *AppVolumes) Level(exe, self string) (float64, bool) {
+	if s, ok := v.apps[strings.ToLower(exe)]; ok {
+		return s, true
+	}
+	if v.haveOthers && v.IsOther(exe, self) {
+		return v.others, true
+	}
+	return 0, false
+}
+
+func (v *AppVolumes) Others() (float64, bool) { return v.others, v.haveOthers }
+
+// ActiveAudioJobs is what the profiles in use do with apps: the apps a knob names, and whether one
+// has Focused app or Other apps.
+func ActiveAudioJobs(devices []Device) (apps []string, focused, others bool) {
+	seen := map[string]bool{}
+	for _, d := range devices {
+		if !d.Enabled {
 			continue
 		}
-		out = append(out, exe)
+		for _, row := range d.ActiveProfile().Jobs {
+			for _, j := range row {
+				switch j.Kind {
+				case JobApp:
+					if !seen[j.Exe] {
+						seen[j.Exe] = true
+						apps = append(apps, j.Exe)
+					}
+				case JobFocusedApp:
+					focused = true
+				case JobOtherApps:
+					others = true
+				}
+			}
+		}
 	}
-	return out
+	return apps, focused, others
 }
