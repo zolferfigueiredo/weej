@@ -9,6 +9,12 @@
 #ifndef SourceExe
   #define SourceExe "..\build\WeeJ.exe"
 #endif
+; VersionInfoVersion takes digits only, so a beta's 2.7.0-beta.1 gives 2.7.0 there.
+#if Pos("-", AppVersion) > 0
+  #define NumVersion Copy(AppVersion, 1, Pos("-", AppVersion) - 1)
+#else
+  #define NumVersion AppVersion
+#endif
 
 [Setup]
 AppId={{82E4CB37-0DB9-4E44-B883-8C04E719EA7D}
@@ -37,7 +43,7 @@ OutputDir=..\dist
 SetupIconFile=..\winres\weej.ico
 UninstallDisplayIcon={app}\WeeJ.exe
 UninstallDisplayName=WeeJ
-VersionInfoVersion={#AppVersion}.0
+VersionInfoVersion={#NumVersion}.0
 WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
