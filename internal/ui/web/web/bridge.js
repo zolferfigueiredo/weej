@@ -813,7 +813,7 @@ function startSettingsMock(post, enStrings) {
           });
           saveDevice(wizardDevice, ["controls"]);
         }
-        if (msg.op === "finish" || msg.op === "cancel") post({ type: "wizard", device: wizardDevice && wizardDevice.id, end: true });
+        if (msg.op === "finish" || msg.op === "cancel") post({ type: "wizard", device: wizardDevice && wizardDevice.id, end: true, finished: msg.op === "finish" });
         break;
       case "listPorts":
         setTimeout(() => {

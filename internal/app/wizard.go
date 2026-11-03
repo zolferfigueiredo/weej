@@ -191,6 +191,6 @@ func (app *App) endWizard(apply bool) {
 		}
 	}
 	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "wizard", "device": w.device, "end": true})
+		win.Send(map[string]any{"type": "wizard", "device": w.device, "end": true, "finished": apply})
 	}
 }

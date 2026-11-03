@@ -373,10 +373,13 @@ function onClick(e) {
       break;
     case "add-profile":
       if (d) {
-        const p = { name: "", jobs: d.controls.map(() => []), buttons: {}, shortcut: null };
-        d.profiles.push(p);
+        const name = t("profile_n", { n: String(d.profiles.length + 1) });
+        d.profiles.push({ name, jobs: d.controls.map(() => []), buttons: {}, shortcut: null });
         d.profile = d.profiles.length - 1;
+        S.dialog = { kind: "profile", id: d.id };
         render();
+        const input = document.getElementById("profile-name");
+        if (input) input.select();
       }
       break;
     case "remove-profile":
@@ -738,7 +741,11 @@ function onMessage(msg) {
       if (msg.end) {
         S.wizard = null;
         if (S.dialog && S.dialog.kind === "wizard") S.dialog = null;
-        nextInSetup();
+        if (S.setup) nextInSetup();
+        else if (msg.finished && msg.device) {
+          S.board = msg.device;
+          S.tab = "boards";
+        }
         render();
         break;
       }
