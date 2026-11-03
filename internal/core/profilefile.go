@@ -36,20 +36,26 @@ func EncodeProfileFile(t DeviceType, p DeviceProfile) ([]byte, error) {
 	}, "", "  ")
 }
 
-// DecodeProfileFile reads a file Export wrote as a profile of board d. Jobs go by control; the
-// buttons only come along from a board of the same type, since each type keys them its own way.
-// A file made on another system leaves out what only works there: the jobs TheeJ keeps under
-// "theej" for itself, named in skipped, and the actions that open or close an app or press keys,
-// which name that system's apps and keys, by button in dropped.
+// DecodeProfileFile reads a file Export wrote as a profile of board d. Jobs go by control, never
+// onto a button, where they are named in skipped; the buttons only come along from a board of the
+// same type, since each type keys them its own way. A file made on another system leaves out what
+// only works there: the jobs TheeJ keeps under "theej" for itself, named in skipped, and the
+// actions that open or close an app or press keys, which name that system's apps and keys, by
+// button in dropped.
 func DecodeProfileFile(data []byte, d Device, tr Translate) (p DeviceProfile, skipped []string, dropped ButtonMap, ok bool) {
 	var f profileFileJSON
 	if err := json.Unmarshal(data, &f); err != nil || f.Kind != profileFileKind {
 		return DeviceProfile{}, nil, nil, false
 	}
 	sameType := f.Type == string(d.Type)
-	p = profileFor(f.Profile, d, sameType)
+	p, onButtons := profileFor(f.Profile, d, sameType)
+	for _, job := range onButtons {
+		if name := job.Title(tr, nil); !slices.Contains(skipped, name) {
+			skipped = append(skipped, name)
+		}
+	}
 	if f.Platform == "" || f.Platform == profileFilePlatform {
-		return p, nil, nil, true
+		return p, skipped, nil, true
 	}
 	// Read apart from the profile: a Mac's keys don't fit a Windows shortcut, so ButtonMap drops
 	// them before they could be named.
@@ -130,20 +136,28 @@ func DecodeProfile(data []byte, d Device) (DeviceProfile, bool) {
 	if err := json.Unmarshal(data, &pj); err != nil {
 		return DeviceProfile{}, false
 	}
-	return profileFor(pj, d, true), true
+	p, _ := profileFor(pj, d, true)
+	return p, true
 }
 
-func profileFor(pj profileJSON, d Device, buttons bool) DeviceProfile {
+// profileFor is pj as a profile of board d, and the jobs it had on what is a button of d.
+func profileFor(pj profileJSON, d Device, buttons bool) (DeviceProfile, []Job) {
 	p := d.NewProfile(pj.Name)
+	var onButtons []Job
 	for i := range p.Jobs {
-		if i < len(pj.Jobs) && pj.Jobs[i] != nil {
-			p.Jobs[i] = pj.Jobs[i]
+		if i >= len(pj.Jobs) || pj.Jobs[i] == nil {
+			continue
 		}
+		if d.Controls[i].Kind == KindButton {
+			onButtons = append(onButtons, pj.Jobs[i]...)
+			continue
+		}
+		p.Jobs[i] = pj.Jobs[i]
 	}
 	if buttons && pj.Buttons != nil {
 		p.Buttons = pj.Buttons
 	}
-	return p
+	return p, onButtons
 }
 
 // DeejProfile is a deej config as a profile of board d. Each slider's jobs go to the knob or
@@ -169,5 +183,14 @@ func DeejProfile(imp Import, d Device) (DeviceProfile, []string) {
 		}
 		p.Jobs[k] = append(p.Jobs[k], imp.Jobs[i]...)
 	}
+	seen := map[string]bool{}
+	skipped = slices.DeleteFunc(skipped, func(s string) bool {
+		lower := strings.ToLower(s)
+		if seen[lower] {
+			return true
+		}
+		seen[lower] = true
+		return false
+	})
 	return p, skipped
 }

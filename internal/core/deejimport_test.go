@@ -116,3 +116,25 @@ invert_sliders: false
 		t.Errorf("Skipped = %v, want the device name", imp.Skipped)
 	}
 }
+
+func TestImportDeejLeavesOutEmptyEntriesAndScreensItCantHave(t *testing.T) {
+	yaml := `
+slider_mapping:
+  0:
+  1:
+    -
+    - monitor 0 (brightness)
+    - monitor 16 (brightness)
+    - monitor 17 (brightness)
+`
+	imp, err := ImportDeej([]byte(yaml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(imp.Skipped, []string{"monitor 0 (brightness)", "monitor 17 (brightness)"}) {
+		t.Errorf("Skipped = %v, want the two screens out of range and no blanks", imp.Skipped)
+	}
+	if len(imp.Jobs) != 2 || len(imp.Jobs[0]) != 0 || !jobSlicesEqual(imp.Jobs[1], []Job{{Kind: JobBrightness, Screen: 15}}) {
+		t.Errorf("Jobs = %v, want nothing on slider 0 and screen 16 on slider 1", imp.Jobs)
+	}
+}
