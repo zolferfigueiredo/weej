@@ -2,4 +2,4 @@ package core
 
 const AppName = "WeeJ"
 
-const AppVersion = "2.5.2"
+const AppVersion = "2.7.0-beta.1"
