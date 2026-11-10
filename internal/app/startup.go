@@ -43,13 +43,10 @@ func (app *App) setup(l *winui.Loop) {
 	}
 
 	app.printStartupSummary()
-	if app.debug.On() {
-		app.trace("start", "WeeJ %s started, debug log on", core.AppVersion)
-		app.printSetup(func(s string) { app.trace("setup", "%s", s) })
-	}
+	app.note("WeeJ %s started", core.AppVersion)
 	app.refreshInstalled()
 
-	audioW, err := audio.Start(app.log, app.debug)
+	audioW, err := audio.Start(app.log, app.changes)
 	if err != nil {
 		app.log("Could not start the audio worker: " + err.Error())
 	}

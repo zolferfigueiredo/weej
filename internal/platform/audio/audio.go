@@ -85,12 +85,12 @@ type Audio struct {
 
 	volumes core.AppVolumes
 
-	tracer Tracer
-	// seen is each level as WeeJ last set or saw it, so the debug log can tell another app's change.
+	changes ChangeLog
+	// seen is each level as WeeJ last set or saw it, so the change log can tell another app's change.
 	seen map[string]float32
 }
 
-func Start(log func(string), tracer Tracer) (*Audio, error) {
+func Start(log func(string), changes ChangeLog) (*Audio, error) {
 	if log == nil {
 		log = func(string) {}
 	}
@@ -110,7 +110,7 @@ func Start(log func(string), tracer Tracer) (*Audio, error) {
 		knownSessions: map[string]struct{}{},
 		loggedOnce:    map[string]bool{},
 		selfExe:       resolveSelfExe(),
-		tracer:        tracer,
+		changes:       changes,
 		seen:          map[string]float32{},
 	}
 
@@ -284,7 +284,9 @@ func (a *Audio) run() {
 			a.pollNewSessions()
 			a.watchOutside()
 		case <-a.deviceChanged:
-			a.tracef("the default output or input changed")
+			if a.noting() {
+				a.changes.Note("The default speaker or microphone changed, in Windows")
+			}
 			a.pollNewSessions()
 		case respCh := <-a.queries:
 			respCh <- a.computePlaying()
@@ -305,7 +307,6 @@ func (a *Audio) drainPending() {
 	a.mu.Unlock()
 
 	if keep != nil {
-		a.tracef("profiles in use turn apps %v, Focused app %v, Other apps %v", keep.apps, keep.focused, keep.others)
 		a.volumes.Keep(keep.apps, keep.focused, keep.others)
 	}
 	if v, ok := snapshot[pendingKey{kind: targetMaster}]; ok {

@@ -1,10 +1,8 @@
 package core
 
 import (
-	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -166,22 +164,18 @@ func TestEngineJobWithNoDisplayLeavesItToTheNext(t *testing.T) {
 	}
 }
 
-func TestEngineTracesWhatItMakesOfEachReading(t *testing.T) {
+func TestEngineTellsOnlyOfMovesThatChangeJobs(t *testing.T) {
 	e := NewEngine(&fakeApplier{})
-	var lines []string
-	e.Trace = func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) }
+	type change struct{ from, to float64 }
+	var got []change
+	e.Changed = func(_ int, from, to float64, _ []Job) { got = append(got, change{from, to}) }
 	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}, Speed: SpeedSuperFast}
-	for _, v := range []int{512, 512, 515, 515, 515, 700, 700} {
+	for _, v := range []int{0, 0, 3, 1023, 1023} {
 		e.Handle([]int{v}, setup, false)
 	}
-	want := []string{"first reading", "under 1%", "applied to master"}
-	if len(lines) != len(want) {
-		t.Fatalf("trace = %q, want one line per reading that changed", lines)
-	}
-	for i, w := range want {
-		if !strings.Contains(lines[i], "control 0") || !strings.Contains(lines[i], w) {
-			t.Errorf("trace line %d = %q, want control 0 and %q", i, lines[i], w)
-		}
+	e.ToggleMute(0, setup)
+	if !reflect.DeepEqual(got, []change{{0, 1}, {1, 0}}) {
+		t.Errorf("changes = %v, want the turn to the top and the mute: not the first reading, a jitter or a repeat", got)
 	}
 }
 

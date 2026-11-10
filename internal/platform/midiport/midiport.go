@@ -130,8 +130,6 @@ type Config struct {
 	Log func(string)
 	// Seed is where a knob not heard from yet starts (core.MixerState.Seed).
 	Seed func(col int) (int, bool)
-	// Trace, when set, sees every message that comes in, and whether it was kept.
-	Trace func(format string, args ...any)
 }
 
 // Port is one MIDI board: its input and output, the mode it is in, and its lights.
@@ -389,13 +387,7 @@ func (p *Port) stream(ctx context.Context, ch <-chan uint32, reconnect <-chan st
 					lights.update()
 				}
 				if cfg.SMC && !guard.Pass(m, time.Since(lights.start0).Seconds(), lights.last.Sub(lights.start0).Seconds()) {
-					if cfg.Trace != nil {
-						cfg.Trace("%06x dropped as the lights' drift", m)
-					}
 					return
-				}
-				if cfg.Trace != nil {
-					cfg.Trace("%06x", m)
 				}
 				c, pressed := state.Feed(m)
 				changed = changed || c

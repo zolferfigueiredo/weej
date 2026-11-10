@@ -6,7 +6,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -36,9 +35,6 @@ type runner struct {
 	moves     core.MoveWatcher
 	buttons   core.ButtonWatcher
 	live      liveFrames
-	// traced is the last frame the debug log wrote, so it writes one only when a value changes.
-	// The board's loop only.
-	traced []int
 }
 
 // runnerKey is what a runner was started with: a change to any of it starts the board again.
@@ -145,7 +141,7 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 		id: id, key: key, engine: core.NewEngine(&applier{app: app}),
 		cancel: cancel, done: make(chan struct{}), reconnect: make(chan struct{}, 1),
 	}
-	r.engine.Trace = func(format string, args ...any) { app.trace(id+" engine", format, args...) }
+	r.engine.Changed = func(col int, from, to float64, jobs []core.Job) { app.noteControl(id, col, from, to, jobs) }
 	go func() {
 		defer close(r.done)
 		if prev != nil {
@@ -175,7 +171,6 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 			SMC:      key.typ == core.DeviceSMC,
 			Log:      app.log,
 			Seed:     func(col int) (int, bool) { return app.knobStart(r, col) },
-			Trace:    func(format string, args ...any) { app.trace(id+" midi", format, args...) },
 		})
 		if d, ok := app.device(id); ok {
 			port.SetLights(d.Lights)
@@ -206,7 +201,6 @@ func (app *App) knobStart(r *runner, col int) (int, bool) {
 		if !ok {
 			u, ok = r.engine.Last(k)
 		}
-		app.trace(r.id+" knob", "control %d starts at %.3f, found %v", k, u, ok)
 		return d.RawAt(k, u), ok
 	}
 	return 0, false
@@ -225,10 +219,17 @@ func (app *App) portsOfOtherBoards(id string, midi bool) []string {
 }
 
 func (app *App) onRunnerStatus(r *runner, id string, connected, busy bool, port string) {
-	app.trace(id+" status", "connected %v, port in use %v, port %q", connected, busy, port)
 	r.mu.Lock()
+	was := r.connected
 	r.connected, r.busy, r.port = connected, busy, port
 	r.mu.Unlock()
+	if d, ok := app.device(id); ok && connected != was {
+		if connected {
+			app.note("%s connected on %s", d.Name, port)
+		} else {
+			app.note("%s disconnected", d.Name)
+		}
+	}
 	if !connected {
 		r.engine.Reset()
 		r.mu.Lock()
@@ -257,10 +258,6 @@ func (app *App) onRawFrame(r *runner, raw []int) {
 		w.feed(raw)
 	}
 	norm := d.Normalize(raw)
-	if app.debug.On() && !slices.Equal(raw, r.traced) {
-		app.trace(r.id+" frame", "raw %v, as controls %v, calibrating %v", raw, norm, calibrating)
-		r.traced = slices.Clone(raw)
-	}
 	r.engine.Handle(norm, d.EngineSetup(), calibrating)
 	app.showValues(r, d.Normalize(raw))
 	if calibrating {
@@ -304,7 +301,7 @@ func (app *App) onButton(r *runner, d core.Device, key int) {
 		names = []string{"empty"}
 	}
 	app.log(fmt.Sprintf("%s button %d pressed: %s", d.Name, key, strings.Join(names, ", ")))
-	app.trace(d.ID+" button", "%d pressed: %s", key, strings.Join(names, ", "))
+	app.note("%s, button %d pressed: %s", d.Name, key, strings.Join(names, ", "))
 	for _, action := range actions {
 		app.runButtonAction(action, r, d, key)
 	}
@@ -445,7 +442,7 @@ func (app *App) setProfiles(targets []core.HotkeyTarget) {
 		if next < 0 || next >= len(d.Profiles) {
 			continue
 		}
-		app.trace(d.ID+" profile", "%d to %d", d.Active, next)
+		app.note("%s: profile %s to %s", d.Name, app.displayProfileName(d.ActiveProfile(), d.Active), app.displayProfileName(d.Profiles[next], next))
 		app.leaveProfile(*d)
 		d.Active = next
 		if hud == nil {

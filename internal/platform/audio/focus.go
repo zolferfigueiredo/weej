@@ -20,7 +20,6 @@ const applicationFrameHost = "applicationframehost.exe"
 func (a *Audio) applyFocused(level float64) {
 	exe := a.exeForPID(focusedPID())
 	if exe == "" {
-		a.tracef("Focused app knob at %.3f left alone: no app in front, or WeeJ", level)
 		return
 	}
 	a.volumes.Set(exe, level)
@@ -31,7 +30,7 @@ func (a *Audio) applyFocused(level float64) {
 			if info.isSystemSounds || info.exe != exe {
 				return
 			}
-			a.setSessionVolume(info, vol, level, "Focused app knob")
+			a.setSessionVolume(info, vol, level, "the Focused app knob")
 		})
 	})
 }

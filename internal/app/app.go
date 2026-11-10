@@ -47,8 +47,8 @@ type App struct {
 	testNotifications bool
 
 	log func(string)
-	// debug is the debug log, written only while its switch in Settings is on.
-	debug *debugLog
+	// changes is the change log, written only while its switch in Settings is on.
+	changes *changeLog
 
 	startTime time.Time
 
@@ -160,7 +160,7 @@ func Main(args []string) int {
 		updateSiteFlag:    flags.updateSite,
 		testNotifications: flags.testNotifications,
 		log:               lg.Log,
-		debug:             newDebugLog(debugDir()),
+		changes:           newChangeLog(changeDir()),
 		startTime:         time.Now(),
 		appName:           map[string]string{},
 		appPath:           map[string]string{},
@@ -169,12 +169,9 @@ func Main(args []string) int {
 		appMissAt:         map[string]time.Time{},
 	}
 
-	defer app.debug.Close()
+	defer app.changes.Close()
 	return winui.Run(app.setup)
 }
-
-// trace writes to the debug log while its switch is on.
-func (app *App) trace(tag, format string, args ...any) { app.debug.Trace(tag, format, args...) }
 
 type parsedFlags struct {
 	forcedPort        string

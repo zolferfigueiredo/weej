@@ -4,7 +4,6 @@ import (
 	"math"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -59,39 +58,14 @@ type Engine struct {
 	// A muted column keeps recording its position, so unmuting puts it back where it now is.
 	muted map[int]bool
 	lines []Line
-	// Trace, when set, is told what the engine makes of each reading that changed, and why.
-	Trace func(format string, args ...any)
-	// traced is each column's reading as last traced, so a reading that comes back the same isn't.
-	traced map[int]int
+	// Changed, when set, hears of each control that changes its jobs: from where to where.
+	Changed func(col int, from, to float64, jobs []Job)
 }
 
-func (e *Engine) tracef(format string, args ...any) {
-	if e.Trace != nil {
-		e.Trace(format, args...)
+func (e *Engine) changed(col int, from, to float64, jobs []Job) {
+	if e.Changed != nil {
+		e.Changed(col, from, to, jobs)
 	}
-}
-
-// fresh tells whether a column's reading differs from the one last traced, and notes it.
-func (e *Engine) fresh(col, raw int) bool {
-	if e.Trace == nil {
-		return false
-	}
-	if last, ok := e.traced[col]; ok && last == raw {
-		return false
-	}
-	if e.traced == nil {
-		e.traced = map[int]int{}
-	}
-	e.traced[col] = raw
-	return true
-}
-
-func jobKeys(jobs []Job) string {
-	keys := make([]string, len(jobs))
-	for i, j := range jobs {
-		keys[i] = jobKey(j)
-	}
-	return strings.Join(keys, ", ")
 }
 
 func NewEngine(a Applier) *Engine {
@@ -103,7 +77,6 @@ func (e *Engine) Reset() {
 	defer e.mu.Unlock()
 	e.lastApplied = map[int]float64{}
 	e.muted = map[int]bool{}
-	e.traced = nil
 }
 
 func jobKey(job Job) string {
@@ -139,20 +112,13 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 		}
 
 		jobs, mapped := mapping[index]
-		previous, ok := e.lastApplied[index]
-		fresh := e.fresh(index, raw)
 		if calibrating || !mapped {
-			if fresh {
-				e.tracef("control %d: %d (%.3f), not applied: calibrating %v, no job %v", index, raw, u, calibrating, !mapped)
-			}
 			e.lastApplied[index] = u
 			continue
 		}
 		// The first reading after a connect is only a baseline, so nothing changes until a turn.
+		previous, ok := e.lastApplied[index]
 		if !ok {
-			if fresh {
-				e.tracef("control %d: %d (%.3f), first reading, kept as the baseline", index, raw, u)
-			}
 			e.lastApplied[index] = u
 			continue
 		}
@@ -161,17 +127,13 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 			continue
 		}
 		if !extreme && math.Abs(u-previous) < 0.01 {
-			if fresh {
-				e.tracef("control %d: %.3f to %.3f (%d), under 1%%, ignored", index, previous, u, raw)
-			}
 			continue
 		}
 		e.lastApplied[index] = u
 		if e.muted[index] {
-			e.tracef("control %d: %.3f to %.3f (%d), muted, held", index, previous, u, raw)
 			continue
 		}
-		e.tracef("control %d: %.3f to %.3f (%d), applied to %s", index, previous, u, raw, jobKeys(jobs))
+		e.changed(index, previous, u, jobs)
 
 		for _, job := range jobs {
 			e.apply(job, u, settle)
@@ -214,7 +176,7 @@ func (e *Engine) UnmuteAll(setup Setup) int {
 	settle := setup.Speed.Settle()
 	for col := range e.muted {
 		if last, ok := e.lastApplied[col]; ok {
-			e.tracef("control %d: unmuted with the others, back to %.3f, applied to %s", col, last, jobKeys(mapping[col]))
+			e.changed(col, 0, last, mapping[col])
 			for _, job := range mapping[col] {
 				e.apply(job, last, settle)
 			}
@@ -245,12 +207,13 @@ func (e *Engine) ToggleMute(col int, setup Setup) bool {
 	if !muted {
 		last, ok := e.lastApplied[col]
 		if !ok {
-			e.tracef("control %d: unmuted, never heard from, left as it is", col)
 			return false
 		}
 		u = last
+		e.changed(col, 0, u, jobs)
+	} else {
+		e.changed(col, e.lastApplied[col], 0, jobs)
 	}
-	e.tracef("control %d: muted %v, set to %.3f, applied to %s", col, muted, u, jobKeys(jobs))
 
 	settle := setup.Speed.Settle()
 	shown := map[string]bool{}

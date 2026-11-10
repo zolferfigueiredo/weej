@@ -60,12 +60,12 @@ export function renderGeneral() {
           </div>
           <div class="row">
             <div class="row-main">
-              <span class="row-title">${esc(t("debug_log"))}</span>
-              <span class="row-desc">${esc(t("debug_log.note"))}</span>
+              <span class="row-title">${esc(t("change_log"))}</span>
+              <span class="row-desc">${esc(t("change_log.note"))}</span>
             </div>
             <div class="row-control">
-              <button class="btn" type="button" data-action="open-debug-folder">${esc(t("debug_log.open"))}</button>
-              <input class="toggle" id="debug-log" type="checkbox" role="switch"${S.init.debugLog ? " checked" : ""} />
+              <button class="btn" type="button" data-action="open-change-folder">${esc(t("change_log.open"))}</button>
+              <input class="toggle" id="change-log" type="checkbox" role="switch"${S.init.changeLog ? " checked" : ""} />
             </div>
           </div>
         </div>

@@ -457,8 +457,8 @@ function onClick(e) {
     case "check-updates":
       send({ type: "checkUpdates" });
       break;
-    case "open-debug-folder":
-      send({ type: "openDebugFolder" });
+    case "open-change-folder":
+      send({ type: "openChangeFolder" });
       break;
     case "open-url":
       e.preventDefault();
@@ -545,8 +545,8 @@ function onChange(e) {
     case "login":
       send({ type: "setLogin", on: el.checked });
       break;
-    case "debug-log":
-      send({ type: "setDebugLog", on: el.checked });
+    case "change-log":
+      send({ type: "setChangeLog", on: el.checked });
       break;
     case "show-icon":
       S.draft.hideTrayIcon = !el.checked;
@@ -653,8 +653,8 @@ function onMessage(msg) {
       S.init.login = !!msg.on;
       if (S.tab === "general" && !S.dialog) render();
       break;
-    case "debugLog":
-      S.init.debugLog = !!msg.on;
+    case "changeLog":
+      S.init.changeLog = !!msg.on;
       if (S.tab === "general" && !S.dialog) render();
       break;
     // Go-initiated: an update is being checked for or installed, or no longer is.

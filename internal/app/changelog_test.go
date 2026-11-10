@@ -13,9 +13,9 @@ func TestClearBeforeKeepsOnlyWhatCameAfter(t *testing.T) {
 	dir := t.TempDir()
 	boot := time.Now().Add(-time.Hour)
 	for name, mod := range map[string]time.Time{
-		"old.log":   boot.Add(-time.Minute),
-		debugMarker: boot.Add(-time.Minute),
-		"new.log":   boot.Add(time.Minute),
+		"old.log":    boot.Add(-time.Minute),
+		changeMarker: boot.Add(-time.Minute),
+		"new.log":    boot.Add(time.Minute),
 	} {
 		path := filepath.Join(dir, name)
 		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
@@ -32,24 +32,24 @@ func TestClearBeforeKeepsOnlyWhatCameAfter(t *testing.T) {
 	}
 }
 
-func TestDebugLogWritesOnlyWhileOn(t *testing.T) {
-	d := newDebugLog(t.TempDir())
-	d.Trace("test", "before")
+func TestChangeLogWritesOnlyWhileOn(t *testing.T) {
+	d := newChangeLog(t.TempDir())
+	d.Note("before")
 	if err := d.Set(true); err != nil {
 		t.Fatal(err)
 	}
-	d.Trace("test", "level %.3f", 0.5)
+	d.Note("Speaker volume: %d%% to %d%%", 71, 55)
 	if err := d.Set(false); err != nil {
 		t.Fatal(err)
 	}
-	d.Trace("test", "after")
+	d.Note("after")
 
 	entries, _ := os.ReadDir(d.dir)
 	if len(entries) != 1 {
 		t.Fatalf("folder holds %v, want one log and no switch", entries)
 	}
 	data, _ := os.ReadFile(filepath.Join(d.dir, entries[0].Name()))
-	if got := string(data); len(got) < 20 || got[13:] != "[test] level 0.500\n" {
+	if got := string(data); len(got) < 20 || got[14:] != "Speaker volume: 71% to 55%\n" {
 		t.Errorf("log = %q, want only the line written while on", got)
 	}
 }
