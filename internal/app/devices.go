@@ -141,6 +141,7 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 		id: id, key: key, engine: core.NewEngine(&applier{app: app}),
 		cancel: cancel, done: make(chan struct{}), reconnect: make(chan struct{}, 1),
 	}
+	r.engine.Trace = func(format string, args ...any) { app.trace(id+" engine", format, args...) }
 	go func() {
 		defer close(r.done)
 		if prev != nil {
@@ -155,6 +156,7 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 				ForcedPort: key.port,
 				Baud:       key.baud,
 				OnLine:     func(values []int) { app.onRawFrame(r, values) },
+				OnBytes:    func(b []byte) { app.trace(id+" serial", "%q", b) },
 				OnStatus:   func(s serialport.Status) { status(s.Connected, s.Busy, s.Port) },
 				Log:        app.log,
 			}, r.reconnect)
@@ -170,6 +172,7 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 			SMC:      key.typ == core.DeviceSMC,
 			Log:      app.log,
 			Seed:     func(col int) (int, bool) { return app.knobStart(r, col) },
+			Trace:    func(format string, args ...any) { app.trace(id+" midi", format, args...) },
 		})
 		if d, ok := app.device(id); ok {
 			port.SetLights(d.Lights)
@@ -200,6 +203,7 @@ func (app *App) knobStart(r *runner, col int) (int, bool) {
 		if !ok {
 			u, ok = r.engine.Last(k)
 		}
+		app.trace(r.id+" knob", "control %d starts at %.3f, found %v", k, u, ok)
 		return d.RawAt(k, u), ok
 	}
 	return 0, false
@@ -218,6 +222,7 @@ func (app *App) portsOfOtherBoards(id string, midi bool) []string {
 }
 
 func (app *App) onRunnerStatus(r *runner, id string, connected, busy bool, port string) {
+	app.trace(id+" status", "connected %v, port in use %v, port %q", connected, busy, port)
 	r.mu.Lock()
 	r.connected, r.busy, r.port = connected, busy, port
 	r.mu.Unlock()
@@ -249,6 +254,7 @@ func (app *App) onRawFrame(r *runner, raw []int) {
 		w.feed(raw)
 	}
 	norm := d.Normalize(raw)
+	app.trace(r.id+" frame", "raw %v, as controls %v, calibrating %v", raw, norm, calibrating)
 	r.engine.Handle(norm, d.EngineSetup(), calibrating)
 	app.showValues(r, d.Normalize(raw))
 	if calibrating {
@@ -292,6 +298,7 @@ func (app *App) onButton(r *runner, d core.Device, key int) {
 		names = []string{"empty"}
 	}
 	app.log(fmt.Sprintf("%s button %d pressed: %s", d.Name, key, strings.Join(names, ", ")))
+	app.trace(d.ID+" button", "%d pressed: %s", key, strings.Join(names, ", "))
 	for _, action := range actions {
 		app.runButtonAction(action, r, d, key)
 	}
@@ -432,6 +439,7 @@ func (app *App) setProfiles(targets []core.HotkeyTarget) {
 		if next < 0 || next >= len(d.Profiles) {
 			continue
 		}
+		app.trace(d.ID+" profile", "%d to %d", d.Active, next)
 		app.leaveProfile(*d)
 		d.Active = next
 		if hud == nil {

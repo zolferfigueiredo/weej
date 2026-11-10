@@ -4,6 +4,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -58,6 +59,22 @@ type Engine struct {
 	// A muted column keeps recording its position, so unmuting puts it back where it now is.
 	muted map[int]bool
 	lines []Line
+	// Trace, when set, is told what the engine makes of each reading that changed, and why.
+	Trace func(format string, args ...any)
+}
+
+func (e *Engine) tracef(format string, args ...any) {
+	if e.Trace != nil {
+		e.Trace(format, args...)
+	}
+}
+
+func jobKeys(jobs []Job) string {
+	keys := make([]string, len(jobs))
+	for i, j := range jobs {
+		keys[i] = jobKey(j)
+	}
+	return strings.Join(keys, ", ")
 }
 
 func NewEngine(a Applier) *Engine {
@@ -104,13 +121,17 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 		}
 
 		jobs, mapped := mapping[index]
+		previous, ok := e.lastApplied[index]
 		if calibrating || !mapped {
+			if !ok || u != previous {
+				e.tracef("control %d: %d (%.3f), not applied: calibrating %v, no job %v", index, raw, u, calibrating, !mapped)
+			}
 			e.lastApplied[index] = u
 			continue
 		}
 		// The first reading after a connect is only a baseline, so nothing changes until a turn.
-		previous, ok := e.lastApplied[index]
 		if !ok {
+			e.tracef("control %d: %d (%.3f), first reading, kept as the baseline", index, raw, u)
 			e.lastApplied[index] = u
 			continue
 		}
@@ -119,12 +140,15 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 			continue
 		}
 		if !extreme && math.Abs(u-previous) < 0.01 {
+			e.tracef("control %d: %.3f to %.3f (%d), under 1%%, ignored", index, previous, u, raw)
 			continue
 		}
 		e.lastApplied[index] = u
 		if e.muted[index] {
+			e.tracef("control %d: %.3f to %.3f (%d), muted, held", index, previous, u, raw)
 			continue
 		}
+		e.tracef("control %d: %.3f to %.3f (%d), applied to %s", index, previous, u, raw, jobKeys(jobs))
 
 		for _, job := range jobs {
 			e.apply(job, u, settle)
@@ -167,6 +191,7 @@ func (e *Engine) UnmuteAll(setup Setup) int {
 	settle := setup.Speed.Settle()
 	for col := range e.muted {
 		if last, ok := e.lastApplied[col]; ok {
+			e.tracef("control %d: unmuted with the others, back to %.3f, applied to %s", col, last, jobKeys(mapping[col]))
 			for _, job := range mapping[col] {
 				e.apply(job, last, settle)
 			}
@@ -197,10 +222,12 @@ func (e *Engine) ToggleMute(col int, setup Setup) bool {
 	if !muted {
 		last, ok := e.lastApplied[col]
 		if !ok {
+			e.tracef("control %d: unmuted, never heard from, left as it is", col)
 			return false
 		}
 		u = last
 	}
+	e.tracef("control %d: muted %v, set to %.3f, applied to %s", col, muted, u, jobKeys(jobs))
 
 	settle := setup.Speed.Settle()
 	shown := map[string]bool{}

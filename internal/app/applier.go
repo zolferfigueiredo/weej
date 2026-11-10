@@ -36,6 +36,7 @@ func (ap *applier) Display(job core.Job) string {
 }
 
 func (app *App) applyJob(job core.Job, s float64) {
+	app.trace("apply", "%s screen %d %s to %.3f", job.Kind, job.Screen, job.Exe, s)
 	switch job.Kind {
 	case core.JobMaster:
 		if app.audio != nil {

@@ -1,8 +1,10 @@
 package core
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -161,6 +163,25 @@ func TestEngineJobWithNoDisplayLeavesItToTheNext(t *testing.T) {
 	}
 	if len(a.huds) != 1 || a.huds[0].Kind != JobMaster {
 		t.Errorf("huds = %v, want master's alone", a.huds)
+	}
+}
+
+func TestEngineTracesWhatItMakesOfEachReading(t *testing.T) {
+	e := NewEngine(&fakeApplier{})
+	var lines []string
+	e.Trace = func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) }
+	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}, Speed: SpeedSuperFast}
+	for _, v := range []int{512, 512, 515, 700} {
+		e.Handle([]int{v}, setup, false)
+	}
+	want := []string{"first reading", "under 1%", "applied to master"}
+	if len(lines) != len(want) {
+		t.Fatalf("trace = %q, want one line per reading that changed", lines)
+	}
+	for i, w := range want {
+		if !strings.Contains(lines[i], "control 0") || !strings.Contains(lines[i], w) {
+			t.Errorf("trace line %d = %q, want control 0 and %q", i, lines[i], w)
+		}
 	}
 }
 

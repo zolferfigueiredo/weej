@@ -24,8 +24,10 @@ type Config struct {
 	Exclude    func() []string
 	ForcedPort string
 	// Baud is the serial speed; 0 means core.DefaultBaud.
-	Baud     int
-	OnLine   func(values []int)
+	Baud   int
+	OnLine func(values []int)
+	// OnBytes, when set, sees every read as it came, bad lines included.
+	OnBytes  func(b []byte)
 	OnStatus func(Status)
 	Log      func(string)
 }
@@ -107,7 +109,7 @@ func Run(ctx context.Context, cfg Config, reconnect <-chan struct{}) {
 				logf(fmt.Sprintf("Connected: %s", name))
 				setStatus(Status{Connected: true, Port: name})
 			}
-			reason := streamPort(ctx, port, reconnect, probe, onLine, connected)
+			reason := streamPort(ctx, port, reconnect, probe, onLine, cfg.OnBytes, connected)
 			port.Close()
 			release(name, cfg.Owner)
 

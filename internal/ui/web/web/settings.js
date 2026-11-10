@@ -457,6 +457,9 @@ function onClick(e) {
     case "check-updates":
       send({ type: "checkUpdates" });
       break;
+    case "open-debug-folder":
+      send({ type: "openDebugFolder" });
+      break;
     case "open-url":
       e.preventDefault();
       send({ type: "openUrl", url: target.dataset.url });
@@ -541,6 +544,9 @@ function onChange(e) {
     // Not part of Apply: it takes effect at once, as Language does.
     case "login":
       send({ type: "setLogin", on: el.checked });
+      break;
+    case "debug-log":
+      send({ type: "setDebugLog", on: el.checked });
       break;
     case "show-icon":
       S.draft.hideTrayIcon = !el.checked;
@@ -645,6 +651,10 @@ function onMessage(msg) {
     // Go-initiated: Launch at startup as it now is, after Settings or the tray menu changed it.
     case "login":
       S.init.login = !!msg.on;
+      if (S.tab === "general" && !S.dialog) render();
+      break;
+    case "debugLog":
+      S.init.debugLog = !!msg.on;
       if (S.tab === "general" && !S.dialog) render();
       break;
     // Go-initiated: an update is being checked for or installed, or no longer is.
