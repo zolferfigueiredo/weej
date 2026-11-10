@@ -47,7 +47,7 @@ func openPort(name string, baud int) (serial.Port, error) {
 	return port, nil
 }
 
-func streamPort(ctx context.Context, port serial.Port, reconnect <-chan struct{}, probe bool, onLine func([]int), onBytes func([]byte), connected func()) dropReason {
+func streamPort(ctx context.Context, port serial.Port, reconnect <-chan struct{}, probe bool, onLine func([]int), connected func()) dropReason {
 	reader := core.NewLineReader()
 	buf := make([]byte, 256)
 	deadline := time.Now().Add(probeWindow)
@@ -74,9 +74,6 @@ func streamPort(ctx context.Context, port serial.Port, reconnect <-chan struct{}
 			continue
 		}
 
-		if onBytes != nil {
-			onBytes(buf[:n])
-		}
 		for _, values := range reader.Feed(buf[:n]) {
 			if !gotLine {
 				gotLine = true

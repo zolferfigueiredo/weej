@@ -171,7 +171,7 @@ func TestEngineTracesWhatItMakesOfEachReading(t *testing.T) {
 	var lines []string
 	e.Trace = func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) }
 	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}, Speed: SpeedSuperFast}
-	for _, v := range []int{512, 512, 515, 700} {
+	for _, v := range []int{512, 512, 515, 515, 515, 700, 700} {
 		e.Handle([]int{v}, setup, false)
 	}
 	want := []string{"first reading", "under 1%", "applied to master"}

@@ -6,6 +6,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,9 @@ type runner struct {
 	moves     core.MoveWatcher
 	buttons   core.ButtonWatcher
 	live      liveFrames
+	// traced is the last frame the debug log wrote, so it writes one only when a value changes.
+	// The board's loop only.
+	traced []int
 }
 
 // runnerKey is what a runner was started with: a change to any of it starts the board again.
@@ -156,7 +160,6 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 				ForcedPort: key.port,
 				Baud:       key.baud,
 				OnLine:     func(values []int) { app.onRawFrame(r, values) },
-				OnBytes:    func(b []byte) { app.trace(id+" serial", "%q", b) },
 				OnStatus:   func(s serialport.Status) { status(s.Connected, s.Busy, s.Port) },
 				Log:        app.log,
 			}, r.reconnect)
@@ -254,7 +257,10 @@ func (app *App) onRawFrame(r *runner, raw []int) {
 		w.feed(raw)
 	}
 	norm := d.Normalize(raw)
-	app.trace(r.id+" frame", "raw %v, as controls %v, calibrating %v", raw, norm, calibrating)
+	if app.debug.On() && !slices.Equal(raw, r.traced) {
+		app.trace(r.id+" frame", "raw %v, as controls %v, calibrating %v", raw, norm, calibrating)
+		r.traced = slices.Clone(raw)
+	}
 	r.engine.Handle(norm, d.EngineSetup(), calibrating)
 	app.showValues(r, d.Normalize(raw))
 	if calibrating {

@@ -61,12 +61,29 @@ type Engine struct {
 	lines []Line
 	// Trace, when set, is told what the engine makes of each reading that changed, and why.
 	Trace func(format string, args ...any)
+	// traced is each column's reading as last traced, so a reading that comes back the same isn't.
+	traced map[int]int
 }
 
 func (e *Engine) tracef(format string, args ...any) {
 	if e.Trace != nil {
 		e.Trace(format, args...)
 	}
+}
+
+// fresh tells whether a column's reading differs from the one last traced, and notes it.
+func (e *Engine) fresh(col, raw int) bool {
+	if e.Trace == nil {
+		return false
+	}
+	if last, ok := e.traced[col]; ok && last == raw {
+		return false
+	}
+	if e.traced == nil {
+		e.traced = map[int]int{}
+	}
+	e.traced[col] = raw
+	return true
 }
 
 func jobKeys(jobs []Job) string {
@@ -86,6 +103,7 @@ func (e *Engine) Reset() {
 	defer e.mu.Unlock()
 	e.lastApplied = map[int]float64{}
 	e.muted = map[int]bool{}
+	e.traced = nil
 }
 
 func jobKey(job Job) string {
@@ -122,8 +140,9 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 
 		jobs, mapped := mapping[index]
 		previous, ok := e.lastApplied[index]
+		fresh := e.fresh(index, raw)
 		if calibrating || !mapped {
-			if !ok || u != previous {
+			if fresh {
 				e.tracef("control %d: %d (%.3f), not applied: calibrating %v, no job %v", index, raw, u, calibrating, !mapped)
 			}
 			e.lastApplied[index] = u
@@ -131,7 +150,9 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 		}
 		// The first reading after a connect is only a baseline, so nothing changes until a turn.
 		if !ok {
-			e.tracef("control %d: %d (%.3f), first reading, kept as the baseline", index, raw, u)
+			if fresh {
+				e.tracef("control %d: %d (%.3f), first reading, kept as the baseline", index, raw, u)
+			}
 			e.lastApplied[index] = u
 			continue
 		}
@@ -140,7 +161,9 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 			continue
 		}
 		if !extreme && math.Abs(u-previous) < 0.01 {
-			e.tracef("control %d: %.3f to %.3f (%d), under 1%%, ignored", index, previous, u, raw)
+			if fresh {
+				e.tracef("control %d: %.3f to %.3f (%d), under 1%%, ignored", index, previous, u, raw)
+			}
 			continue
 		}
 		e.lastApplied[index] = u
