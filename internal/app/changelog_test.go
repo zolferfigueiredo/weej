@@ -13,9 +13,9 @@ func TestClearBeforeKeepsOnlyWhatCameAfter(t *testing.T) {
 	dir := t.TempDir()
 	boot := time.Now().Add(-time.Hour)
 	for name, mod := range map[string]time.Time{
-		"old.log":    boot.Add(-time.Minute),
-		changeMarker: boot.Add(-time.Minute),
-		"new.log":    boot.Add(time.Minute),
+		"old.log":       boot.Add(-time.Minute),
+		oldChangeSwitch: boot.Add(-time.Minute),
+		"new.log":       boot.Add(time.Minute),
 	} {
 		path := filepath.Join(dir, name)
 		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
@@ -35,13 +35,9 @@ func TestClearBeforeKeepsOnlyWhatCameAfter(t *testing.T) {
 func TestChangeLogWritesOnlyWhileOn(t *testing.T) {
 	d := newChangeLog(t.TempDir())
 	d.Note("before")
-	if err := d.Set(true); err != nil {
-		t.Fatal(err)
-	}
+	d.Set(true)
 	d.Note("Speaker volume: %d%% to %d%%", 71, 55)
-	if err := d.Set(false); err != nil {
-		t.Fatal(err)
-	}
+	d.Set(false)
 	d.Note("after")
 
 	entries, _ := os.ReadDir(d.dir)

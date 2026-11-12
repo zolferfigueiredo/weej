@@ -17,8 +17,8 @@ import (
 )
 
 // changeLog writes a line each time a level or a setting changes, with what changed it, while its
-// switch is on, to find out why one moves by itself. It stays on this PC. Its switch is a file among
-// the logs, so a Windows restart, which clears the folder, also turns it off.
+// switch is on, to find out why one moves by itself. It stays on this PC, and a Windows restart
+// clears its logs. The switch itself is a setting (core.Settings.ChangeLog), kept across restarts.
 type changeLog struct {
 	on   atomic.Bool
 	dir  string
@@ -28,9 +28,10 @@ type changeLog struct {
 }
 
 const (
-	changeMarker  = "on"
 	changeFileMax = 200 << 20
 	changeDirMax  = 1 << 30
+	// oldChangeSwitch is the file 2.7.0-beta.2 kept its switch as, read once to carry it over.
+	oldChangeSwitch = "on"
 )
 
 func changeDir() string { return filepath.Join(os.TempDir(), "WeeJ", "changes") }
@@ -38,34 +39,26 @@ func changeDir() string { return filepath.Join(os.TempDir(), "WeeJ", "changes") 
 func newChangeLog(dir string) *changeLog {
 	d := &changeLog{dir: dir}
 	clearBefore(dir, sys.BootTime())
-	if _, err := os.Stat(filepath.Join(dir, changeMarker)); err == nil {
-		d.on.Store(true)
-	}
 	return d
 }
 
 func (d *changeLog) On() bool { return d != nil && d.on.Load() }
 
-func (d *changeLog) Set(on bool) error {
-	marker := filepath.Join(d.dir, changeMarker)
-	if on {
-		if err := os.MkdirAll(d.dir, 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(marker, nil, 0o644); err != nil {
-			return err
-		}
-		d.on.Store(true)
-		return nil
+func (d *changeLog) Set(on bool) {
+	d.on.Store(on)
+	if !on {
+		d.Close()
 	}
-	d.on.Store(false)
-	d.mu.Lock()
-	d.closeFile()
-	d.mu.Unlock()
-	if err := os.Remove(marker); err != nil && !os.IsNotExist(err) {
-		return err
+}
+
+// carryOldSwitch tells whether 2.7.0-beta.2 left its switch on this boot, and removes that file.
+func (d *changeLog) carryOldSwitch() bool {
+	path := filepath.Join(d.dir, oldChangeSwitch)
+	if _, err := os.Stat(path); err != nil {
+		return false
 	}
-	return nil
+	_ = os.Remove(path)
+	return true
 }
 
 // Note writes one line, formatting it only while the switch is on.
@@ -121,8 +114,11 @@ func (app *App) note(format string, args ...any) { app.changes.Note(format, args
 
 // setChangeLog turns the change log on or off at once, from Settings.
 func (app *App) setChangeLog(on bool) {
-	if err := app.changes.Set(on); err != nil {
-		app.log("Could not turn the change log on or off: " + err.Error())
+	app.changes.Set(on)
+	s := app.snapshotSettings()
+	s.ChangeLog = on
+	if err := app.persistSettings(s); err != nil {
+		app.log("Could not save settings: " + err.Error())
 	}
 	app.note("WeeJ %s: change log on", core.AppVersion)
 	if win := app.settingsWin; win != nil {
@@ -182,7 +178,7 @@ func pruneTo(dir string, max int64) {
 	var total int64
 	for _, e := range entries {
 		info, err := e.Info()
-		if err != nil || e.Name() == changeMarker {
+		if err != nil {
 			continue
 		}
 		logs = append(logs, logFile{filepath.Join(dir, e.Name()), info.Size(), info.ModTime()})

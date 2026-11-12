@@ -65,7 +65,7 @@
   "calibrate": "Calibrate",
   "cancel": "Cancel",
   "change_log": "Change log",
-  "change_log.note": "Writes down each level that changes, from what to what and what changed it, to find out why one moves by itself. It stays on this PC and is cleared when Windows restarts.",
+  "change_log.note": "Writes down each level that changes, from what to what and what changed it, to find out why one moves by itself. It stays on this PC, and its logs are cleared when Windows restarts.",
   "change_log.open": "Open folder",
   "check": "Check for updates…",
   "check_connection": "Check your connection and try again.",

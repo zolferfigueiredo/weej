@@ -23,6 +23,8 @@ type Settings struct {
 	NotifiedVersion  string
 	UpdatedTo        string
 	TrayTipShown     bool
+	// ChangeLog is the Change log switch, which stays as set across restarts.
+	ChangeLog bool
 }
 
 // settingsVersion marks the file as one of boards; a file without it is from before boards and
@@ -49,6 +51,7 @@ type settingsJSON struct {
 	NotifiedVersion  string       `json:"notifiedVersion"`
 	UpdatedTo        string       `json:"updatedTo"`
 	TrayTipShown     bool         `json:"trayTipShown"`
+	ChangeLog        bool         `json:"changeLog"`
 }
 
 type deviceJSON struct {
@@ -99,6 +102,7 @@ func EncodeSettings(s Settings) ([]byte, error) {
 		NotifiedVersion:  s.NotifiedVersion,
 		UpdatedTo:        s.UpdatedTo,
 		TrayTipShown:     s.TrayTipShown,
+		ChangeLog:        s.ChangeLog,
 	}
 	for i, d := range s.Devices {
 		out.Devices[i] = encodeDevice(d)
@@ -215,6 +219,9 @@ func DecodeSettings(data []byte, profileName string) Settings {
 	}
 	if v, ok := take[bool](raw, "trayTipShown"); ok {
 		s.TrayTipShown = v
+	}
+	if v, ok := take[bool](raw, "changeLog"); ok {
+		s.ChangeLog = v
 	}
 	return s
 }

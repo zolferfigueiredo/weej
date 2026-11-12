@@ -65,7 +65,7 @@
   "calibrate": "Kalibrieren",
   "cancel": "Abbrechen",
   "change_log": "Änderungsprotokoll",
-  "change_log.note": "Schreibt jeden Pegel auf, der sich ändert, von welchem Wert zu welchem und wodurch, um herauszufinden, warum sich einer von selbst bewegt. Es bleibt auf diesem PC und wird beim Neustart von Windows gelöscht.",
+  "change_log.note": "Schreibt jeden Pegel auf, der sich ändert, von welchem Wert zu welchem und wodurch, um herauszufinden, warum sich einer von selbst bewegt. Es bleibt auf diesem PC, und seine Protokolle werden beim Neustart von Windows gelöscht.",
   "change_log.open": "Ordner öffnen",
   "check": "Nach Updates suchen…",
   "check_connection": "Prüfe deine Verbindung und versuche es erneut.",
