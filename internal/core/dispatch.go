@@ -58,6 +58,26 @@ type Engine struct {
 	// A muted column keeps recording its position, so unmuting puts it back where it now is.
 	muted map[int]bool
 	lines []Line
+	// Changed, when set, hears of each control that changes its jobs: from where to where.
+	Changed func(col int, from, to float64, jobs []Job)
+
+	// HoldJumps holds a reading that jumps further than holdJump until the next one confirms it,
+	// for a board that sends every value all the time, as an Arduino does: a dirty pot or a lost
+	// character gives a single stray reading, and the volumes would follow it at once.
+	HoldJumps bool
+	held      map[int]float64
+	// Jump, when set, hears of a reading held back (dropped false) and of one dropped, its next
+	// reading having gone back (dropped true).
+	Jump func(col int, from, to float64, dropped bool)
+}
+
+// holdJump is how far one reading may move a control before it waits for the next to confirm it.
+const holdJump = 0.1
+
+func (e *Engine) changed(col int, from, to float64, jobs []Job) {
+	if e.Changed != nil {
+		e.Changed(col, from, to, jobs)
+	}
 }
 
 func NewEngine(a Applier) *Engine {
@@ -69,6 +89,39 @@ func (e *Engine) Reset() {
 	defer e.mu.Unlock()
 	e.lastApplied = map[int]float64{}
 	e.muted = map[int]bool{}
+	e.held = nil
+}
+
+// holdJump tells whether to hold back this reading: the first that jumps further than holdJump.
+// The next reading lands either way, the jump dropped when it went back.
+func (e *Engine) holdJump(col int, previous, u float64) bool {
+	if !e.HoldJumps {
+		return false
+	}
+	held, waiting := e.held[col]
+	far := math.Abs(u-previous) > holdJump
+	if !waiting {
+		if !far {
+			return false
+		}
+		if e.held == nil {
+			e.held = map[int]float64{}
+		}
+		e.held[col] = u
+		e.jump(col, previous, u, false)
+		return true
+	}
+	delete(e.held, col)
+	if !far {
+		e.jump(col, previous, held, true)
+	}
+	return false
+}
+
+func (e *Engine) jump(col int, from, to float64, dropped bool) {
+	if e.Jump != nil {
+		e.Jump(col, from, to, dropped)
+	}
 }
 
 func jobKey(job Job) string {
@@ -114,6 +167,9 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 			e.lastApplied[index] = u
 			continue
 		}
+		if e.holdJump(index, previous, u) {
+			continue
+		}
 		extreme := u <= 0 || u >= 1
 		if u == previous {
 			continue
@@ -125,6 +181,7 @@ func (e *Engine) Handle(values []int, setup Setup, calibrating bool) {
 		if e.muted[index] {
 			continue
 		}
+		e.changed(index, previous, u, jobs)
 
 		for _, job := range jobs {
 			e.apply(job, u, settle)
@@ -167,6 +224,7 @@ func (e *Engine) UnmuteAll(setup Setup) int {
 	settle := setup.Speed.Settle()
 	for col := range e.muted {
 		if last, ok := e.lastApplied[col]; ok {
+			e.changed(col, 0, last, mapping[col])
 			for _, job := range mapping[col] {
 				e.apply(job, last, settle)
 			}
@@ -200,6 +258,9 @@ func (e *Engine) ToggleMute(col int, setup Setup) bool {
 			return false
 		}
 		u = last
+		e.changed(col, 0, u, jobs)
+	} else {
+		e.changed(col, e.lastApplied[col], 0, jobs)
 	}
 
 	settle := setup.Speed.Settle()

@@ -866,6 +866,10 @@ button.popover-item {
   justify-content: flex-end;
 }
 
+.row-control .btn {
+  white-space: nowrap;
+}
+
 .btn {
   padding: 4px 12px;
 }

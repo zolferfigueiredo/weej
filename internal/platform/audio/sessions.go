@@ -192,7 +192,15 @@ func processImagePath(pid uint32) string {
 	return windows.UTF16ToString(buf[:size])
 }
 
-func (a *Audio) setSessionVolume(vol *wca.ISimpleAudioVolume, level float64) {
+// setSessionVolume sets a session's volume, and for the change log, says why.
+func (a *Audio) setSessionVolume(info sessionInfo, vol *wca.ISimpleAudioVolume, level float64, why string) {
+	if a.noting() {
+		var from float32
+		if vol.GetMasterVolume(&from) == nil {
+			a.wrote(info.key, sessionName(info)+" volume", from, float32(level), why)
+		}
+	}
+	a.seen[info.key] = float32(level)
 	if err := vol.SetMasterVolume(float32(level), eventCtx); err != nil {
 		a.logOnce("set-session-volume", "Could not set a session volume: "+err.Error())
 	}
@@ -229,7 +237,18 @@ func (a *Audio) applyMaster(level float64) {
 	defer vol.Release()
 
 	var muted bool
+	if a.noting() {
+		var from float32
+		if vol.GetMasterVolumeLevelScalar(&from) == nil {
+			a.wrote("Speaker volume", "Speaker volume", from, float32(level), "its knob")
+		}
+	}
+	a.seen["Speaker volume"] = float32(level)
 	if vol.GetMute(&muted) == nil && muted {
+		a.seen["Speaker volume mute"] = 0
+		if a.noting() {
+			a.changes.Note("Speaker volume: unmuted, by WeeJ: its knob turned")
+		}
 		if err := vol.SetMute(false, eventCtx); err != nil {
 			a.logOnce("set-master-mute", "Could not unmute the output: "+err.Error())
 		}
@@ -246,6 +265,13 @@ func (a *Audio) applyMic(level float64) {
 	}
 	defer vol.Release()
 
+	if a.noting() {
+		var from float32
+		if vol.GetMasterVolumeLevelScalar(&from) == nil {
+			a.wrote("Microphone volume", "Microphone volume", from, float32(level), "its knob")
+		}
+	}
+	a.seen["Microphone volume"] = float32(level)
 	if err := vol.SetMasterVolumeLevelScalar(float32(level), eventCtx); err != nil {
 		a.logOnce("set-mic-volume", "Could not set the input volume: "+err.Error())
 	}
@@ -321,6 +347,10 @@ func (a *Audio) toggleMicMute() MicState {
 		a.logOnce("get-mic-mute", "Could not read the microphone mute: "+err.Error())
 		return MicState{}
 	}
+	a.seen["Microphone volume mute"] = boolLevel(!muted)
+	if a.noting() {
+		a.changes.Note("Microphone volume: muted %v, by WeeJ: a button", !muted)
+	}
 	if err := vol.SetMute(!muted, eventCtx); err != nil {
 		a.logOnce("set-mic-mute", "Could not mute the microphone: "+err.Error())
 		return MicState{}
@@ -342,7 +372,7 @@ func (a *Audio) applySystemSounds(level float64) {
 		defer vol.Release()
 		a.knownSessions[info.key] = struct{}{}
 		if info.isSystemSounds {
-			a.setSessionVolume(vol, level)
+			a.setSessionVolume(info, vol, level, "its knob")
 		}
 	})
 }
@@ -356,7 +386,7 @@ func (a *Audio) applyApps(levels map[string]float64) {
 				return
 			}
 			if level, ok := levels[info.exe]; ok {
-				a.setSessionVolume(vol, level)
+				a.setSessionVolume(info, vol, level, "its knob")
 			}
 		})
 	})
@@ -368,7 +398,7 @@ func (a *Audio) applyOtherApps(level float64) {
 			defer vol.Release()
 			a.knownSessions[info.key] = struct{}{}
 			if !info.isSystemSounds && info.exe != "" && a.volumes.IsOther(info.exe, a.selfExe) {
-				a.setSessionVolume(vol, level)
+				a.setSessionVolume(info, vol, level, "the Other apps knob")
 			}
 		})
 	})
@@ -389,7 +419,7 @@ func (a *Audio) pollNewSessions() {
 
 			if info.isSystemSounds {
 				if a.haveSystemSoundsTarget {
-					a.setSessionVolume(vol, a.systemSoundsLevel)
+					a.setSessionVolume(info, vol, a.systemSoundsLevel, "it just opened, so it gets the System sounds knob's level")
 				}
 				return
 			}
@@ -397,7 +427,7 @@ func (a *Audio) pollNewSessions() {
 				return
 			}
 			if level, ok := a.volumes.Level(info.exe, a.selfExe); ok {
-				a.setSessionVolume(vol, level)
+				a.setSessionVolume(info, vol, level, "it just opened, so it gets the level its knob or Other apps last set")
 			}
 		})
 	})

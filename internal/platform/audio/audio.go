@@ -84,9 +84,13 @@ type Audio struct {
 	systemSoundsLevel      float64
 
 	volumes core.AppVolumes
+
+	changes ChangeLog
+	// seen is each level as WeeJ last set or saw it, so the change log can tell another app's change.
+	seen map[string]float32
 }
 
-func Start(log func(string)) (*Audio, error) {
+func Start(log func(string), changes ChangeLog) (*Audio, error) {
 	if log == nil {
 		log = func(string) {}
 	}
@@ -106,6 +110,8 @@ func Start(log func(string)) (*Audio, error) {
 		knownSessions: map[string]struct{}{},
 		loggedOnce:    map[string]bool{},
 		selfExe:       resolveSelfExe(),
+		changes:       changes,
+		seen:          map[string]float32{},
 	}
 
 	go a.run()
@@ -276,7 +282,11 @@ func (a *Audio) run() {
 			a.drainPending()
 		case <-ticker.C:
 			a.pollNewSessions()
+			a.watchOutside()
 		case <-a.deviceChanged:
+			if a.noting() {
+				a.changes.Note("The default speaker or microphone changed, in Windows")
+			}
 			a.pollNewSessions()
 		case respCh := <-a.queries:
 			respCh <- a.computePlaying()

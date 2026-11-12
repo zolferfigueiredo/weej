@@ -851,6 +851,9 @@ function startSettingsMock(post, enStrings) {
       case "setLogin":
         post({ type: "login", on: msg.on });
         break;
+      case "setChangeLog":
+        post({ type: "changeLog", on: msg.on });
+        break;
       case "key": {
         const hasMod = msg.ctrl || msg.alt;
         if (msg.key === "Delete" || msg.key === "Backspace") {

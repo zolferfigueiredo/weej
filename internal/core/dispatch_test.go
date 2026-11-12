@@ -164,6 +164,58 @@ func TestEngineJobWithNoDisplayLeavesItToTheNext(t *testing.T) {
 	}
 }
 
+func TestEngineTellsOnlyOfMovesThatChangeJobs(t *testing.T) {
+	e := NewEngine(&fakeApplier{})
+	type change struct{ from, to float64 }
+	var got []change
+	e.Changed = func(_ int, from, to float64, _ []Job) { got = append(got, change{from, to}) }
+	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}, Speed: SpeedSuperFast}
+	for _, v := range []int{0, 0, 3, 1023, 1023} {
+		e.Handle([]int{v}, setup, false)
+	}
+	e.ToggleMute(0, setup)
+	if !reflect.DeepEqual(got, []change{{0, 1}, {1, 0}}) {
+		t.Errorf("changes = %v, want the turn to the top and the mute: not the first reading, a jitter or a repeat", got)
+	}
+}
+
+func TestEngineDropsASingleStrayReading(t *testing.T) {
+	a := &recordingApplier{}
+	e := NewEngine(a)
+	e.HoldJumps = true
+	var dropped []float64
+	e.Jump = func(_ int, _, to float64, gone bool) {
+		if gone {
+			dropped = append(dropped, to)
+		}
+	}
+	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}, Speed: SpeedSuperFast}
+	// 77%, a stray 98%, then 77% again, as an Arduino sent it.
+	for _, v := range []int{788, 1003, 788} {
+		e.Handle([]int{v}, setup, false)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.values) != 0 || len(dropped) != 1 {
+		t.Errorf("applied %v and dropped %v, want the stray reading dropped and nothing applied", a.values, dropped)
+	}
+}
+
+func TestEngineLetsAFastTurnThroughOneReadingLate(t *testing.T) {
+	a := &recordingApplier{}
+	e := NewEngine(a)
+	e.HoldJumps = true
+	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}, Speed: SpeedSuperFast}
+	for _, v := range []int{0, 400, 900, 1023, 1023} {
+		e.Handle([]int{v}, setup, false)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.values) != 2 || a.values[0] != 900.0/1023 || a.values[1] != 1 {
+		t.Errorf("applied %v, want the turn confirmed at 900 and then the top", a.values)
+	}
+}
+
 func TestEngineTakesAConnectsFirstReadingAsABaseline(t *testing.T) {
 	a := &fakeApplier{}
 	e := NewEngine(a)

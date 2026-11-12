@@ -133,6 +133,21 @@ func TestSettingsInstallUpdatesUnlessTurnedOff(t *testing.T) {
 	}
 }
 
+func TestSettingsChangeLogIsOffUntilTurnedOn(t *testing.T) {
+	if s := DecodeSettings([]byte(`{"version":2}`), "Default"); s.ChangeLog {
+		t.Error("a file without changeLog has it on, want it off")
+	}
+	on := DefaultSettings()
+	on.ChangeLog = true
+	data, err := EncodeSettings(on)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s := DecodeSettings(data, "Default"); !s.ChangeLog {
+		t.Error("changeLog true read back as off")
+	}
+}
+
 func TestSettingsRoundTrip(t *testing.T) {
 	s := boardFixture()
 	data, err := EncodeSettings(s)

@@ -47,6 +47,8 @@ type App struct {
 	testNotifications bool
 
 	log func(string)
+	// changes is the change log, written only while its switch in Settings is on.
+	changes *changeLog
 
 	startTime time.Time
 
@@ -158,6 +160,7 @@ func Main(args []string) int {
 		updateSiteFlag:    flags.updateSite,
 		testNotifications: flags.testNotifications,
 		log:               lg.Log,
+		changes:           newChangeLog(changeDir()),
 		startTime:         time.Now(),
 		appName:           map[string]string{},
 		appPath:           map[string]string{},
@@ -166,6 +169,7 @@ func Main(args []string) int {
 		appMissAt:         map[string]time.Time{},
 	}
 
+	defer app.changes.Close()
 	return winui.Run(app.setup)
 }
 

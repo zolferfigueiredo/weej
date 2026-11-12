@@ -30,7 +30,7 @@ func (a *Audio) applyFocused(level float64) {
 			if info.isSystemSounds || info.exe != exe {
 				return
 			}
-			a.setSessionVolume(vol, level)
+			a.setSessionVolume(info, vol, level, "the Focused app knob")
 		})
 	})
 }

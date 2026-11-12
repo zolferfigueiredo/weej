@@ -144,6 +144,14 @@ func (app *App) onSettingsMessage(data []byte) {
 		}
 		_ = json.Unmarshal(data, &msg)
 		app.setLogin(msg.On)
+	case "setChangeLog":
+		var msg struct {
+			On bool `json:"on"`
+		}
+		_ = json.Unmarshal(data, &msg)
+		app.setChangeLog(msg.On)
+	case "openChangeFolder":
+		app.openChangeFolder()
 	case "record":
 		app.handleSettingsRecord()
 	case "key":
@@ -215,6 +223,7 @@ func (app *App) sendSettingsInit() {
 	payload["language"] = s.Language
 	payload["login"] = sys.LoginEnabled(app.self)
 	payload["loginAvailable"] = sys.IsInstalledCopy(app.self)
+	payload["changeLog"] = app.changes.On()
 	payload["settings"] = settingsJSON(s)
 	payload["catalog"] = app.buildCatalog(s.Devices)
 	payload["actionIcons"] = app.actionIcons()
@@ -259,6 +268,7 @@ func (app *App) applySettings(next core.Settings) {
 	app.applyLights(next.Devices)
 	app.registerHotkeys(next)
 	app.refreshTray()
+	app.note("Settings applied")
 }
 
 func (app *App) profileName() string { return app.tr("default_profile") }
