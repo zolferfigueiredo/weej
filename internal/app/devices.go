@@ -35,6 +35,8 @@ type runner struct {
 	moves     core.MoveWatcher
 	buttons   core.ButtonWatcher
 	live      liveFrames
+	// raw is the frame the engine is reading, for the change log. The board's loop only.
+	raw []int
 }
 
 // runnerKey is what a runner was started with: a change to any of it starts the board again.
@@ -141,7 +143,9 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 		id: id, key: key, engine: core.NewEngine(&applier{app: app}),
 		cancel: cancel, done: make(chan struct{}), reconnect: make(chan struct{}, 1),
 	}
-	r.engine.Changed = func(col int, from, to float64, jobs []core.Job) { app.noteControl(id, col, from, to, jobs) }
+	r.engine.Changed = func(col int, from, to float64, jobs []core.Job) { app.noteControl(r, col, from, to, jobs) }
+	r.engine.Jump = func(col int, from, to float64, dropped bool) { app.noteJump(r, col, from, to, dropped) }
+	r.engine.HoldJumps = key.typ == core.DeviceDIY
 	go func() {
 		defer close(r.done)
 		if prev != nil {
@@ -258,6 +262,7 @@ func (app *App) onRawFrame(r *runner, raw []int) {
 		w.feed(raw)
 	}
 	norm := d.Normalize(raw)
+	r.raw = raw
 	r.engine.Handle(norm, d.EngineSetup(), calibrating)
 	app.showValues(r, d.Normalize(raw))
 	if calibrating {

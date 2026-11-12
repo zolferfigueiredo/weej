@@ -132,12 +132,13 @@ func (app *App) openChangeFolder() {
 	}
 }
 
-// noteControl writes down a control whose move changed its jobs, in the words Settings uses.
-func (app *App) noteControl(id string, col int, from, to float64, jobs []core.Job) {
+// noteControl writes down a control whose move changed its jobs, in the words Settings uses, with
+// what the board sent.
+func (app *App) noteControl(r *runner, col int, from, to float64, jobs []core.Job) {
 	if !app.changes.On() {
 		return
 	}
-	d, ok := app.device(id)
+	d, ok := app.device(r.id)
 	if !ok || col >= len(d.Controls) {
 		return
 	}
@@ -146,8 +147,33 @@ func (app *App) noteControl(id string, col int, from, to float64, jobs []core.Jo
 	for i, j := range jobs {
 		titles[i] = j.Title(tr, app.appDisplayName)
 	}
-	app.note("%s, %s %s: %d%% to %d%%, sets %s", d.Name, d.Controls[col].Kind, core.Letter(col),
-		core.Percent(from), core.Percent(to), strings.Join(titles, ", "))
+	app.note("%s, %s %s: %d%% to %d%%%s, sets %s", d.Name, d.Controls[col].Kind, core.Letter(col),
+		core.Percent(from), core.Percent(to), rawText(r, d, col), strings.Join(titles, ", "))
+}
+
+// noteJump writes down a reading held back for jumping too far, and one dropped for going back.
+func (app *App) noteJump(r *runner, col int, from, to float64, dropped bool) {
+	if !app.changes.On() {
+		return
+	}
+	d, ok := app.device(r.id)
+	if !ok || col >= len(d.Controls) {
+		return
+	}
+	name := fmt.Sprintf("%s, %s %s", d.Name, d.Controls[col].Kind, core.Letter(col))
+	if dropped {
+		app.note("%s: the reading of %d%% was a stray one, dropped: the next went back to %d%%%s", name, core.Percent(to), core.Percent(from), rawText(r, d, col))
+		return
+	}
+	app.note("%s: jumped from %d%% to %d%%%s in one reading, waiting for the next before it applies", name, core.Percent(from), core.Percent(to), rawText(r, d, col))
+}
+
+// rawText is the value the board sent for a control, as " (sent 306)".
+func rawText(r *runner, d core.Device, col int) string {
+	if in := d.Controls[col].Input; in >= 0 && in < len(r.raw) {
+		return fmt.Sprintf(" (sent %d)", r.raw[in])
+	}
+	return ""
 }
 
 // clearBefore deletes what the folder holds from before t, the switch included.
