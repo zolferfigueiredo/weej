@@ -71,10 +71,13 @@ func TestLightGuardDropsTheLightsDriftButNotAHand(t *testing.T) {
 	if g.Pass(bend(1, 127), 10.005, 10) || g.Pass(bend(1, 123), 10.4, 10) {
 		t.Error("the lights' drift went through")
 	}
-	if !g.Pass(bend(1, 126), 11, 10) {
+	if g.Pass(bend(1, 120), 14.3, 10) {
+		t.Error("the lights' late drift went through")
+	}
+	if !g.Pass(bend(1, 126), 15.5, 10) {
 		t.Error("a small move long after the lights changed was dropped")
 	}
-	g.Pass(bend(1, 123), 11.1, 10)
+	g.Pass(bend(1, 123), 15.6, 10)
 	if !g.Pass(bend(1, 110), 20.01, 20) || !g.Pass(bend(1, 109), 20.05, 20) {
 		t.Error("a hand's move while the lights changed was dropped")
 	}

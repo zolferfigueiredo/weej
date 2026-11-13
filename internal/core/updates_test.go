@@ -25,11 +25,35 @@ func TestNewerVersion(t *testing.T) {
 		{"1.0.0", "0.9.9", true},
 		{"0.1.2", "0.1.2", false},
 		{"0.1.1", "0.1.2", false},
+		{"2.7.0-beta.2", "2.7.0-beta.1", true},
+		{"2.7.0-beta.10", "2.7.0-beta.9", true},
+		{"2.7.0", "2.7.0-beta.2", true}, // a release beats its betas
+		{"2.7.0-beta.1", "2.7.0", false},
+		{"2.7.0-beta.1", "2.6.9", true},
+		{"2.6.9", "2.7.0-beta.1", false},
 	}
 	for _, c := range cases {
 		if got := IsNewer(c.remote, c.local); got != c.want {
 			t.Errorf("IsNewer(%q, %q) = %v, want %v", c.remote, c.local, got, c.want)
 		}
+	}
+}
+
+func TestNewestReleaseCountsBetasButNotDrafts(t *testing.T) {
+	list := `[
+		{"tag_name": "v2.8.0", "draft": true},
+		{"tag_name": "v2.7.0-beta.2", "draft": false, "prerelease": true},
+		{"tag_name": "v2.7.0-beta.1", "draft": false, "prerelease": true},
+		{"tag_name": "v2.5.2", "draft": false}
+	]`
+	if got, err := NewestRelease([]byte(list)); err != nil || got != "2.7.0-beta.2" {
+		t.Errorf("NewestRelease() = %q, %v, want 2.7.0-beta.2", got, err)
+	}
+	if _, err := NewestRelease([]byte(`[]`)); err == nil {
+		t.Error("want error: no releases")
+	}
+	if _, err := NewestRelease([]byte(`{"message": "rate limited"}`)); err == nil {
+		t.Error("want error: not a list")
 	}
 }
 

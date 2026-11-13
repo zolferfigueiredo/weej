@@ -37,15 +37,20 @@ func (app *App) setup(l *winui.Loop) {
 	if !lang.Valid(settings.Language) {
 		settings.Language = code
 	}
+	if app.changes.carryOldSwitch() {
+		settings.ChangeLog = true
+	}
+	app.changes.Set(settings.ChangeLog)
 	app.replaceSettings(settings)
 	if err := app.persistSettings(settings); err != nil {
 		app.log("Could not save settings: " + err.Error())
 	}
 
 	app.printStartupSummary()
+	app.note("WeeJ %s started", core.AppVersion)
 	app.refreshInstalled()
 
-	audioW, err := audio.Start(app.log)
+	audioW, err := audio.Start(app.log, app.changes)
 	if err != nil {
 		app.log("Could not start the audio worker: " + err.Error())
 	}
@@ -64,6 +69,7 @@ func (app *App) setup(l *winui.Loop) {
 	l.Hotkeys().OnHotkey(app.onHotkey)
 	app.registerHotkeys(settings)
 	app.syncRunners(settings.Devices)
+	app.keepAppVolumes(settings)
 	app.applyLights(settings.Devices)
 	// A first start has no boards yet, so Settings opens on setting them up.
 	if len(settings.Devices) == 0 && webOK {
@@ -105,7 +111,10 @@ func settingsFileLanguage(data []byte) (string, bool) {
 	return probe.Language, true
 }
 
-func (app *App) printStartupSummary() {
+func (app *App) printStartupSummary() { app.printSetup(app.log) }
+
+// printSetup writes each board, its profile in use and what each of its controls does.
+func (app *App) printSetup(out func(string)) {
 	tr := app.trFunc()
 	for _, d := range app.snapshotSettings().Devices {
 		state := "on"
@@ -117,7 +126,7 @@ func (app *App) printStartupSummary() {
 			port = "automatic"
 		}
 		p := d.ActiveProfile()
-		app.log(fmt.Sprintf("board %s (%s, %s, %s), profile %s", d.Name, d.Type, port, state, p.Name))
+		out(fmt.Sprintf("board %s, %s (%s, %s, %s), profile %s", d.ID, d.Name, d.Type, port, state, p.Name))
 		for i, c := range d.Controls {
 			if c.Kind == core.KindButton {
 				continue
@@ -131,7 +140,7 @@ func (app *App) printStartupSummary() {
 			if len(titles) == 0 {
 				titles = []string{app.tr("job.empty")}
 			}
-			app.log(fmt.Sprintf("  %s %s, input %d: %s", c.Kind, core.Letter(i), c.Input, strings.Join(titles, ", ")))
+			out(fmt.Sprintf("  control %d, %s %s, input %d: %s", i, c.Kind, core.Letter(i), c.Input, strings.Join(titles, ", ")))
 		}
 	}
 }

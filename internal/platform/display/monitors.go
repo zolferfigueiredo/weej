@@ -4,6 +4,7 @@ package display
 
 import (
 	"image"
+	"sync"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
@@ -224,13 +225,24 @@ func AtPointer() Monitor {
 	return Monitor{}
 }
 
-func enumMonitorHandles() []uintptr {
-	var handles []uintptr
-	cb := windows.NewCallback(func(hMonitor uintptr, _ uintptr, _ *rect, _ uintptr) uintptr {
-		handles = append(handles, hMonitor)
+// One callback serves every enumeration: each windows.NewCallback takes one of the few callback slots
+// a Go program has, for good, and this runs on every HUD step.
+var (
+	monitorMu      sync.Mutex
+	monitorHandles []uintptr
+	monitorFound   = windows.NewCallback(func(hMonitor uintptr, _ uintptr, _ *rect, _ uintptr) uintptr {
+		monitorHandles = append(monitorHandles, hMonitor)
 		return 1
 	})
-	procEnumDisplayMonitors.Call(0, 0, cb, 0)
+)
+
+func enumMonitorHandles() []uintptr {
+	monitorMu.Lock()
+	defer monitorMu.Unlock()
+	monitorHandles = nil
+	procEnumDisplayMonitors.Call(0, 0, monitorFound, 0)
+	handles := monitorHandles
+	monitorHandles = nil
 	return handles
 }
 

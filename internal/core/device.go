@@ -79,6 +79,35 @@ const (
 	ViewList = "list"
 )
 
+// WithFields is d with the fields named, by their settings.json names, taken from from.
+func (d Device) WithFields(from Device, fields []string) Device {
+	for _, f := range fields {
+		switch f {
+		case "name":
+			d.Name = from.Name
+		case "enabled":
+			d.Enabled = from.Enabled
+		case "port":
+			d.Port = from.Port
+		case "baudRate":
+			d.Baud = from.Baud
+		case "speed":
+			d.Speed = from.Speed
+		case "lights":
+			d.Lights = from.Lights
+		case "view":
+			d.View = from.View
+		case "nextProfile":
+			d.Next = from.Next
+		case "previousProfile":
+			d.Previous = from.Previous
+		case "controls":
+			d.Controls = from.Controls
+		}
+	}
+	return d
+}
+
 // NewDevice makes a board with one profile and its knobs, faders and buttons still to find. An
 // SMC-Mixer's controls are fixed, so it takes no counts.
 func NewDevice(id, name string, t DeviceType, knobs, faders, buttons int, profileName string) Device {

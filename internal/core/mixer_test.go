@@ -157,6 +157,28 @@ func TestEngineMuteHoldsAndRestores(t *testing.T) {
 	}
 }
 
+func TestEngineUnmutesAControlNotHeardFromToWhereItsJobWas(t *testing.T) {
+	a := &recordingApplier{fakeApplier: fakeApplier{levels: map[JobKind]float64{JobMaster: 0.4}}}
+	e := NewEngine(a)
+	setup := Setup{
+		Columns:  []int{0, 1},
+		Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}, {{Kind: JobMicrophone}}}}},
+		Speed:    SpeedSuperFast,
+	}
+	e.ToggleMute(0, setup)
+	e.ToggleMute(0, setup)
+	e.ToggleMute(1, setup)
+	if e.ToggleMute(1, setup) {
+		t.Error("the second toggle did not unmute a control whose job can't be read")
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !reflect.DeepEqual(a.values, []float64{0, 0.4, 0}) {
+		t.Errorf("applied values = %v, want [0 0.4 0]: master muted and back to 0.4, the microphone muted and left there", a.values)
+	}
+}
+
 func TestEngineResetUnmutes(t *testing.T) {
 	e := NewEngine(&fakeApplier{})
 	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}}

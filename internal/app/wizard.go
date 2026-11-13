@@ -187,10 +187,10 @@ func (app *App) endWizard(apply bool) {
 		if i := deviceIndex(s, w.device); i >= 0 {
 			s.Devices[i].Controls = controls
 			app.applySettings(s)
-			app.sendDevice(s.Devices[i])
+			app.sendDevice(s.Devices[i], []string{"controls"})
 		}
 	}
 	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "wizard", "device": w.device, "end": true})
+		win.Send(map[string]any{"type": "wizard", "device": w.device, "end": true, "finished": apply})
 	}
 }

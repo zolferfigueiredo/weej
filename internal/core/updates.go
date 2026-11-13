@@ -63,7 +63,44 @@ func numericCompare(a, b string) int {
 	}
 }
 
-func IsNewer(remote, local string) bool { return numericCompare(remote, local) > 0 }
+// IsNewer compares versions where past a "-" is a beta of the version before it: 2.7.0-beta.1,
+// then 2.7.0-beta.2, then 2.7.0.
+func IsNewer(remote, local string) bool {
+	r, rBeta, _ := strings.Cut(remote, "-")
+	l, lBeta, _ := strings.Cut(local, "-")
+	if c := numericCompare(r, l); c != 0 {
+		return c > 0
+	}
+	switch {
+	case rBeta == "" || lBeta == "":
+		return rBeta == "" && lBeta != ""
+	default:
+		return numericCompare(rBeta, lBeta) > 0
+	}
+}
+
+func IsBeta(version string) bool { return strings.Contains(version, "-") }
+
+// NewestRelease is the newest version in GitHub's list of releases, betas among them, drafts not.
+func NewestRelease(data []byte) (string, error) {
+	var list []struct {
+		Tag   string `json:"tag_name"`
+		Draft bool   `json:"draft"`
+	}
+	if err := json.Unmarshal(data, &list); err != nil {
+		return "", fmt.Errorf("core: releases: %w", err)
+	}
+	newest := ""
+	for _, r := range list {
+		if v := ReleaseVersion(r.Tag); !r.Draft && v != "" && (newest == "" || IsNewer(v, newest)) {
+			newest = v
+		}
+	}
+	if newest == "" {
+		return "", errors.New("core: releases: none published")
+	}
+	return newest, nil
+}
 
 func ReleaseVersion(tag string) string {
 	if strings.HasPrefix(tag, "v") {

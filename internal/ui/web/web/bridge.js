@@ -747,11 +747,14 @@ function startSettingsMock(post, enStrings) {
   let wizard = null;
   let wizardDevice = null;
   const find = (id) => init.settings.devices.find((d) => d.id === id);
-  const saveDevice = (d) => {
+  const saveDevice = (d, fields) => {
     const i = init.settings.devices.findIndex((x) => x.id === d.id);
-    if (i >= 0) init.settings.devices[i] = d;
+    if (i >= 0 && fields) {
+      for (const f of fields) init.settings.devices[i][f] = JSON.parse(JSON.stringify(d[f] ?? null));
+      d = init.settings.devices[i];
+    } else if (i >= 0) init.settings.devices[i] = d;
     else init.settings.devices.push(d);
-    post({ type: "deviceSaved", device: JSON.parse(JSON.stringify(d)) });
+    post({ type: "deviceSaved", device: JSON.parse(JSON.stringify(d)), fields });
   };
   return (msg) => {
     switch (msg.type) {
@@ -768,7 +771,11 @@ function startSettingsMock(post, enStrings) {
         post({ type: "saved", settings: msg.settings });
         break;
       case "setDevice":
-        saveDevice(msg.device);
+        saveDevice(msg.device, msg.fields || []);
+        break;
+      case "checkUpdates":
+        post({ type: "updateBusy", busy: true });
+        setTimeout(() => post({ type: "updateBusy", busy: false }), 1500);
         break;
       case "addDevice": {
         const id = `d${++init.settings.added}`;
@@ -808,9 +815,9 @@ function startSettingsMock(post, enStrings) {
           wizardDevice.controls.forEach((c, k) => {
             if (c.input < 0) c.input = 10 + k;
           });
-          saveDevice(wizardDevice);
+          saveDevice(wizardDevice, ["controls"]);
         }
-        if (msg.op === "finish" || msg.op === "cancel") post({ type: "wizard", device: wizardDevice && wizardDevice.id, end: true });
+        if (msg.op === "finish" || msg.op === "cancel") post({ type: "wizard", device: wizardDevice && wizardDevice.id, end: true, finished: msg.op === "finish" });
         break;
       case "listPorts":
         setTimeout(() => {
@@ -843,6 +850,9 @@ function startSettingsMock(post, enStrings) {
         break;
       case "setLogin":
         post({ type: "login", on: msg.on });
+        break;
+      case "setChangeLog":
+        post({ type: "changeLog", on: msg.on });
         break;
       case "key": {
         const hasMod = msg.ctrl || msg.alt;

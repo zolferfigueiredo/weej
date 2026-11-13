@@ -116,11 +116,26 @@ func (app *App) notifyUpdateAvailable(version string) {
 	)
 }
 
-// onBalloonClick updates, as the notification of a new version says a click does. The one after
-// an update has nothing to do.
+// onBalloonClick checks again and asks, as the notification of a new version says a click does,
+// so it never installs a version that is no longer the newest. The one after an update has
+// nothing to do.
 func (app *App) onBalloonClick() {
 	if v := app.snapshotSettings().AvailableVersion; v != "" && core.IsNewer(v, core.AppVersion) {
-		app.startUpdateNow()
+		app.manualCheckUpdate()
+	}
+}
+
+// updateBusy is while an update is checked for, installs or waits to restart, when Check for
+// updates has nothing to do.
+func (app *App) updateBusy() bool {
+	app.mu.Lock()
+	defer app.mu.Unlock()
+	return app.checking || app.installing || app.restartPending
+}
+
+func (app *App) pushUpdateBusy() {
+	if win := app.settingsWin; win != nil {
+		win.Send(map[string]any{"type": "updateBusy", "busy": app.updateBusy()})
 	}
 }
 
@@ -132,6 +147,7 @@ func (app *App) manualCheckUpdate() {
 	}
 	app.checking = true
 	app.mu.Unlock()
+	app.pushUpdateBusy()
 
 	go func() {
 		rel, err := app.fetchRelease(context.Background())
@@ -139,6 +155,7 @@ func (app *App) manualCheckUpdate() {
 			app.mu.Lock()
 			app.checking = false
 			app.mu.Unlock()
+			app.pushUpdateBusy()
 
 			s := app.snapshotSettings()
 			s.LastUpdateCheck = time.Now()
@@ -224,6 +241,7 @@ func (app *App) install(rel updater.Release, withWindow bool) {
 		}
 		return
 	}
+	app.pushUpdateBusy()
 
 	if withWindow {
 		app.openUpdateWindow()
@@ -258,6 +276,7 @@ func (app *App) installDone(version string, err error, withWindow bool) {
 	app.mu.Lock()
 	app.installing = false
 	app.mu.Unlock()
+	app.pushUpdateBusy()
 
 	if err != nil {
 		app.log("Could not install the update: " + err.Error())
@@ -284,6 +303,7 @@ func (app *App) installDone(version string, err error, withWindow bool) {
 		app.mu.Lock()
 		app.restartPending = true
 		app.mu.Unlock()
+		app.pushUpdateBusy()
 		app.refreshTray()
 		return
 	}

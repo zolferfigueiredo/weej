@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"unsafe"
 
 	wca "github.com/moutend/go-wca/pkg/wca"
@@ -191,7 +192,15 @@ func processImagePath(pid uint32) string {
 	return windows.UTF16ToString(buf[:size])
 }
 
-func (a *Audio) setSessionVolume(vol *wca.ISimpleAudioVolume, level float64) {
+// setSessionVolume sets a session's volume, and for the change log, says why.
+func (a *Audio) setSessionVolume(info sessionInfo, vol *wca.ISimpleAudioVolume, level float64, why string) {
+	if a.noting() {
+		var from float32
+		if vol.GetMasterVolume(&from) == nil {
+			a.wrote(info.key, sessionName(info)+" volume", from, float32(level), why)
+		}
+	}
+	a.seen[info.key] = float32(level)
 	if err := vol.SetMasterVolume(float32(level), eventCtx); err != nil {
 		a.logOnce("set-session-volume", "Could not set a session volume: "+err.Error())
 	}
@@ -219,6 +228,7 @@ func (a *Audio) endpointVolume(flow uint32) *wca.IAudioEndpointVolume {
 	return vol
 }
 
+// applyMaster unmutes the output too, as the volume keys do.
 func (a *Audio) applyMaster(level float64) {
 	vol := a.endpointVolume(wca.ERender)
 	if vol == nil {
@@ -226,6 +236,23 @@ func (a *Audio) applyMaster(level float64) {
 	}
 	defer vol.Release()
 
+	var muted bool
+	if a.noting() {
+		var from float32
+		if vol.GetMasterVolumeLevelScalar(&from) == nil {
+			a.wrote("Speaker volume", "Speaker volume", from, float32(level), "its knob")
+		}
+	}
+	a.seen["Speaker volume"] = float32(level)
+	if vol.GetMute(&muted) == nil && muted {
+		a.seen["Speaker volume mute"] = 0
+		if a.noting() {
+			a.changes.Note("Speaker volume: unmuted, by WeeJ: its knob turned")
+		}
+		if err := vol.SetMute(false, eventCtx); err != nil {
+			a.logOnce("set-master-mute", "Could not unmute the output: "+err.Error())
+		}
+	}
 	if err := vol.SetMasterVolumeLevelScalar(float32(level), eventCtx); err != nil {
 		a.logOnce("set-master-volume", "Could not set the output volume: "+err.Error())
 	}
@@ -238,14 +265,21 @@ func (a *Audio) applyMic(level float64) {
 	}
 	defer vol.Release()
 
+	if a.noting() {
+		var from float32
+		if vol.GetMasterVolumeLevelScalar(&from) == nil {
+			a.wrote("Microphone volume", "Microphone volume", from, float32(level), "its knob")
+		}
+	}
+	a.seen["Microphone volume"] = float32(level)
 	if err := vol.SetMasterVolumeLevelScalar(float32(level), eventCtx); err != nil {
 		a.logOnce("set-mic-volume", "Could not set the input volume: "+err.Error())
 	}
 }
 
-// readLevel is where the output's, the input's or an app's volume is now, or -1.
+// readLevel is where a job's volume is now, or -1: the output's, the input's, or that of an app,
+// the one in front or Other apps, from a session of theirs or else where a knob last set it.
 func (a *Audio) readLevel(job core.Job) float64 {
-	var level float32 = -1
 	switch job.Kind {
 	case core.JobMaster, core.JobMicrophone:
 		flow := uint32(wca.ERender)
@@ -257,20 +291,47 @@ func (a *Audio) readLevel(job core.Job) float64 {
 			return -1
 		}
 		defer vol.Release()
+		var level float32
 		if vol.GetMasterVolumeLevelScalar(&level) != nil {
 			return -1
 		}
+		return float64(level)
 	case core.JobApp:
-		a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
-			a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
-				defer vol.Release()
-				var v float32
-				if level < 0 && !info.isSystemSounds && info.exe == job.Exe && vol.GetMasterVolume(&v) == nil {
-					level = v
-				}
-			})
-		})
+		return a.sessionLevel(func(exe string) bool { return exe == job.Exe })
+	case core.JobFocusedApp:
+		focused := a.exeForPID(focusedPID())
+		if focused == "" {
+			return -1
+		}
+		if level := a.sessionLevel(func(exe string) bool { return exe == focused }); level >= 0 {
+			return level
+		}
+		if level, ok := a.volumes.Level(focused, a.selfExe); ok {
+			return level
+		}
+	case core.JobOtherApps:
+		if level := a.sessionLevel(func(exe string) bool { return a.volumes.IsOther(exe, a.selfExe) }); level >= 0 {
+			return level
+		}
+		if level, ok := a.volumes.Others(); ok {
+			return level
+		}
 	}
+	return -1
+}
+
+// sessionLevel is the volume of the first app session whose exe matches, or -1.
+func (a *Audio) sessionLevel(match func(exe string) bool) float64 {
+	var level float32 = -1
+	a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
+		a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
+			defer vol.Release()
+			var v float32
+			if level < 0 && !info.isSystemSounds && info.exe != "" && match(info.exe) && vol.GetMasterVolume(&v) == nil {
+				level = v
+			}
+		})
+	})
 	return float64(level)
 }
 
@@ -285,6 +346,10 @@ func (a *Audio) toggleMicMute() MicState {
 	if err := vol.GetMute(&muted); err != nil {
 		a.logOnce("get-mic-mute", "Could not read the microphone mute: "+err.Error())
 		return MicState{}
+	}
+	a.seen["Microphone volume mute"] = boolLevel(!muted)
+	if a.noting() {
+		a.changes.Note("Microphone volume: muted %v, by WeeJ: a button", !muted)
 	}
 	if err := vol.SetMute(!muted, eventCtx); err != nil {
 		a.logOnce("set-mic-mute", "Could not mute the microphone: "+err.Error())
@@ -307,12 +372,12 @@ func (a *Audio) applySystemSounds(level float64) {
 		defer vol.Release()
 		a.knownSessions[info.key] = struct{}{}
 		if info.isSystemSounds {
-			a.setSessionVolume(vol, level)
+			a.setSessionVolume(info, vol, level, "its knob")
 		}
 	})
 }
 
-func (a *Audio) applyApps(level float64, exes map[string]struct{}) {
+func (a *Audio) applyApps(levels map[string]float64) {
 	a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
 		a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
 			defer vol.Release()
@@ -320,43 +385,23 @@ func (a *Audio) applyApps(level float64, exes map[string]struct{}) {
 			if info.isSystemSounds || info.exe == "" {
 				return
 			}
-			if _, ok := exes[info.exe]; ok {
-				a.setSessionVolume(vol, level)
+			if level, ok := levels[info.exe]; ok {
+				a.setSessionVolume(info, vol, level, "its knob")
 			}
 		})
 	})
 }
 
-type heldSession struct {
-	exe string
-	vol *wca.ISimpleAudioVolume
-}
-
-func (a *Audio) applyOtherApps(level float64, mapped []string) {
-	var held []heldSession
+func (a *Audio) applyOtherApps(level float64) {
 	a.rangeActiveRenderEndpoints(func(endpoint *wca.IMMDevice) {
 		a.eachRenderSession(endpoint, func(info sessionInfo, vol *wca.ISimpleAudioVolume) {
+			defer vol.Release()
 			a.knownSessions[info.key] = struct{}{}
-			if info.isSystemSounds || info.exe == "" {
-				vol.Release()
-				return
+			if !info.isSystemSounds && info.exe != "" && a.volumes.IsOther(info.exe, a.selfExe) {
+				a.setSessionVolume(info, vol, level, "the Other apps knob")
 			}
-			held = append(held, heldSession{exe: info.exe, vol: vol})
 		})
 	})
-
-	exes := make([]string, len(held))
-	for i, h := range held {
-		exes[i] = h.exe
-	}
-	others := toSet(core.OtherApps(exes, mapped, a.selfExe))
-
-	for _, h := range held {
-		if _, ok := others[h.exe]; ok {
-			a.setSessionVolume(h.vol, level)
-		}
-		h.vol.Release()
-	}
 }
 
 // pollNewSessions runs every second and on default-device change: any session not seen before
@@ -374,23 +419,15 @@ func (a *Audio) pollNewSessions() {
 
 			if info.isSystemSounds {
 				if a.haveSystemSoundsTarget {
-					a.setSessionVolume(vol, a.systemSoundsLevel)
+					a.setSessionVolume(info, vol, a.systemSoundsLevel, "it just opened, so it gets the System sounds knob's level")
 				}
 				return
 			}
 			if info.exe == "" {
 				return
 			}
-			if a.haveAppsTarget {
-				if _, ok := a.appsExes[info.exe]; ok {
-					a.setSessionVolume(vol, a.appsLevel)
-					return
-				}
-			}
-			if a.haveOtherAppsTarget {
-				if others := core.OtherApps([]string{info.exe}, a.otherAppsMapped, a.selfExe); len(others) > 0 {
-					a.setSessionVolume(vol, a.otherAppsLevel)
-				}
+			if level, ok := a.volumes.Level(info.exe, a.selfExe); ok {
+				a.setSessionVolume(info, vol, level, "it just opened, so it gets the level its knob or Other apps last set")
 			}
 		})
 	})
@@ -424,18 +461,28 @@ func (a *Audio) computePlaying() []string {
 	return out
 }
 
-func visiblePIDs() map[uint32]struct{} {
-	result := map[uint32]struct{}{}
-	cb := windows.NewCallback(func(hwnd windows.HWND, _ uintptr) uintptr {
+// One callback serves every search, as findChildProcess's does.
+var (
+	visibleMu     sync.Mutex
+	visibleFound  map[uint32]struct{}
+	visibleSearch = windows.NewCallback(func(hwnd windows.HWND, _ uintptr) uintptr {
 		if !windows.IsWindowVisible(hwnd) {
 			return 1
 		}
 		var pid uint32
 		if _, err := windows.GetWindowThreadProcessId(hwnd, &pid); err == nil && pid != 0 {
-			result[pid] = struct{}{}
+			visibleFound[pid] = struct{}{}
 		}
 		return 1
 	})
-	_ = windows.EnumWindows(cb, nil)
+)
+
+func visiblePIDs() map[uint32]struct{} {
+	visibleMu.Lock()
+	defer visibleMu.Unlock()
+	visibleFound = map[uint32]struct{}{}
+	_ = windows.EnumWindows(visibleSearch, nil)
+	result := visibleFound
+	visibleFound = nil
 	return result
 }

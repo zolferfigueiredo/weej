@@ -54,6 +54,8 @@ func (app *App) openSettings(tab string) {
 			app.mu.Unlock()
 			// Closing mid-recording would otherwise leave the saved hotkeys switched off.
 			app.registerHotkeys(app.snapshotSettings())
+			// A calibration only shows in Settings; its ticker would run on with nothing to show.
+			app.endWizard(false)
 			if restart {
 				app.loop.Invoke(app.restartIntoUpdate)
 			}
@@ -142,6 +144,14 @@ func (app *App) onSettingsMessage(data []byte) {
 		}
 		_ = json.Unmarshal(data, &msg)
 		app.setLogin(msg.On)
+	case "setChangeLog":
+		var msg struct {
+			On bool `json:"on"`
+		}
+		_ = json.Unmarshal(data, &msg)
+		app.setChangeLog(msg.On)
+	case "openChangeFolder":
+		app.openChangeFolder()
 	case "record":
 		app.handleSettingsRecord()
 	case "key":
@@ -202,6 +212,7 @@ func (app *App) sendSettingsInit() {
 	payload := app.baseInitFields()
 	payload["tab"] = tab
 	payload["version"] = core.AppVersion
+	payload["updateBusy"] = app.updateBusy()
 	payload["website"] = websiteURL
 	payload["madeBy"] = madeByURL
 	payload["deej"] = deejURL
@@ -212,6 +223,8 @@ func (app *App) sendSettingsInit() {
 	payload["language"] = s.Language
 	payload["login"] = sys.LoginEnabled(app.self)
 	payload["loginAvailable"] = sys.IsInstalledCopy(app.self)
+	payload["changeLog"] = app.changes.On()
+	payload["beta"] = core.IsBeta(core.AppVersion)
 	payload["settings"] = settingsJSON(s)
 	payload["catalog"] = app.buildCatalog(s.Devices)
 	payload["actionIcons"] = app.actionIcons()
@@ -256,6 +269,7 @@ func (app *App) applySettings(next core.Settings) {
 	app.applyLights(next.Devices)
 	app.registerHotkeys(next)
 	app.refreshTray()
+	app.note("Settings applied")
 }
 
 func (app *App) profileName() string { return app.tr("default_profile") }
@@ -278,11 +292,12 @@ func (app *App) handleSettingsSave(data []byte) {
 	}
 }
 
-// handleSetDevice saves one board at once, as the gear's dialog, the on and off switch, the
-// Draw or List choice and calibrating do, leaving the rest of the page's edits for Apply.
+// handleSetDevice saves a few fields of one board at once, as the gear's dialog, the on and off
+// switch and the Draw or List choice do, leaving the rest of the page's edits for Apply.
 func (app *App) handleSetDevice(data []byte) {
 	var msg struct {
 		Device json.RawMessage `json:"device"`
+		Fields []string        `json:"fields"`
 	}
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return
@@ -296,14 +311,16 @@ func (app *App) handleSetDevice(data []byte) {
 	if i < 0 {
 		return
 	}
-	next.Devices[i] = d
+	next.Devices[i] = next.Devices[i].WithFields(d, msg.Fields)
 	app.applySettings(next)
-	app.sendDevice(app.snapshotSettings().Devices[i])
+	app.sendDevice(app.snapshotSettings().Devices[i], msg.Fields)
 }
 
-func (app *App) sendDevice(d core.Device) {
+// sendDevice tells Settings a board as saved. With fields, the page takes only those into its
+// edits; without, the whole board, as a new one.
+func (app *App) sendDevice(d core.Device, fields []string) {
 	if win := app.settingsWin; win != nil {
-		win.Send(map[string]any{"type": "deviceSaved", "device": deviceJSON(d)})
+		win.Send(map[string]any{"type": "deviceSaved", "device": deviceJSON(d), "fields": fields})
 	}
 }
 
@@ -333,7 +350,7 @@ func (app *App) handleAddDevice(data []byte) {
 	app.applySettings(next)
 	saved := app.snapshotSettings()
 	if i := deviceIndex(saved, d.ID); i >= 0 {
-		app.sendDevice(saved.Devices[i])
+		app.sendDevice(saved.Devices[i], nil)
 	}
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "added", "device": d.ID})

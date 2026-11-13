@@ -25,14 +25,20 @@ type parsedFont = opentype.Font
 const hudGlyphSourcePx = 32
 
 func (app *App) showHUD(job core.Job, s float64) {
-	app.loop.Invoke(func() { app.drawLevelHUD(app.monitorFor(job), app.glyphFor(job, s), s) })
+	app.loop.Invoke(func() {
+		if mon, ok := app.monitorFor(job); ok {
+			app.drawLevelHUD(mon, app.glyphFor(job, s), s)
+		}
+	})
 }
 
-// showGlyphHUD shows a level by one of the glyphs, as a button's action does, on the screen a
-// profile's name shows on.
+// showGlyphHUD shows a level by one of the glyphs, as a button's action does, on the primary
+// screen.
 func (app *App) showGlyphHUD(glyph draw.GlyphKind, s float64) {
 	app.loop.Invoke(func() {
-		app.drawLevelHUD(app.monitorFor(core.Job{}), draw.Glyph(glyph, hudGlyphSourcePx, app.glyphInk()), s)
+		if mon, ok := primaryMonitor(display.Monitors()); ok {
+			app.drawLevelHUD(mon, draw.Glyph(glyph, hudGlyphSourcePx, app.glyphInk()), s)
+		}
 	})
 }
 
@@ -57,8 +63,8 @@ func (app *App) drawLevelHUD(mon display.Monitor, glyph *image.NRGBA, s float64)
 }
 
 // showProfileHUD names the profile a board has just made active, and the board too when there
-// are several, on the same screen and spot as the volume HUD, so it replaces one that is still
-// showing instead of stacking.
+// are several, on the screen with the pointer, in the volume HUD's spot, so it replaces one still
+// showing there instead of stacking.
 func (app *App) showProfileHUD(d core.Device, named bool) {
 	if d.Active < 0 || d.Active >= len(d.Profiles) {
 		return
@@ -85,7 +91,10 @@ func (app *App) showLightsHUD(name string, on bool) {
 // a few.
 func (app *App) showNameHUD(name string, index, count int, icon func(scale float64) *image.NRGBA) {
 	app.loop.Invoke(func() {
-		mon := app.monitorFor(core.Job{})
+		mon, ok := pointerMonitor()
+		if !ok {
+			return
+		}
 		scale := hudScale(mon)
 		bmp := draw.ProfileHUD(draw.ProfileHUDParams{
 			Scale:  scale,
@@ -108,33 +117,47 @@ func monitorKey(m display.Monitor) string {
 	return m.Name
 }
 
-func (app *App) monitorFor(job core.Job) display.Monitor {
-	mons := display.Monitors()
+// monitorFor is the monitor job's HUD shows on. A screen job whose screen isn't plugged in has
+// none, since nothing changes there.
+func (app *App) monitorFor(job core.Job) (display.Monitor, bool) {
 	switch job.Kind {
 	case core.JobBuiltinBrightness:
-		for _, m := range mons {
+		for _, m := range display.Monitors() {
 			if m.Internal {
-				return m
+				return m, true
 			}
 		}
+		return display.Monitor{}, false
 	case core.JobBrightness, core.JobContrast:
-		for _, m := range mons {
+		for _, m := range display.Monitors() {
 			if m.Screen == job.Screen {
-				return m
+				return m, true
 			}
 		}
+		return display.Monitor{}, false
 	case core.JobZoom:
-		return display.AtPointer()
+		return pointerMonitor()
 	}
+	return primaryMonitor(display.Monitors())
+}
+
+func pointerMonitor() (display.Monitor, bool) {
+	if m := display.AtPointer(); m.Handle != 0 {
+		return m, true
+	}
+	return primaryMonitor(display.Monitors())
+}
+
+func primaryMonitor(mons []display.Monitor) (display.Monitor, bool) {
 	for _, m := range mons {
 		if m.Primary {
-			return m
+			return m, true
 		}
 	}
 	if len(mons) > 0 {
-		return mons[0]
+		return mons[0], true
 	}
-	return display.Monitor{}
+	return display.Monitor{}, false
 }
 
 func (app *App) glyphInk() color.Color {

@@ -4,12 +4,12 @@ package app
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/zolferfigueiredo/weej/internal/core"
 	"github.com/zolferfigueiredo/weej/internal/draw"
-	"github.com/zolferfigueiredo/weej/internal/lang"
 	"github.com/zolferfigueiredo/weej/internal/platform/sys"
 	"github.com/zolferfigueiredo/weej/internal/ui/winui"
 	"github.com/zolferfigueiredo/weej/internal/updater"
@@ -71,7 +71,8 @@ func (app *App) refreshTrayNow() {
 	}
 }
 
-// buildMenu has a section per board that is on: its name and status, and its profiles.
+// buildMenu opens with Settings, then has a section per board that is on: its name and status,
+// and its profiles.
 func (app *App) buildMenu() []winui.MenuItem {
 	s := app.snapshotSettings()
 	labels := app.shortcutLabels(s)
@@ -86,7 +87,17 @@ func (app *App) buildMenu() []winui.MenuItem {
 		return labels[string(data)]
 	}
 
-	var items []winui.MenuItem
+	items := []winui.MenuItem{
+		{Text: app.tr("settings"), OnClick: func() { app.openSettings("") }},
+		{Separator: true},
+	}
+	if !slices.ContainsFunc(s.Devices, func(d core.Device) bool { return d.Enabled }) {
+		none := "boards.none"
+		if len(s.Devices) > 0 {
+			none = "boards.none_connected"
+		}
+		items = append(items, winui.MenuItem{Text: app.tr(none), Disabled: true}, winui.MenuItem{Separator: true})
+	}
 	for _, d := range s.Devices {
 		if !d.Enabled {
 			continue
@@ -114,10 +125,6 @@ func (app *App) buildMenu() []winui.MenuItem {
 		items = append(items, winui.MenuItem{Separator: true})
 	}
 
-	items = append(items, winui.MenuItem{Text: app.tr("settings"), OnClick: func() { app.openSettings("") }})
-	items = append(items, winui.MenuItem{Text: app.tr("language"), Children: app.languageMenuItems(s.Language)})
-
-	items = append(items, winui.MenuItem{Separator: true})
 	items = append(items, winui.MenuItem{
 		Text: app.tr("login"), Checked: sys.LoginEnabled(app.self), Disabled: !sys.IsInstalledCopy(app.self),
 		OnClick: app.toggleLogin,
@@ -167,18 +174,6 @@ func (app *App) setLogin(on bool) {
 	if win := app.settingsWin; win != nil {
 		win.Send(map[string]any{"type": "login", "on": sys.LoginEnabled(app.self)})
 	}
-}
-
-func (app *App) languageMenuItems(current string) []winui.MenuItem {
-	items := make([]winui.MenuItem, 0, len(lang.Languages))
-	for _, l := range lang.Languages {
-		code := l.Code
-		items = append(items, winui.MenuItem{
-			Text: l.Name, Checked: code == current,
-			OnClick: func() { app.setLanguage(code) },
-		})
-	}
-	return items
 }
 
 func (app *App) updateMenuItem(s core.Settings) winui.MenuItem {

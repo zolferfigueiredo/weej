@@ -144,7 +144,7 @@ export const GEAR_ICON = `<svg class="gear" viewBox="0 0 16 16" aria-hidden="tru
 
 // --- Draw --------------------------------------------------------------------
 
-// Draw | List, with a gear beside Draw that turns on moving a DIY or MIDI board's controls.
+// Draw | List, with a gear before Draw, only in Draw, that turns on moving a DIY or MIDI board's controls.
 function viewBar(d) {
   const view = d.view === "list" ? "list" : "draw";
   const button = (v) =>
@@ -154,7 +154,7 @@ function viewBar(d) {
     view === "draw" && !isSMC(d) && d.controls.length
       ? `<button class="btn btn-icon${arranging ? " on" : ""}" type="button" data-action="arrange" aria-pressed="${arranging}" title="${escAttr(t("board.arrange"))}" aria-label="${escAttr(t("board.arrange"))}">${GEAR_ICON}</button>`
       : "";
-  return `<span class="segmented">${button("draw")}${gear}${button("list")}</span>`;
+  return `<span class="segmented">${gear}${button("draw")}${button("list")}</span>`;
 }
 
 function drawView(d) {

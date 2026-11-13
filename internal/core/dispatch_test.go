@@ -2,6 +2,7 @@ package core
 
 import (
 	"reflect"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -46,6 +47,26 @@ type fakeApplier struct {
 	mu      sync.Mutex
 	applied []Job
 	huds    []Job
+	// displays overrides where a kind of job shows its HUD.
+	displays map[JobKind]string
+	levels   map[JobKind]float64
+}
+
+func (f *fakeApplier) Level(job Job) (float64, bool) {
+	s, ok := f.levels[job.Kind]
+	return s, ok
+}
+
+func (f *fakeApplier) Display(job Job) string {
+	if d, ok := f.displays[job.Kind]; ok {
+		return d
+	}
+	switch job.Kind {
+	case JobBrightness, JobContrast:
+		return "screen:" + strconv.Itoa(job.Screen)
+	default:
+		return "primary"
+	}
 }
 
 func (f *fakeApplier) Apply(job Job, s float64) {
@@ -101,6 +122,97 @@ func TestEngineOneHUDPerDisplayPerKnobChange(t *testing.T) {
 	defer a.mu.Unlock()
 	if len(a.huds) != 2 || a.huds[0].Kind != JobBrightness || a.huds[1].Kind != JobBrightness {
 		t.Errorf("huds = %v, want one per change, brightness claiming screen 0 first", a.huds)
+	}
+}
+
+func TestEngineJobsOnOneMonitorShareItsHUD(t *testing.T) {
+	a := &fakeApplier{displays: map[JobKind]string{JobBrightness: "primary"}}
+	e := NewEngine(a)
+	setup := Setup{
+		Columns:  []int{0},
+		Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}, {Kind: JobBrightness, Screen: 0}}}}},
+		Speed:    SpeedSuperFast,
+	}
+	e.Handle([]int{1023}, setup, false)
+	e.Handle([]int{0}, setup, false)
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.huds) != 1 || a.huds[0].Kind != JobMaster {
+		t.Errorf("huds = %v, want master's alone, its screen being the primary", a.huds)
+	}
+}
+
+func TestEngineJobWithNoDisplayLeavesItToTheNext(t *testing.T) {
+	a := &fakeApplier{displays: map[JobKind]string{JobFocusedApp: ""}}
+	e := NewEngine(a)
+	setup := Setup{
+		Columns:  []int{0},
+		Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobFocusedApp}, {Kind: JobMaster}}}}},
+		Speed:    SpeedSuperFast,
+	}
+	e.Handle([]int{1023}, setup, false)
+	e.Handle([]int{0}, setup, false)
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.applied) != 2 {
+		t.Errorf("applied = %v, want both jobs", a.applied)
+	}
+	if len(a.huds) != 1 || a.huds[0].Kind != JobMaster {
+		t.Errorf("huds = %v, want master's alone", a.huds)
+	}
+}
+
+func TestEngineTellsOnlyOfMovesThatChangeJobs(t *testing.T) {
+	e := NewEngine(&fakeApplier{})
+	type change struct{ from, to float64 }
+	var got []change
+	e.Changed = func(_ int, from, to float64, _ []Job) { got = append(got, change{from, to}) }
+	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}, Speed: SpeedSuperFast}
+	for _, v := range []int{0, 0, 3, 1023, 1023} {
+		e.Handle([]int{v}, setup, false)
+	}
+	e.ToggleMute(0, setup)
+	if !reflect.DeepEqual(got, []change{{0, 1}, {1, 0}}) {
+		t.Errorf("changes = %v, want the turn to the top and the mute: not the first reading, a jitter or a repeat", got)
+	}
+}
+
+func TestEngineDropsASingleStrayReading(t *testing.T) {
+	a := &recordingApplier{}
+	e := NewEngine(a)
+	e.HoldJumps = true
+	var dropped []float64
+	e.Jump = func(_ int, _, to float64, gone bool) {
+		if gone {
+			dropped = append(dropped, to)
+		}
+	}
+	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}, Speed: SpeedSuperFast}
+	// 77%, a stray 98%, then 77% again, as an Arduino sent it.
+	for _, v := range []int{788, 1003, 788} {
+		e.Handle([]int{v}, setup, false)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.values) != 0 || len(dropped) != 1 {
+		t.Errorf("applied %v and dropped %v, want the stray reading dropped and nothing applied", a.values, dropped)
+	}
+}
+
+func TestEngineLetsAFastTurnThroughOneReadingLate(t *testing.T) {
+	a := &recordingApplier{}
+	e := NewEngine(a)
+	e.HoldJumps = true
+	setup := Setup{Columns: []int{0}, Profiles: []Profile{{Jobs: [][]Job{{{Kind: JobMaster}}}}}, Speed: SpeedSuperFast}
+	for _, v := range []int{0, 400, 900, 1023, 1023} {
+		e.Handle([]int{v}, setup, false)
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if len(a.values) != 2 || a.values[0] != 900.0/1023 || a.values[1] != 1 {
+		t.Errorf("applied %v, want the turn confirmed at 900 and then the top", a.values)
 	}
 }
 

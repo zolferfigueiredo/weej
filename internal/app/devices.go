@@ -35,6 +35,8 @@ type runner struct {
 	moves     core.MoveWatcher
 	buttons   core.ButtonWatcher
 	live      liveFrames
+	// raw is the frame the engine is reading, for the change log. The board's loop only.
+	raw []int
 }
 
 // runnerKey is what a runner was started with: a change to any of it starts the board again.
@@ -141,6 +143,9 @@ func (app *App) startRunner(id string, key runnerKey, prev *runner) *runner {
 		id: id, key: key, engine: core.NewEngine(&applier{app: app}),
 		cancel: cancel, done: make(chan struct{}), reconnect: make(chan struct{}, 1),
 	}
+	r.engine.Changed = func(col int, from, to float64, jobs []core.Job) { app.noteControl(r, col, from, to, jobs) }
+	r.engine.Jump = func(col int, from, to float64, dropped bool) { app.noteJump(r, col, from, to, dropped) }
+	r.engine.HoldJumps = key.typ == core.DeviceDIY
 	go func() {
 		defer close(r.done)
 		if prev != nil {
@@ -194,8 +199,8 @@ func (app *App) knobStart(r *runner, col int) (int, bool) {
 			continue
 		}
 		u, ok := 0.0, false
-		if jobs := d.ActiveProfile().Jobs; k < len(jobs) && len(jobs[k]) > 0 && app.audio != nil {
-			u, ok = app.audio.Level(jobs[k][0])
+		if jobs := d.ActiveProfile().Jobs; k < len(jobs) && len(jobs[k]) > 0 {
+			u, ok = app.jobLevel(jobs[k][0])
 		}
 		if !ok {
 			u, ok = r.engine.Last(k)
@@ -219,8 +224,16 @@ func (app *App) portsOfOtherBoards(id string, midi bool) []string {
 
 func (app *App) onRunnerStatus(r *runner, id string, connected, busy bool, port string) {
 	r.mu.Lock()
+	was := r.connected
 	r.connected, r.busy, r.port = connected, busy, port
 	r.mu.Unlock()
+	if d, ok := app.device(id); ok && connected != was {
+		if connected {
+			app.note("%s connected on %s", d.Name, port)
+		} else {
+			app.note("%s disconnected", d.Name)
+		}
+	}
 	if !connected {
 		r.engine.Reset()
 		r.mu.Lock()
@@ -249,6 +262,7 @@ func (app *App) onRawFrame(r *runner, raw []int) {
 		w.feed(raw)
 	}
 	norm := d.Normalize(raw)
+	r.raw = raw
 	r.engine.Handle(norm, d.EngineSetup(), calibrating)
 	app.showValues(r, d.Normalize(raw))
 	if calibrating {
@@ -292,6 +306,7 @@ func (app *App) onButton(r *runner, d core.Device, key int) {
 		names = []string{"empty"}
 	}
 	app.log(fmt.Sprintf("%s button %d pressed: %s", d.Name, key, strings.Join(names, ", ")))
+	app.note("%s, button %d pressed: %s", d.Name, key, strings.Join(names, ", "))
 	for _, action := range actions {
 		app.runButtonAction(action, r, d, key)
 	}
@@ -432,6 +447,7 @@ func (app *App) setProfiles(targets []core.HotkeyTarget) {
 		if next < 0 || next >= len(d.Profiles) {
 			continue
 		}
+		app.note("%s: profile %s to %s", d.Name, app.displayProfileName(d.ActiveProfile(), d.Active), app.displayProfileName(d.Profiles[next], next))
 		app.leaveProfile(*d)
 		d.Active = next
 		if hud == nil {
