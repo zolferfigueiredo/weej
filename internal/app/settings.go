@@ -224,6 +224,7 @@ func (app *App) sendSettingsInit() {
 	payload["login"] = sys.LoginEnabled(app.self)
 	payload["loginAvailable"] = sys.IsInstalledCopy(app.self)
 	payload["changeLog"] = app.changes.On()
+	payload["beta"] = core.IsBeta(core.AppVersion)
 	payload["settings"] = settingsJSON(s)
 	payload["catalog"] = app.buildCatalog(s.Devices)
 	payload["actionIcons"] = app.actionIcons()

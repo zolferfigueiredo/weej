@@ -44,7 +44,9 @@ func newChangeLog(dir string) *changeLog {
 
 func (d *changeLog) On() bool { return d != nil && d.on.Load() }
 
+// Set turns the log on only in a beta: a release has no change log, whatever the setting says.
 func (d *changeLog) Set(on bool) {
+	on = on && core.IsBeta(core.AppVersion)
 	d.on.Store(on)
 	if !on {
 		d.Close()

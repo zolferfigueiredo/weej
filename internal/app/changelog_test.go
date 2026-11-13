@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/zolferfigueiredo/weej/internal/core"
 )
 
 func TestClearBeforeKeepsOnlyWhatCameAfter(t *testing.T) {
@@ -41,6 +43,12 @@ func TestChangeLogWritesOnlyWhileOn(t *testing.T) {
 	d.Note("after")
 
 	entries, _ := os.ReadDir(d.dir)
+	if !core.IsBeta(core.AppVersion) {
+		if len(entries) != 0 {
+			t.Fatalf("a release wrote %v, want no change log", entries)
+		}
+		return
+	}
 	if len(entries) != 1 {
 		t.Fatalf("folder holds %v, want one log and no switch", entries)
 	}
